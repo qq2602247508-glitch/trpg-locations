@@ -53,7 +53,7 @@ interface SignalRule<T extends string> {
   terms: readonly string[];
 }
 
-const KNOWN_KINDS = ["tavern", "tower", "sewer", "cave", "building", "settlement"] as const satisfies readonly KnownSceneKind[];
+const KNOWN_KINDS = ["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness"] as const satisfies readonly KnownSceneKind[];
 
 const CATEGORY_RULES: Readonly<Record<KnownSceneKind, readonly KeywordRule[]>> = {
   tavern: [
@@ -145,6 +145,24 @@ const CATEGORY_RULES: Readonly<Record<KnownSceneKind, readonly KeywordRule[]>> =
     { term: "港口", weight: 3 },
     { term: "深水城", weight: 5 },
   ],
+  wilderness: [
+    { term: "river", weight: 4 },
+    { term: "valley", weight: 4 },
+    { term: "rift", weight: 4 },
+    { term: "chasm", weight: 3 },
+    { term: "mountain", weight: 4 },
+    { term: "ice", weight: 4 },
+    { term: "glacier", weight: 3 },
+    { term: "ruin", weight: 3 },
+    { term: "underground lake", weight: 5 },
+    { term: "河谷", weight: 4 },
+    { term: "裂谷", weight: 4 },
+    { term: "山地", weight: 4 },
+    { term: "冰原", weight: 4 },
+    { term: "遗迹", weight: 3 },
+    { term: "地下湖", weight: 5 },
+    { term: "幽暗地域", weight: 4 },
+  ],
 };
 
 const ENVIRONMENT_RULES: readonly SignalRule<AdaptiveEnvironment>[] = [
@@ -227,6 +245,7 @@ const KIND_DEFAULTS: Readonly<Record<KnownSceneKind, Omit<AdaptiveFeatures, "anc
   cave: { environment: "underground", topology: "branching", verticality: "medium", water: "minor", lighting: "dark", cover: "dense", theme: "wild" },
   building: { environment: "interior", topology: "linear", verticality: "medium", water: "none", lighting: "dim", cover: "moderate", theme: "neutral" },
   settlement: { environment: "urban", topology: "open", verticality: "low", water: "none", lighting: "bright", cover: "moderate", theme: "neutral" },
+  wilderness: { environment: "wilderness", topology: "branching", verticality: "medium", water: "minor", lighting: "dim", cover: "dense", theme: "wild" },
 };
 
 function normalizePrompt(prompt: string): string {

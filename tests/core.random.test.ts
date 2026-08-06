@@ -41,6 +41,7 @@ describe("local scene classification", () => {
     expect(classifyInput("潮湿的下水道与排水沟").kind).toBe("sewer");
     expect(classifyInput("有中轴圣所和祭坛的神殿").kind).toBe("building");
     expect(classifyInput("深水城港区的市场与码头").kind).toBe("settlement");
+    expect(classifyInput("冰原上的裂谷与高台").kind).toBe("wilderness");
   });
 
   it("uses stable composable adaptive traits for an unknown category", () => {

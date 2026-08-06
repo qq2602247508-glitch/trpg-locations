@@ -444,7 +444,10 @@ export class SceneRenderer {
     gridGeometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
     const gridMaterial = new THREE.LineBasicMaterial({
       color: 0x94e2ba,
-      depthTest: false,
+      // Respect terrain and walls. Drawing the ground grid through every
+      // elevated surface flattened mountains, bridges, and multi-storey rooms
+      // into one unreadable plane.
+      depthTest: true,
       depthWrite: false,
       toneMapped: false,
     });

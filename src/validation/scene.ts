@@ -43,7 +43,7 @@ interface GeometryMetrics {
   geometryErrorCount: number;
 }
 
-const SCENE_KINDS = ["tavern", "tower", "sewer", "cave", "building", "settlement", "adaptive"] as const satisfies readonly SceneKind[];
+const SCENE_KINDS = ["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness", "adaptive"] as const satisfies readonly SceneKind[];
 const PRIMITIVE_SHAPES = ["box", "cylinder", "cone", "sphere", "stairs", "water"] as const satisfies readonly PrimitiveShape[];
 const MATERIAL_KEYS = ["stone", "darkStone", "wood", "plaster", "roof", "metal", "water", "earth", "rock", "moss", "hazard", "warmLight"] as const satisfies readonly MaterialKey[];
 const ROOM_ROLES = ["public", "private", "service", "circulation", "combat", "natural"] as const satisfies readonly Room["role"][];
@@ -408,9 +408,10 @@ function validateGeometryInvariants(
           && pointNearPrimitiveSurface(crossing, primitive, ROUTE_SURFACE_MARGIN_METERS, ROUTE_SURFACE_MARGIN_METERS)
           && rangesOverlap(primitiveVerticalSpan(primitive), { min: crossing.y, max: crossing.y }, ROUTE_SURFACE_MARGIN_METERS)
         ));
+        const isOutdoorEdge = kind === "wilderness" && hasAnyTag(floor, ["terrain", "ledge", "platform", "bridge"]);
         if (!hasCrossingSupport) {
           geometryError(`Vertical route ${route.id} crosses solid floor slab ${floor.id} without local stair or shaft opening evidence.`);
-        } else if (!hasCrossingOpening) {
+        } else if (!hasCrossingOpening && !isOutdoorEdge) {
           geometryError(`Vertical route ${route.id} crosses solid floor slab ${floor.id} without local vertical-opening or shaft evidence.`);
         }
       }

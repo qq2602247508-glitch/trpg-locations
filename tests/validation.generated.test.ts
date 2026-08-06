@@ -10,7 +10,7 @@ const request: GenerationRequest = {
 };
 
 describe("generator validation integration", () => {
-  it.each(["tavern", "tower", "sewer", "cave", "building", "settlement", "adaptive"] as const satisfies readonly SceneKind[])(
+  it.each(["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness", "adaptive"] as const satisfies readonly SceneKind[])(
     "%s scenes arrive valid without repair",
     (kind) => {
       const scene = generateScene(request, kind);

@@ -20,6 +20,7 @@ import { generateTavern } from "./tavern";
 import { generateTower } from "./tower";
 import { generateBuilding } from "./building";
 import { generateSettlement } from "./settlement";
+import { generateWilderness } from "./wilderness";
 
 export type FixedSceneKind = Exclude<SceneKind, "adaptive">;
 export type SceneGenerator = (context: GeneratorContext) => GeneratedScene;
@@ -32,6 +33,7 @@ export const generatorRegistry: Readonly<Record<FixedSceneKind, SceneGenerator>>
   cave: generateCave,
   building: generateBuilding,
   settlement: generateSettlement,
+  wilderness: generateWilderness,
 };
 
 export const sceneGenerators = generatorRegistry;
@@ -51,7 +53,7 @@ export interface AdaptivePlan {
 }
 
 function isSceneKind(value: SceneKind | string): value is SceneKind {
-  return value === "adaptive" || value === "tavern" || value === "tower" || value === "sewer" || value === "cave" || value === "building" || value === "settlement";
+  return value === "adaptive" || value === "tavern" || value === "tower" || value === "sewer" || value === "cave" || value === "building" || value === "settlement" || value === "wilderness";
 }
 
 function normalizeRequest(request: GenerationRequest): GenerationRequest {
@@ -74,9 +76,10 @@ function selectAdaptivePrimary(classification: InputClassification, rng: SeededR
   if (traits.environment === "interior" || traits.theme === "cozy" || traits.topology === "open") return "tavern";
   if (traits.environment === "ruin" || traits.environment === "urban") return "building";
   if (traits.environment === "coastal") return "settlement";
+  if (traits.environment === "wilderness") return "wilderness";
 
   return rng.weightedPick(
-    ["tavern", "tower", "sewer", "cave", "building", "settlement"] as const,
+    ["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness"] as const,
     [
       traits.lighting === "bright" ? 4 : 2,
       traits.verticality === "medium" ? 3 : 1,
@@ -84,6 +87,7 @@ function selectAdaptivePrimary(classification: InputClassification, rng: SeededR
       traits.environment === "wilderness" ? 3 : 2,
       traits.theme === "mystic" ? 3 : 1,
       traits.theme === "neutral" ? 2 : 1,
+      traits.cover === "dense" ? 3 : 1,
     ],
   );
 }

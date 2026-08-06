@@ -1,7 +1,7 @@
 export const GRID_FEET = 5;
 export const GRID_METERS = 1.524;
 
-export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "building" | "settlement" | "adaptive";
+export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "building" | "settlement" | "wilderness" | "adaptive";
 export type PrimitiveShape = "box" | "cylinder" | "cone" | "sphere" | "stairs" | "water";
 export type MaterialKey =
   | "stone"

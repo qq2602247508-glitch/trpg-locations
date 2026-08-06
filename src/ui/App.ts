@@ -12,6 +12,7 @@ const KIND_LABELS: Record<SceneKind, string> = {
   cave: "洞窟与地底",
   building: "专用建筑语法",
   settlement: "城镇与街区",
+  wilderness: "自然与特殊战术空间",
 };
 
 const DEFAULT_PROMPT = "一座雨夜里仍灯火通明的河港酒馆，包含后厨密道与二层伏击点";
@@ -79,6 +80,7 @@ export function mountApp(root: HTMLElement): void {
                 <option value="cave">洞窟与地底</option>
                 <option value="building">专用建筑语法</option>
                 <option value="settlement">城镇与街区</option>
+                <option value="wilderness">自然与特殊战术空间</option>
               </select>
             </label>
 

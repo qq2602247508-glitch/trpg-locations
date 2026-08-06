@@ -36,10 +36,10 @@ describe("scene generators", () => {
   });
 
   it("registers each fixed topology", () => {
-    expect(Object.keys(generatorRegistry).sort()).toEqual(["building", "cave", "settlement", "sewer", "tavern", "tower"]);
+    expect(Object.keys(generatorRegistry).sort()).toEqual(["building", "cave", "settlement", "sewer", "tavern", "tower", "wilderness"]);
   });
 
-  it.each(["tavern", "tower", "sewer", "cave", "building", "settlement"] as const)("is seed-reproducible and validated for %s", (kind) => {
+  it.each(["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness"] as const)("is seed-reproducible and validated for %s", (kind) => {
     const first = generateScene(request(`repeatable-${kind}`), kind);
     const second = generateScene(request(`repeatable-${kind}`), kind);
     expect(first).toEqual(second);
@@ -54,7 +54,7 @@ describe("scene generators", () => {
   });
 
   it("does not reduce all seeds to one fixed map", () => {
-    const kinds: readonly Exclude<SceneKind, "adaptive">[] = ["tavern", "tower", "sewer", "cave", "building", "settlement"];
+    const kinds: readonly Exclude<SceneKind, "adaptive">[] = ["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness"];
     for (const kind of kinds) {
       const first = generateScene(request(`${kind}-variation-a`), kind);
       const second = generateScene(request(`${kind}-variation-b`), kind);
@@ -63,7 +63,7 @@ describe("scene generators", () => {
   });
 
   it("emits cleanly valid output across a small seed/scale matrix", () => {
-    const kinds: readonly Exclude<SceneKind, "adaptive">[] = ["tavern", "tower", "sewer", "cave", "building", "settlement"];
+    const kinds: readonly Exclude<SceneKind, "adaptive">[] = ["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness"];
     const sizes: readonly GenerationRequest["size"][] = ["small", "medium", "large"];
     for (const kind of kinds) {
       for (const size of sizes) {
@@ -109,6 +109,34 @@ describe("scene generators", () => {
     expect(hasTag(harbor, "harbor-edge")).toBe(true);
     expect(harbor.rooms.some((room) => room.name.includes("plaza")) || harbor.rooms.some((room) => room.name.includes("Plaza"))).toBe(true);
     expect(harbor.routes.some((route) => route.kind === "primary")).toBe(true);
+  });
+
+  it("builds natural tactical spaces with terrain-specific route logic", () => {
+    const river = generateScene({ ...request("wilderness-river"), prompt: "宽阔河谷与桥梁", size: "large" }, "wilderness");
+    const mountain = generateScene({ ...request("wilderness-mountain"), prompt: "多层山地高台与登山路线", size: "large" }, "wilderness");
+    expect(river.diagnostics.valid).toBe(true);
+    expect(mountain.diagnostics.valid).toBe(true);
+    expect(river.archetype).toBe("river-valley");
+    expect(mountain.archetype).toBe("mountain");
+    expect(hasTag(river, "watercourse")).toBe(true);
+    expect(hasTag(mountain, "natural-ramp")).toBe(true);
+    expect(mountain.tactical.some((feature) => feature.kind === "highGround")).toBe(true);
+  });
+
+  it.each([
+    ["river-valley", "河谷与河流"],
+    ["rift", "危险裂谷"],
+    ["mountain", "陡峭山地"],
+    ["ice", "破碎冰原"],
+    ["ruin", "荒野遗迹"],
+    ["underground-lake", "幽暗地域的地下湖"],
+  ] as const)("validates the %s wilderness grammar across scale bands", (archetype, prompt) => {
+    for (const size of ["small", "medium", "large"] as const) {
+      const scene = generateScene({ ...request(`wilderness-${archetype}-${size}`), prompt, size }, "wilderness");
+      expect(scene.archetype).toBe(archetype);
+      expect(scene.diagnostics.valid).toBe(true);
+      expect(scene.diagnostics.repairs).toEqual([]);
+    }
   });
 
   it("builds a multi-level tower with an explicit silhouette and platforms", () => {
