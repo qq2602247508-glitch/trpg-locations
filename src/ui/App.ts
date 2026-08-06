@@ -10,6 +10,8 @@ const KIND_LABELS: Record<SceneKind, string> = {
   tower: "塔楼与要塞",
   sewer: "下水道与遗迹",
   cave: "洞窟与地底",
+  building: "专用建筑语法",
+  settlement: "城镇与街区",
 };
 
 const DEFAULT_PROMPT = "一座雨夜里仍灯火通明的河港酒馆，包含后厨密道与二层伏击点";
@@ -75,6 +77,8 @@ export function mountApp(root: HTMLElement): void {
                 <option value="tower">塔楼与要塞</option>
                 <option value="sewer">下水道与遗迹</option>
                 <option value="cave">洞窟与地底</option>
+                <option value="building">专用建筑语法</option>
+                <option value="settlement">城镇与街区</option>
               </select>
             </label>
 

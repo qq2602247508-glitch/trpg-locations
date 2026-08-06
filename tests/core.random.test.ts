@@ -39,6 +39,8 @@ describe("local scene classification", () => {
   it("recognises fixed categories from Chinese and English local terms", () => {
     expect(classifyInput("A moonlit watchtower with a roof platform").kind).toBe("tower");
     expect(classifyInput("潮湿的下水道与排水沟").kind).toBe("sewer");
+    expect(classifyInput("有中轴圣所和祭坛的神殿").kind).toBe("building");
+    expect(classifyInput("深水城港区的市场与码头").kind).toBe("settlement");
   });
 
   it("uses stable composable adaptive traits for an unknown category", () => {

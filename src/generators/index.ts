@@ -18,6 +18,8 @@ import {
 } from "./shared";
 import { generateTavern } from "./tavern";
 import { generateTower } from "./tower";
+import { generateBuilding } from "./building";
+import { generateSettlement } from "./settlement";
 
 export type FixedSceneKind = Exclude<SceneKind, "adaptive">;
 export type SceneGenerator = (context: GeneratorContext) => GeneratedScene;
@@ -28,6 +30,8 @@ export const generatorRegistry: Readonly<Record<FixedSceneKind, SceneGenerator>>
   tower: generateTower,
   sewer: generateSewer,
   cave: generateCave,
+  building: generateBuilding,
+  settlement: generateSettlement,
 };
 
 export const sceneGenerators = generatorRegistry;
@@ -47,7 +51,7 @@ export interface AdaptivePlan {
 }
 
 function isSceneKind(value: SceneKind | string): value is SceneKind {
-  return value === "adaptive" || value === "tavern" || value === "tower" || value === "sewer" || value === "cave";
+  return value === "adaptive" || value === "tavern" || value === "tower" || value === "sewer" || value === "cave" || value === "building" || value === "settlement";
 }
 
 function normalizeRequest(request: GenerationRequest): GenerationRequest {
@@ -68,14 +72,18 @@ function selectAdaptivePrimary(classification: InputClassification, rng: SeededR
   if (traits.water === "major" || (traits.environment === "underground" && traits.water !== "none")) return "sewer";
   if (traits.environment === "underground" || traits.topology === "branching" || traits.theme === "wild") return "cave";
   if (traits.environment === "interior" || traits.theme === "cozy" || traits.topology === "open") return "tavern";
+  if (traits.environment === "ruin" || traits.environment === "urban") return "building";
+  if (traits.environment === "coastal") return "settlement";
 
   return rng.weightedPick(
-    ["tavern", "tower", "sewer", "cave"] as const,
+    ["tavern", "tower", "sewer", "cave", "building", "settlement"] as const,
     [
       traits.lighting === "bright" ? 4 : 2,
       traits.verticality === "medium" ? 3 : 1,
-      traits.environment === "urban" ? 2 : 1,
+      traits.lighting === "dim" ? 2 : 1,
       traits.environment === "wilderness" ? 3 : 2,
+      traits.theme === "mystic" ? 3 : 1,
+      traits.theme === "neutral" ? 2 : 1,
     ],
   );
 }

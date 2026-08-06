@@ -36,10 +36,10 @@ describe("scene generators", () => {
   });
 
   it("registers each fixed topology", () => {
-    expect(Object.keys(generatorRegistry).sort()).toEqual(["cave", "sewer", "tavern", "tower"]);
+    expect(Object.keys(generatorRegistry).sort()).toEqual(["building", "cave", "settlement", "sewer", "tavern", "tower"]);
   });
 
-  it.each(["tavern", "tower", "sewer", "cave"] as const)("is seed-reproducible and validated for %s", (kind) => {
+  it.each(["tavern", "tower", "sewer", "cave", "building", "settlement"] as const)("is seed-reproducible and validated for %s", (kind) => {
     const first = generateScene(request(`repeatable-${kind}`), kind);
     const second = generateScene(request(`repeatable-${kind}`), kind);
     expect(first).toEqual(second);
@@ -54,7 +54,7 @@ describe("scene generators", () => {
   });
 
   it("does not reduce all seeds to one fixed map", () => {
-    const kinds: readonly Exclude<SceneKind, "adaptive">[] = ["tavern", "tower", "sewer", "cave"];
+    const kinds: readonly Exclude<SceneKind, "adaptive">[] = ["tavern", "tower", "sewer", "cave", "building", "settlement"];
     for (const kind of kinds) {
       const first = generateScene(request(`${kind}-variation-a`), kind);
       const second = generateScene(request(`${kind}-variation-b`), kind);
@@ -63,7 +63,7 @@ describe("scene generators", () => {
   });
 
   it("emits cleanly valid output across a small seed/scale matrix", () => {
-    const kinds: readonly Exclude<SceneKind, "adaptive">[] = ["tavern", "tower", "sewer", "cave"];
+    const kinds: readonly Exclude<SceneKind, "adaptive">[] = ["tavern", "tower", "sewer", "cave", "building", "settlement"];
     const sizes: readonly GenerationRequest["size"][] = ["small", "medium", "large"];
     for (const kind of kinds) {
       for (const size of sizes) {
@@ -85,6 +85,30 @@ describe("scene generators", () => {
     expect(hasRoomRole(scene, "private")).toBe(true);
     expect(hasTag(scene, "stairs")).toBe(true);
     expect(scene.routes.some((route) => route.kind === "vertical")).toBe(true);
+  });
+
+  it("selects distinct building grammars without reducing them to a tavern shell", () => {
+    const church = generateScene({ ...request("building-church"), prompt: "一座有中轴圣所和钟楼的教堂" }, "building");
+    const manor = generateScene({ ...request("building-manor"), prompt: "有庭院、翼楼和家族厅的庄园" }, "building");
+    const workshop = generateScene({ ...request("building-workshop"), prompt: "带熔炉、作业跨和上层猫道的工坊" }, "building");
+    expect(church.diagnostics.valid && manor.diagnostics.valid && workshop.diagnostics.valid).toBe(true);
+    expect(church.archetype).toBe("church");
+    expect(manor.archetype).toBe("manor");
+    expect(workshop.archetype).toBe("workshop");
+    expect(church.primitives.some((primitive) => primitive.tags?.includes("altar"))).toBe(true);
+    expect(manor.primitives.some((primitive) => primitive.tags?.includes("courtyard"))).toBe(true);
+    expect(workshop.primitives.some((primitive) => primitive.tags?.includes("forge"))).toBe(true);
+  });
+
+  it("plans a settlement as roads, districts, landmarks, and independent building modules", () => {
+    const harbor = generateScene({ ...request("settlement-harbor"), prompt: "繁忙港区的仓库、市场和码头", size: "large" }, "settlement");
+    expect(harbor.diagnostics.valid).toBe(true);
+    expect(harbor.archetype).toBe("harbor");
+    expect(hasTag(harbor, "road")).toBe(true);
+    expect(hasTag(harbor, "settlement-building")).toBe(true);
+    expect(hasTag(harbor, "harbor-edge")).toBe(true);
+    expect(harbor.rooms.some((room) => room.name.includes("plaza")) || harbor.rooms.some((room) => room.name.includes("Plaza"))).toBe(true);
+    expect(harbor.routes.some((route) => route.kind === "primary")).toBe(true);
   });
 
   it("builds a multi-level tower with an explicit silhouette and platforms", () => {

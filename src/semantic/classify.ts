@@ -53,7 +53,7 @@ interface SignalRule<T extends string> {
   terms: readonly string[];
 }
 
-const KNOWN_KINDS = ["tavern", "tower", "sewer", "cave"] as const satisfies readonly KnownSceneKind[];
+const KNOWN_KINDS = ["tavern", "tower", "sewer", "cave", "building", "settlement"] as const satisfies readonly KnownSceneKind[];
 
 const CATEGORY_RULES: Readonly<Record<KnownSceneKind, readonly KeywordRule[]>> = {
   tavern: [
@@ -100,6 +100,50 @@ const CATEGORY_RULES: Readonly<Record<KnownSceneKind, readonly KeywordRule[]>> =
     { term: "溶洞", weight: 4 },
     { term: "矿洞", weight: 3 },
     { term: "地洞", weight: 3 },
+  ],
+  building: [
+    { term: "church", weight: 4 },
+    { term: "chapel", weight: 4 },
+    { term: "temple", weight: 4 },
+    { term: "shrine", weight: 4 },
+    { term: "manor", weight: 4 },
+    { term: "estate", weight: 3 },
+    { term: "barracks", weight: 4 },
+    { term: "garrison", weight: 3 },
+    { term: "library", weight: 4 },
+    { term: "archive", weight: 3 },
+    { term: "workshop", weight: 4 },
+    { term: "forge", weight: 3 },
+    { term: "warehouse", weight: 4 },
+    { term: "depot", weight: 3 },
+    { term: "教堂", weight: 4 },
+    { term: "神殿", weight: 4 },
+    { term: "寺庙", weight: 4 },
+    { term: "庄园", weight: 4 },
+    { term: "宅邸", weight: 3 },
+    { term: "兵营", weight: 4 },
+    { term: "军营", weight: 3 },
+    { term: "图书馆", weight: 4 },
+    { term: "档案馆", weight: 3 },
+    { term: "工坊", weight: 4 },
+    { term: "锻炉", weight: 3 },
+    { term: "仓库", weight: 4 },
+    { term: "货栈", weight: 3 },
+  ],
+  settlement: [
+    { term: "village", weight: 4 },
+    { term: "town", weight: 4 },
+    { term: "city", weight: 4 },
+    { term: "district", weight: 3 },
+    { term: "harbor", weight: 4 },
+    { term: "port", weight: 3 },
+    { term: "村庄", weight: 4 },
+    { term: "城镇", weight: 4 },
+    { term: "城市", weight: 4 },
+    { term: "街区", weight: 3 },
+    { term: "港区", weight: 4 },
+    { term: "港口", weight: 3 },
+    { term: "深水城", weight: 5 },
   ],
 };
 
@@ -181,6 +225,8 @@ const KIND_DEFAULTS: Readonly<Record<KnownSceneKind, Omit<AdaptiveFeatures, "anc
   tower: { environment: "interior", topology: "vertical", verticality: "high", water: "none", lighting: "dim", cover: "moderate", theme: "neutral" },
   sewer: { environment: "underground", topology: "branching", verticality: "low", water: "minor", lighting: "dim", cover: "moderate", theme: "grim" },
   cave: { environment: "underground", topology: "branching", verticality: "medium", water: "minor", lighting: "dark", cover: "dense", theme: "wild" },
+  building: { environment: "interior", topology: "linear", verticality: "medium", water: "none", lighting: "dim", cover: "moderate", theme: "neutral" },
+  settlement: { environment: "urban", topology: "open", verticality: "low", water: "none", lighting: "bright", cover: "moderate", theme: "neutral" },
 };
 
 function normalizePrompt(prompt: string): string {

@@ -1,7 +1,7 @@
 export const GRID_FEET = 5;
 export const GRID_METERS = 1.524;
 
-export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "adaptive";
+export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "building" | "settlement" | "adaptive";
 export type PrimitiveShape = "box" | "cylinder" | "cone" | "sphere" | "stairs" | "water";
 export type MaterialKey =
   | "stone"
@@ -72,6 +72,8 @@ export interface SceneDiagnostics {
 export interface GeneratedScene {
   version: 1;
   kind: SceneKind;
+  /** Selected procedural grammar within a broad scene domain. */
+  archetype?: string;
   title: string;
   description: string;
   seed: string;
