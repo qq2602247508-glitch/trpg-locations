@@ -1,0 +1,48 @@
+# 生成架构
+
+TRPG Locations 将空间逻辑与渲染分离。渲染器只消费 `GeneratedScene`，不参与决定房间尺寸、道路拓扑或战术路线。
+
+## 不变量
+
+- 一格恒为 5 英尺（1.524 米）。
+- 同一请求与种子必须生成相同的规划结果。
+- 尺寸、拓扑和派生数据由程序规则决定；语义模型只能产生意图和标签。
+- 建筑、基础设施和自然空间使用不同的生成语法。
+- 生成结果必须经过验证，严重错误不能伪装为成功。
+
+## 数据流
+
+```text
+GenerationRequest
+  -> semantic classification
+  -> seeded generator registry
+  -> scene primitives / rooms / routes / tactical features
+  -> validation and bounded repair
+  -> Three.js renderer
+```
+
+## 坐标约定
+
+- Three.js 世界坐标以米为单位，Y 轴向上。
+- 规划尺寸以战术格表达，进入几何层时乘以 `GRID_METERS`。
+- `position.x/z` 是几何中心，`position.y` 是几何底面高度；`size` 是完整世界尺寸。渲染器只在构造矩阵时把底面高度换算为几何中心，楼层与路线因此共享同一基准面。
+- `level` 是逻辑楼层，`position.y` 是实际高度，两者都必须存在，便于剖切和验证。
+
+## 扩展场景
+
+新增类别时优先组合以下能力，而不是新增固定地图：
+
+- domain：建筑、聚落、基础设施、自然空间
+- form：线性、分支、环形、庭院、垂直、地下
+- function：居住、公共、后勤、宗教、防御、工业
+- circulation：主路径、替代路径、垂直路径、秘密路径
+- environment：潮湿、寒冷、沿海、山地、废弃、繁荣
+
+专用生成器只在该类别确实具有独特空间规律时增加。
+
+## 性能原则
+
+- 重复几何优先实例化。
+- 静态几何按材质与楼层组织。
+- 调试线框、路线和战术标记可独立关闭。
+- 大型聚落后续按区块生成，建筑内部按需加载。
