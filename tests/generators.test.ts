@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generateScene, generatorRegistry } from "../src/generators";
 import { rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind } from "../src/schema";
-import { levelForY, overlayTouchesFloor } from "../src/render/SceneRenderer";
+import { fogDensityForSpan, levelForY, overlayTouchesFloor } from "../src/render/SceneRenderer";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
   prompt: "A tactical location with routes, cover, height, and a meaningful encounter objective.",
@@ -33,6 +33,12 @@ describe("scene generators", () => {
     expect(overlayTouchesFloor([0, 1], 2)).toBe(false);
     expect(overlayTouchesFloor([2], "cut")).toBe(true);
     expect(overlayTouchesFloor([2], "roof")).toBe(true);
+  });
+
+  it("reduces fog density as generated maps grow", () => {
+    expect(fogDensityForSpan(25)).toBe(0.009);
+    expect(fogDensityForSpan(160)).toBeLessThan(0.003);
+    expect(fogDensityForSpan(160)).toBeGreaterThanOrEqual(0.0014);
   });
 
   it("registers each fixed topology", () => {
@@ -100,6 +106,38 @@ describe("scene generators", () => {
     expect(workshop.primitives.some((primitive) => primitive.tags?.includes("forge"))).toBe(true);
   });
 
+  it("uses fortification and mining grammars with their own vertical/tactical logic", () => {
+    const fortress = generateScene({ ...request("building-fortress"), prompt: "有门楼、角塔和墙头通道的堡垒", size: "large" }, "building");
+    const mine = generateScene({ ...request("building-mine"), prompt: "有矿车巷道、竖井和上下作业层的矿井", size: "large" }, "building");
+    expect(fortress.archetype).toBe("fortress");
+    expect(mine.archetype).toBe("mine");
+    expect(fortress.diagnostics.valid).toBe(true);
+    expect(mine.diagnostics.valid).toBe(true);
+    expect(hasTag(fortress, "curtain-wall")).toBe(true);
+    expect(hasTag(fortress, "corner-tower")).toBe(true);
+    expect(hasTag(mine, "cart-track")).toBe(true);
+    expect(mine.routes.some((route) => route.kind === "vertical")).toBe(true);
+  });
+
+  it.each([
+    ["church", "教堂"],
+    ["temple", "神殿"],
+    ["manor", "庄园"],
+    ["barracks", "兵营"],
+    ["library", "图书馆"],
+    ["workshop", "工坊"],
+    ["warehouse", "仓库"],
+    ["fortress", "堡垒"],
+    ["mine", "矿井"],
+  ] as const)("validates the %s building grammar across scale bands", (archetype, prompt) => {
+    for (const size of ["small", "medium", "large"] as const) {
+      const scene = generateScene({ ...request(`building-${archetype}-${size}`), prompt, size }, "building");
+      expect(scene.archetype).toBe(archetype);
+      expect(scene.diagnostics.valid).toBe(true);
+      expect(scene.diagnostics.repairs).toEqual([]);
+    }
+  });
+
   it("plans a settlement as roads, districts, landmarks, and independent building modules", () => {
     const harbor = generateScene({ ...request("settlement-harbor"), prompt: "繁忙港区的仓库、市场和码头", size: "large" }, "settlement");
     expect(harbor.diagnostics.valid).toBe(true);
@@ -109,6 +147,29 @@ describe("scene generators", () => {
     expect(hasTag(harbor, "harbor-edge")).toBe(true);
     expect(harbor.rooms.some((room) => room.name.includes("plaza")) || harbor.rooms.some((room) => room.name.includes("Plaza"))).toBe(true);
     expect(harbor.routes.some((route) => route.kind === "primary")).toBe(true);
+    expect(harbor.rooms.filter((room) => room.id.startsWith("settlement-building-")).length).toBeGreaterThanOrEqual(4);
+    expect(harbor.primitives.filter((primitive) => primitive.tags?.includes("road")).length).toBeGreaterThanOrEqual(8);
+  });
+
+  it("prefers a specific harbor grammar inside a named city", () => {
+    const harborDistrict = generateScene({ ...request("settlement-deepwater-harbor"), prompt: "深水城港区的仓库、市场和码头", size: "large" }, "settlement");
+    expect(harborDistrict.archetype).toBe("harbor");
+    expect(hasTag(harborDistrict, "harbor-edge")).toBe(true);
+  });
+
+  it.each([
+    ["village", "村庄"],
+    ["town", "城镇"],
+    ["city", "深水城街区"],
+    ["harbor", "港区码头"],
+  ] as const)("validates the %s settlement planner across scale bands", (archetype, prompt) => {
+    for (const size of ["small", "medium", "large"] as const) {
+      const scene = generateScene({ ...request(`settlement-${archetype}-${size}`), prompt, size }, "settlement");
+      expect(scene.archetype).toBe(archetype);
+      expect(scene.diagnostics.valid).toBe(true);
+      expect(scene.diagnostics.repairs).toEqual([]);
+      expect(scene.rooms.filter((room) => room.id.startsWith("settlement-building-")).length).toBeGreaterThanOrEqual(4);
+    }
   });
 
   it("builds natural tactical spaces with terrain-specific route logic", () => {

@@ -129,6 +129,11 @@ const TACTICAL_COLORS: Record<TacticalFeature["kind"], number> = {
 // so the tactical grid and diagnostics remain readable instead of z-fighting.
 const FLOOR_OVERLAY_Y = 0.225;
 
+/** Keeps atmospheric depth without letting large districts disappear into fog. */
+export function fogDensityForSpan(spanMeters: number): number {
+  return THREE.MathUtils.clamp(0.42 / Math.max(1, spanMeters), 0.0014, 0.009);
+}
+
 /**
  * A deliberately compact Three.js renderer: primitive types are batched into
  * InstancedMesh groups, while the small diagnostic overlays stay independent.
@@ -175,6 +180,12 @@ export class SceneRenderer {
   private routesVisible = false;
 
   private tacticalVisible = false;
+
+  private keyLight?: THREE.DirectionalLight;
+
+  private rimLight?: THREE.DirectionalLight;
+
+  private warmFill?: THREE.PointLight;
 
   private currentScene?: GeneratedScene;
 
@@ -235,6 +246,7 @@ export class SceneRenderer {
     this.primitiveBatches = 0;
 
     this.worldBounds = this.measureBounds(scene);
+    this.adaptEnvironmentToBounds();
     this.buildGrid(scene);
     this.buildPrimitiveBatches(scene);
     this.buildRoutes(scene);
@@ -361,17 +373,55 @@ export class SceneRenderer {
     key.shadow.camera.near = 0.5;
     key.shadow.camera.far = 120;
     key.shadow.bias = -0.0004;
+    key.target.name = "Warm key target";
+    this.keyLight = key;
+    this.scene.add(key.target);
     this.scene.add(key);
 
     const rim = new THREE.DirectionalLight(0x5ca8c1, 1.5);
     rim.name = "Cyan rim light";
     rim.position.set(-16, 12, -20);
+    rim.target.name = "Cyan rim target";
+    this.rimLight = rim;
+    this.scene.add(rim.target);
     this.scene.add(rim);
 
     const warmFill = new THREE.PointLight(0xffa35c, 27, 58, 1.8);
     warmFill.name = "Interior glow";
     warmFill.position.set(0, 7, 0);
+    this.warmFill = warmFill;
     this.scene.add(warmFill);
+  }
+
+  private adaptEnvironmentToBounds(): void {
+    const { minX, maxX, minZ, maxZ } = this.worldBounds;
+    const width = maxX - minX;
+    const depth = maxZ - minZ;
+    const span = Math.max(width, depth, 5);
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    if (this.scene.fog instanceof THREE.FogExp2) {
+      this.scene.fog.density = fogDensityForSpan(span);
+    }
+    if (this.keyLight) {
+      this.keyLight.position.set(centerX + span * 0.42, span * 0.7, centerZ + span * 0.28);
+      this.keyLight.target.position.set(centerX, 0, centerZ);
+      const shadowExtent = Math.max(24, span * 0.68);
+      this.keyLight.shadow.camera.left = -shadowExtent;
+      this.keyLight.shadow.camera.right = shadowExtent;
+      this.keyLight.shadow.camera.top = shadowExtent;
+      this.keyLight.shadow.camera.bottom = -shadowExtent;
+      this.keyLight.shadow.camera.far = Math.max(120, span * 3);
+      this.keyLight.shadow.camera.updateProjectionMatrix();
+    }
+    if (this.rimLight) {
+      this.rimLight.position.set(centerX - span * 0.38, span * 0.48, centerZ - span * 0.42);
+      this.rimLight.target.position.set(centerX, 0, centerZ);
+    }
+    if (this.warmFill) {
+      this.warmFill.position.set(centerX, Math.max(7, span * 0.08), centerZ);
+      this.warmFill.distance = Math.max(58, span * 0.72);
+    }
   }
 
   private measureBounds(scene: GeneratedScene): WorldBounds {

@@ -19,7 +19,7 @@ import {
   wallWithOpenings,
 } from "./shared";
 
-export type BuildingArchetype = "church" | "temple" | "manor" | "barracks" | "library" | "workshop" | "warehouse";
+export type BuildingArchetype = "church" | "temple" | "manor" | "barracks" | "library" | "workshop" | "warehouse" | "fortress" | "mine";
 
 interface BuildingProfile {
   archetype: BuildingArchetype;
@@ -40,6 +40,8 @@ const PROFILES: Readonly<Record<BuildingArchetype, BuildingProfile>> = {
   library: { archetype: "library", title: ["The Lantern Archive", "Library of Quiet Chains", "The Cartographer's Athenaeum"], wall: "plaster", floor: "wood", width: [18, 27], depth: [20, 29], floors: [2, 3], floorHeight: [12, 16] },
   workshop: { archetype: "workshop", title: ["The Brasswheel Works", "Ember Row Foundry", "The Three Hammers"], wall: "stone", floor: "stone", width: [18, 29], depth: [15, 23], floors: [1, 2], floorHeight: [12, 17] },
   warehouse: { archetype: "warehouse", title: ["Warehouse Nine", "The Salt and Rope Depot", "East Quay Stores"], wall: "darkStone", floor: "stone", width: [21, 34], depth: [18, 29], floors: [1, 2], floorHeight: [14, 19] },
+  fortress: { archetype: "fortress", title: ["The Blackstone Hold", "Westreach Bastion", "The Four Towers"], wall: "darkStone", floor: "stone", width: [30, 44], depth: [26, 40], floors: [1, 1], floorHeight: [18, 24] },
+  mine: { archetype: "mine", title: ["The Red Seam Mine", "Deepdelve Works", "The Abandoned Silver Levels"], wall: "rock", floor: "rock", width: [32, 48], depth: [28, 42], floors: [2, 2], floorHeight: [11, 14] },
 };
 
 const ARCHETYPE_TERMS: Readonly<Record<BuildingArchetype, readonly string[]>> = {
@@ -50,6 +52,8 @@ const ARCHETYPE_TERMS: Readonly<Record<BuildingArchetype, readonly string[]>> = 
   library: ["library", "archive", "scriptorium", "图书馆", "档案馆", "藏书楼", "抄经室"],
   workshop: ["workshop", "smithy", "forge", "foundry", "工坊", "铁匠铺", "锻炉", "铸造厂"],
   warehouse: ["warehouse", "depot", "storehouse", "granary", "仓库", "货栈", "粮仓", "堆栈"],
+  fortress: ["fortress", "fort", "bastion", "citadel", "堡垒", "要塞", "堡寨", "城塞"],
+  mine: ["mine", "mineshaft", "colliery", "矿井", "矿场", "矿坑", "矿山"],
 };
 
 export function classifyBuildingArchetype(prompt: string): BuildingArchetype {
@@ -239,6 +243,104 @@ function buildHall(scene: GeneratedScene, profile: BuildingProfile, width: numbe
   void rng;
 }
 
+function buildFortress(scene: GeneratedScene, profile: BuildingProfile, width: number, depth: number, floorHeightFeet: number[], rng: GeneratorContext["rng"]): void {
+  const centerX = 2 + width / 2;
+  const centerZ = 2 + depth / 2;
+  const wallHeight = feetToMeters(Math.min(16, floorHeightFeet[0] ?? 20));
+  const wallWalkY = feetToMeters(10);
+  scene.primitives.push(
+    box("fortress-courtyard-floor", 0, centerX, 0, centerZ, width - 2, FLOOR_SLAB_METERS, depth - 2, "stone", ["floor", "courtyard", "fortress"]),
+    ...wallWithOpenings("fortress-north-curtain", 0, centerX, 2, FLOOR_SLAB_METERS, width, wallHeight, "x", profile.wall, ["curtain-wall", "fortress"], { widthCells: 3.2 }),
+    ...wallWithOpenings("fortress-south-curtain", 0, centerX, 2 + depth, FLOOR_SLAB_METERS, width, wallHeight, "x", profile.wall, ["curtain-wall", "fortress"], { widthCells: 1.8, offsetCells: width * 0.28 }),
+    ...wallWithOpenings("fortress-west-curtain", 0, 2, centerZ, FLOOR_SLAB_METERS, depth, wallHeight, "z", profile.wall, ["curtain-wall", "fortress"], []),
+    ...wallWithOpenings("fortress-east-curtain", 0, 2 + width, centerZ, FLOOR_SLAB_METERS, depth, wallHeight, "z", profile.wall, ["curtain-wall", "fortress"], []),
+  );
+  for (const [index, x, z] of [[0, 2.8, 2.8], [1, 1.2 + width, 2.8], [2, 2.8, 1.2 + depth], [3, 1.2 + width, 1.2 + depth]] as const) {
+    scene.primitives.push(cylinder(`fortress-corner-tower-${index}`, 0, x, 0, z, 4.2, wallHeight + feetToMeters(7), "darkStone", ["corner-tower", "fortress", "high-ground"]));
+  }
+  const keepWidth = Math.max(9, width * 0.28);
+  const keepDepth = Math.max(8, depth * 0.28);
+  const keepX = centerX;
+  const keepZ = centerZ + depth * 0.18;
+  scene.primitives.push(...rectangularShell("fortress-keep", 0, keepX, keepZ, 0, keepWidth, keepDepth, wallHeight * 0.85, "stone", "darkStone", ["keep", "fortress"], { north: { widthCells: 2 } }));
+  scene.primitives.push(
+    corridor("fortress-north-wall-walk", 0, 4, 3, width, 3, wallWalkY, 1.5, "stone", ["wall-walk", "platform", "high-ground", "vertical-opening"]),
+    corridor("fortress-east-wall-walk", 0, width + 1, 4, width + 1, depth, wallWalkY, 1.5, "stone", ["wall-walk", "platform", "high-ground"]),
+  );
+  const bottom = { xCells: 5.5, zCells: 7.2, yMeters: FLOOR_SLAB_METERS };
+  const top = { xCells: 5.5, zCells: 3.2, yMeters: wallWalkY + FLOOR_SLAB_METERS };
+  const wallStair = stairConnection("fortress-wall-stair", 0, bottom, top, 1.8, "stone", ["wall-walk-access"]);
+  scene.primitives.push(wallStair.primitive);
+  scene.rooms.push(
+    createRoom("fortress-courtyard-room", "Fortress courtyard", "circulation", 0, centerX, centerZ, width - 5, depth - 5),
+    createRoom("fortress-gatehouse", "Gatehouse kill zone", "combat", 0, centerX, 4.5, 8, 5),
+    createRoom("fortress-keep-room", "Inner keep", "private", 0, keepX, keepZ, keepWidth - 1, keepDepth - 1),
+    createRoom("fortress-wall-room", "Curtain wall walk", "combat", 0, centerX, 3, width - 6, 2, wallWalkY),
+  );
+  connectRooms(scene.rooms, "fortress-courtyard-room", "fortress-gatehouse");
+  connectRooms(scene.rooms, "fortress-courtyard-room", "fortress-keep-room");
+  connectRooms(scene.rooms, "fortress-courtyard-room", "fortress-wall-room");
+  scene.routes.push(createRoute("fortress-primary-route", "primary", [{ x: centerX, z: 1 }, { x: centerX, z: 5 }, { x: centerX, z: centerZ }, { x: keepX, z: keepZ - keepDepth / 2 + 1 }]));
+  scene.routes.push(createRoute("fortress-sally-route", "alternate", [{ x: keepX, z: keepZ }, { x: keepX, z: keepZ - keepDepth / 2 - 1 }, { x: centerX, z: centerZ }, { x: keepX + keepWidth / 2 + 2, z: centerZ }, { x: keepX + keepWidth / 2 + 2, z: depth - 1 }, { x: 2 + width * 0.78, z: depth + 2 }, { x: 2 + width * 0.78, z: depth + 3 }]));
+  scene.routes.push(stairRoute("fortress-wall-route", wallStair));
+  scene.tactical.push(
+    tacticalFeature("fortress-gate", "entrance", centerX, 2, 0, 2, "The gatehouse funnels attackers between curtain walls."),
+    tacticalFeature("fortress-gate-choke", "chokepoint", centerX, 4.5, 0, 3, "Crossfire from the gatehouse dominates the entry lane."),
+    tacticalFeature("fortress-wall-high-ground", "highGround", centerX, 3, wallWalkY, 3, "The wall walk controls the courtyard and exterior approach."),
+  );
+  addCover(scene, "fortress-crate-cover-a", centerX - 4, centerZ - 2, rng);
+  addCover(scene, "fortress-crate-cover-b", centerX + 5, centerZ + 2, rng);
+}
+
+function addCover(scene: GeneratedScene, id: string, x: number, z: number, rng: GeneratorContext["rng"]): void {
+  scene.primitives.push(box(id, 0, x, FLOOR_SLAB_METERS, z, rng.float(1.2, 2), rng.float(0.9, 1.5), rng.float(1.2, 2), "wood", ["cover", "supply"]));
+  scene.tactical.push(tacticalFeature(`${id}-feature`, "cover", x, z, 0, 1, "Supplies create cover in an otherwise exposed yard."));
+}
+
+function buildMine(scene: GeneratedScene, profile: BuildingProfile, width: number, depth: number, floorHeightFeet: number[], rng: GeneratorContext["rng"]): void {
+  const lowerY = 0;
+  const upperY = feetToMeters(floorHeightFeet[0] ?? 12);
+  const hubX = width * 0.46;
+  const hubZ = depth * 0.48;
+  const upperEntryX = 2;
+  const upperEntryZ = depth * 0.3;
+  scene.primitives.push(
+    corridor("mine-upper-adit", 1, upperEntryX, upperEntryZ, hubX, hubZ, upperY, 2.5, "rock", ["mine-tunnel", "adit", "cart-track"]),
+    corridor("mine-lower-main", 0, 3, depth * 0.72, width - 4, depth * 0.72, lowerY, 2.7, "rock", ["mine-tunnel", "main-level", "cart-track"]),
+    corridor("mine-lower-branch-a", 0, hubX, depth * 0.72, width * 0.2, depth * 0.9, lowerY, 2, "rock", ["mine-tunnel", "branch"]),
+    corridor("mine-lower-branch-b", 0, hubX, depth * 0.72, width * 0.78, depth * 0.9, lowerY, 2, "rock", ["mine-tunnel", "branch"]),
+    box("mine-upper-platform", 1, hubX, upperY, hubZ, 7, FLOOR_SLAB_METERS, 6, "wood", ["floor", "shaft-platform", "platform"]),
+    box("mine-lower-hub", 0, hubX, lowerY, depth * 0.72, 9, FLOOR_SLAB_METERS, 7, "rock", ["floor", "mine-hub", "platform"]),
+  );
+  const bottom = { xCells: hubX + 2.4, zCells: depth * 0.72, yMeters: lowerY + FLOOR_SLAB_METERS };
+  const top = { xCells: hubX + 2.4, zCells: hubZ, yMeters: upperY + FLOOR_SLAB_METERS };
+  const shaftStair = stairConnection("mine-incline", 0, bottom, top, 2, "wood", ["mine-incline", "shaft-access"]);
+  scene.primitives.push(shaftStair.primitive);
+  scene.rooms.push(
+    createRoom("mine-upper-entry", "Upper adit and hoist", "circulation", 1, hubX, hubZ, 8, 7, upperY),
+    createRoom("mine-lower-hub-room", "Lower cart junction", "circulation", 0, hubX, depth * 0.72, 9, 7, lowerY),
+    createRoom("mine-ore-chamber-a", "Flooded ore chamber", "natural", 0, width * 0.2, depth * 0.9, 7, 5, lowerY),
+    createRoom("mine-ore-chamber-b", "Timbered stope", "combat", 0, width * 0.78, depth * 0.9, 8, 6, lowerY),
+  );
+  connectRooms(scene.rooms, "mine-upper-entry", "mine-lower-hub-room");
+  connectRooms(scene.rooms, "mine-lower-hub-room", "mine-ore-chamber-a");
+  connectRooms(scene.rooms, "mine-lower-hub-room", "mine-ore-chamber-b");
+  for (let index = 0; index < 5; index += 1) {
+    const x = width * 0.18 + index * width * 0.15;
+    scene.primitives.push(box(`mine-timber-${index}`, 0, x, FLOOR_SLAB_METERS, depth * 0.72, 0.35, feetToMeters(rng.int(5, 8)), 2.8, "wood", ["timber-support", "cover"]));
+  }
+  scene.primitives.push(box("mine-collapse", 0, width * 0.78, FLOOR_SLAB_METERS, depth * 0.9, 4, 0.18, 3, "hazard", ["hazard", "collapse"]));
+  scene.routes.push(createRoute("mine-entry-route", "primary", [{ x: 0, z: upperEntryZ, y: upperY }, { x: upperEntryX, z: upperEntryZ, y: upperY }, { x: hubX, z: hubZ, y: upperY }]));
+  scene.routes.push(stairRoute("mine-vertical-route", shaftStair));
+  scene.routes.push(createRoute("mine-cart-loop", "alternate", [{ x: hubX, z: depth * 0.72, y: lowerY }, { x: width * 0.2, z: depth * 0.9, y: lowerY }, { x: hubX, z: depth * 0.72, y: lowerY }, { x: width * 0.78, z: depth * 0.9, y: lowerY }]));
+  scene.tactical.push(
+    tacticalFeature("mine-entrance", "entrance", 1, upperEntryZ, upperY, 2, "A timbered adit enters the upper mine level."),
+    tacticalFeature("mine-incline-choke", "chokepoint", hubX + 2.4, (hubZ + depth * 0.72) / 2, lowerY, 2, "The incline is the only reliable route between working levels."),
+    tacticalFeature("mine-collapse-hazard", "hazard", width * 0.78, depth * 0.9, lowerY, 2, "A failed timber set threatens another collapse."),
+  );
+  void profile;
+}
+
 export function generateBuilding(context: GeneratorContext): GeneratedScene {
   const archetype = classifyBuildingArchetype(context.request.prompt);
   const profile = PROFILES[archetype];
@@ -261,6 +363,8 @@ export function generateBuilding(context: GeneratorContext): GeneratedScene {
 
   if (archetype === "church" || archetype === "temple") buildSacred(scene, profile, width, depth, floorHeightFeet, context.rng.fork("sacred"));
   else if (archetype === "manor") buildManor(scene, profile, width, depth, floorHeightFeet);
+  else if (archetype === "fortress") buildFortress(scene, profile, width, depth, floorHeightFeet, context.rng.fork("fortress"));
+  else if (archetype === "mine") buildMine(scene, profile, width, depth, floorHeightFeet, context.rng.fork("mine"));
   else buildHall(scene, profile, width, depth, floorHeightFeet, context.rng.fork("hall"));
   return scene;
 }
