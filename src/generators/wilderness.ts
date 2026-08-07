@@ -54,11 +54,11 @@ export function classifyWildernessArchetype(prompt: string): WildernessArchetype
   return selected;
 }
 
-function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number } {
+function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number; density: number } {
   const { rng, request } = context;
   const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
   const scale = request.size === "small" ? 0.75 : request.size === "large" ? 1.3 : 1;
-  return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2] };
+  return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2], density: request.density };
 }
 
 function addCover(scene: GeneratedScene, rng: GeneratorContext["rng"], prefix: string, x: number, z: number, y: number, count: number, material: MaterialKey = "rock"): void {
@@ -159,7 +159,7 @@ function buildRift(scene: GeneratedScene, width: number, depth: number, rng: Gen
 /** A semantic underdark map: connected walkable cells are shaped first, then
  * rendered as elevation bands, a continuous ravine, bridges, and biome zones.
  * This is deliberately different from the generic chamber cave generator. */
-function buildUnderdark(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+function buildUnderdark(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const cols = Math.max(24, Math.floor(width));
   const rows = Math.max(20, Math.floor(depth));
   const levels = 5;
@@ -170,9 +170,10 @@ function buildUnderdark(scene: GeneratedScene, width: number, depth: number, rng
   for (let z = 0; z < rows; z += 1) {
     for (let x = 0; x < cols; x += 1) {
       const boundary = Math.min(x, z, cols - 1 - x, rows - 1 - z);
-      const caveShape = boundary >= 1 && (Math.sin(x * 0.31) + Math.cos(z * 0.23) > -1.15 || boundary > 3);
+      const caveShape = boundary >= 1 && (Math.sin(x * 0.31) + Math.cos(z * 0.23) > (-1.15 + density * 0.35) || boundary > 3);
       const inRavine = Math.abs(x - (ravineX + Math.sin(z * 0.22) * 2.2)) < 2.1 && !bridgeRows.some((row) => Math.abs(z - row) <= 1);
-      if (!caveShape || inRavine) heights.push(undefined);
+      const densityCollapse = density > 0.62 && !inRavine && Math.sin(x * 0.48 + z * 0.17) > 0.72 - density * 0.12 && boundary > 3;
+      if (!caveShape || inRavine || densityCollapse) heights.push(undefined);
       else {
         const westHighland = x < cols * 0.33 && z > rows * 0.18;
         const northRuin = z < rows * 0.27 && x > cols * 0.58;
@@ -183,6 +184,17 @@ function buildUnderdark(scene: GeneratedScene, width: number, depth: number, rng
     }
   }
   const yOf = (level: number) => feetToMeters(level * 10) + FLOOR_SLAB_METERS;
+  const nearestWalkable = (targetX: number, targetZ: number): { x: number; z: number; level: number } => {
+    for (let radius = 0; radius < 8; radius += 1) {
+      for (let dz = -radius; dz <= radius; dz += 1) for (let dx = -radius; dx <= radius; dx += 1) {
+        const x = Math.round(targetX + dx);
+        const z = Math.round(targetZ + dz);
+        const level = cellAt(x, z);
+        if (level !== undefined) return { x, z, level };
+      }
+    }
+    return { x: Math.max(1, Math.min(cols - 2, Math.round(targetX))), z: Math.max(1, Math.min(rows - 2, Math.round(targetZ))), level: 0 };
+  };
   let walkable = 0;
   let cliffSegments = 0;
   for (let z = 0; z < rows; z += 1) {
@@ -218,14 +230,16 @@ function buildUnderdark(scene: GeneratedScene, width: number, depth: number, rng
     if (index > 0) connectRooms(scene.rooms, `underdark-zone-${index - 1}`, id);
   }
   const routePoints = [{ x: 2, z: rows - 3, y: yOf(1) }, { x: cols * 0.25, z: rows * 0.72, y: yOf(3) }, { x: ravineX, z: bridgeRows[0] ?? rows * 0.28, y: yOf(1) }, { x: cols * 0.75, z: rows * 0.18, y: yOf(2) }];
-  scene.routes.push(createRoute("underdark-main-route", "primary", routePoints), createRoute("underdark-ravine-route", "alternate", [{ x: 2, z: rows - 3, y: yOf(1) }, { x: ravineX, z: rows * 0.82, y: yOf(0) }, { x: cols - 3, z: rows * 0.68, y: yOf(0) }]));
+  const alternateA = nearestWalkable(ravineX - 4, rows * 0.82);
+  const alternateB = nearestWalkable(cols - 3, rows * 0.68);
+  scene.routes.push(createRoute("underdark-main-route", "primary", routePoints), createRoute("underdark-ravine-route", "alternate", [{ x: 2, z: rows - 3, y: yOf(1) }, { x: alternateA.x, z: alternateA.z, y: yOf(alternateA.level) }, { x: alternateB.x, z: alternateB.z, y: yOf(alternateB.level) }]));
   scene.tactical.push(tacticalFeature("underdark-entrance", "entrance", 2, rows - 3, yOf(1), 2, "A descending tunnel opens into the lower cavern."), tacticalFeature("underdark-ravine", "hazard", ravineX, rows * 0.5, -1, 4, "A continuous ravine divides the cavern and blocks direct movement."), tacticalFeature("underdark-highland", "highGround", cols * 0.18, rows * 0.48, yOf(3), 3, "The western highland overlooks the basin and both bridge approaches."));
-  for (let index = 0; index < 18; index += 1) {
+  for (let index = 0; index < Math.round(7 + density * 20); index += 1) {
     const x = rng.float(cols * 0.56, cols * 0.86);
     const z = rng.float(rows * 0.58, rows * 0.88);
     scene.primitives.push(primitive(`underdark-fungus-${index}`, "cone", 0, x, yOf(0) + feetToMeters(rng.int(3, 8)), z, feetToMeters(rng.float(1, 2.4)), feetToMeters(rng.int(3, 8)), feetToMeters(rng.float(1, 2.4)), "moss", ["fungal-forest", "underdark", "cover"]));
   }
-  for (let index = 0; index < 9; index += 1) {
+  for (let index = 0; index < Math.round(3 + density * 10); index += 1) {
     const x = rng.float(cols * 0.6, cols * 0.94);
     const z = rng.float(rows * 0.08, rows * 0.48);
     scene.primitives.push(primitive(`underdark-crystal-${index}`, "cone", 0, x, yOf(1) + feetToMeters(rng.int(2, 6)), z, feetToMeters(0.7), feetToMeters(rng.int(4, 10)), feetToMeters(0.7), "warmLight", ["crystal", "underdark", "landmark"]));
@@ -365,15 +379,15 @@ function buildMountainLegacy(scene: GeneratedScene, width: number, depth: number
   scene.tactical.push(tacticalFeature("mountain-entrance", "entrance", trailStartX, trailStartZ, 0, 2, "A switchback trail begins on the first fragmented terrace."), tacticalFeature("mountain-summit", "highGround", summitX, summitZ, summitY, 3, "The summit shelf dominates every lower approach."));
 }
 
-function buildMountain(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
-  buildMountainContinuous(scene, width, depth, rng);
+function buildMountain(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  buildMountainContinuous(scene, width, depth, density, rng);
 }
 
 /** Continuous macro-terrain grammar. Heights belong to regions, not isolated
  * cells: large shelves stay flat, boundaries become cliff faces, and voids are
  * carved as coherent cuts. This is the base grammar future outdoor themes can
  * reuse without hard-coding a complete map. */
-function buildMountainContinuous(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+function buildMountainContinuous(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const tile = 1;
   const cols = Math.max(24, Math.floor(width));
   const rows = Math.max(24, Math.floor(depth));
@@ -390,7 +404,7 @@ function buildMountainContinuous(scene: GeneratedScene, width: number, depth: nu
       const upper = z < rows * 0.32 && Math.abs(x - ridgeX) < cols * 0.27;
       const shelf = z >= rows * 0.28 && z < rows * 0.62;
       const ravine = Math.abs(x - (voidX + Math.sin(z * 0.18) * 3.6)) < 2.3 && z > rows * 0.2 && z < rows * 0.88;
-      const collapsed = Math.hypot((x - voidX) / 5.5, (z - voidZ) / 4.2) < 1 && Math.sin(x * 0.7 + z * 0.33) > -0.2;
+      const collapsed = Math.hypot((x - voidX) / (4.5 + density * 2), (z - voidZ) / (3.2 + density * 2)) < 1 && Math.sin(x * 0.7 + z * 0.33) > (-0.2 - density * 0.35);
       if (edge === 0 || ravine || collapsed) heights.push(undefined);
       else {
         const level = basin ? 0 : upper ? levels - 1 : shelf ? Math.max(2, levels - 3) : Math.max(1, Math.min(levels - 2, Math.floor((rows - z) / Math.max(1, rows / (levels - 1)))));
@@ -400,7 +414,8 @@ function buildMountainContinuous(scene: GeneratedScene, width: number, depth: nu
   }
   const yOf = (level: number) => feetToMeters(level * 10) + FLOOR_SLAB_METERS;
   const routeCells: Array<{ x: number; z: number; level: number }> = [];
-  for (let z = rows - 3; z >= 2; z -= Math.max(2, Math.floor(rows / 8))) {
+  const routeStep = Math.max(2, Math.floor(rows / (6 + Math.round(density * 5))));
+  for (let z = rows - 3; z >= 2; z -= routeStep) {
     const desired = Math.round(cols * (0.2 + (rows - z) / rows * 0.58));
     const x = [desired, desired - 1, desired + 1, Math.round(ridgeX)].find((candidate) => cellAt(candidate, z) !== undefined);
     if (x !== undefined) routeCells.push({ x, z, level: cellAt(x, z) ?? 0 });
@@ -536,8 +551,8 @@ function buildSwamp(scene: GeneratedScene, width: number, depth: number, rng: Ge
 /** Adds a second layer of authored natural structure instead of leaving large
  * wilderness maps as a few empty slabs. These pieces intentionally remain
  * generic terrain vocabulary so new biomes can reuse the same composition pass. */
-function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, rng: GeneratorContext["rng"]): void {
-  const obstacleCount = rng.int(10, 16);
+function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const obstacleCount = rng.int(Math.round(5 + density * 8), Math.round(9 + density * 14));
   for (let index = 0; index < obstacleCount; index += 1) {
     const x = rng.float(2.5, width - 2.5);
     const z = rng.float(2.5, depth - 2.5);
@@ -548,9 +563,12 @@ function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchet
     scene.primitives.push(primitive(`natural-detail-${index}`, shape, 0, x, FLOOR_SLAB_METERS, z, widthCells * 1.524, height, depthCells * 1.524, archetype === "ice" ? "rock" : "rock", ["natural-detail", "natural-cover", index % 4 === 0 ? "terrain" : "cover"]));
     scene.tactical.push(tacticalFeature(`natural-detail-cover-${index}`, "cover", x, z, 0, Math.max(1, Math.ceil(Math.max(widthCells, depthCells) / 1.4)), "Irregular natural structure breaks sight lines and creates a tactical pocket."));
   }
-  const hazardX = width * rng.float(0.32, 0.68);
-  const hazardZ = depth * rng.float(0.34, 0.66);
-  scene.tactical.push(tacticalFeature("natural-complex-hazard", "hazard", hazardX, hazardZ, archetype === "rift" ? -1 : 0, 2, archetype === "ice" ? "Thin ice or a snow-covered void gives way under pressure." : "Unstable ground, loose rock, or deep growth turns this area into a danger zone."));
+  const hazardCount = density > 0.72 ? 2 : 1;
+  for (let index = 0; index < hazardCount; index += 1) {
+    const hazardX = width * rng.float(0.32, 0.68);
+    const hazardZ = depth * rng.float(0.34, 0.66);
+    scene.tactical.push(tacticalFeature(`natural-complex-hazard-${index}`, "hazard", hazardX, hazardZ, archetype === "rift" ? -1 : 0, 2, archetype === "ice" ? "Thin ice or a snow-covered void gives way under pressure." : "Unstable ground, loose rock, or deep growth turns this area into a danger zone."));
+  }
 }
 
 /** Theme pass for outdoor grammars. These are structural features (banks,
@@ -636,7 +654,7 @@ interface StandablePropSpec {
 /** Adds a natural object as a real tactical surface instead of a decorative
  * mesh. The top cap receives the same 5-ft surface grid as terrain, and tags
  * expose stand/jump/cover semantics to future pathfinding and AI. */
-function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const specs: Partial<Record<WildernessArchetype, StandablePropSpec>> = {
     "river-valley": { material: "rock", label: "river boulder", width: 2.6, depth: 2.2, heightFeet: 5, count: 8 },
     rift: { material: "rock", label: "rift pillar", width: 1.8, depth: 1.8, heightFeet: 10, count: 7 },
@@ -665,7 +683,8 @@ function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype
     const nextZ = next ? next.z / CELL : pointZ;
     return distanceToSegment(x, z, pointX, pointZ, nextX, nextZ) < 3.4;
   }));
-  for (let index = 0; index < spec.count; index += 1) {
+  const count = Math.max(2, Math.round(spec.count * (0.45 + density * 0.85)));
+  for (let index = 0; index < count; index += 1) {
     let x = rng.float(3, width - 3);
     let z = rng.float(3, depth - 3);
     // Keep standable props out of authored route portals and switchbacks. A
@@ -706,16 +725,16 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   scene.archetype = archetype;
   if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, context.rng.fork("river"));
   else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, context.rng.fork("rift"));
-  else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, context.rng.fork("mountain"));
+  else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, context.rng.fork("ice"));
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));
   else if (archetype === "forest") buildForest(scene, profile.width, profile.depth, context.rng.fork("forest"));
   else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, context.rng.fork("swamp"));
-  else if (archetype === "underdark") buildUnderdark(scene, profile.width, profile.depth, context.rng.fork("underdark"));
+  else if (archetype === "underdark") buildUnderdark(scene, profile.width, profile.depth, profile.density, context.rng.fork("underdark"));
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
   addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"));
   addPromptDrivenTheme(scene, context.request.prompt, profile.width, profile.depth, context.rng.fork("prompt-theme"));
-  addStandableProps(scene, archetype, profile.width, profile.depth, context.rng.fork("standable-props"));
-  addTerrainComplexity(scene, archetype, profile.width, profile.depth, context.rng.fork("terrain-complexity"));
+  addStandableProps(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("standable-props"));
+  addTerrainComplexity(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("terrain-complexity"));
   return scene;
 }
