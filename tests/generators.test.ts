@@ -154,6 +154,27 @@ describe("scene generators", () => {
     expect(mine.routes.some((route) => route.kind === "vertical")).toBe(true);
   });
 
+  it("uses distinct room graphs and fixtures for each dungeon style", () => {
+    const styles = [
+      ["crypt", "墓穴地牢", "sarcophagus"],
+      ["temple", "神殿地牢", "altar"],
+      ["mine", "矿井地牢", "ore-cart"],
+      ["prison", "监狱地牢", "bars"],
+      ["lair", "龙巢地牢", "hoard"],
+      ["sewer", "下水道地牢", "channel"],
+      ["arcane", "奥术法师地牢", "arcane-node"],
+    ] as const;
+    const signatures = new Set<string>();
+    for (const [style, prompt, fixture] of styles) {
+      const scene = generateScene({ ...request("dungeon-style-contract", "large", 0.8), prompt }, "dungeon");
+      expect(scene.archetype).toBe(`dungeon:${style}`);
+      expect(hasTag(scene, fixture)).toBe(true);
+      expect(scene.diagnostics.valid).toBe(true);
+      signatures.add(scene.rooms.slice(0, 8).map((room) => `${room.center.x.toFixed(1)},${room.center.z.toFixed(1)}`).join("|"));
+    }
+    expect(signatures.size).toBe(styles.length);
+  });
+
   it.each([
     ["church", "教堂"],
     ["temple", "神殿"],
@@ -177,6 +198,9 @@ describe("scene generators", () => {
     ["hospital", "1920年代 CoC 医院"],
     ["planetarium", "天文馆与旋转穹顶"],
     ["museum", "CoC 博物馆与封闭档案室"],
+    ["police", "1920年代 CoC 警察局与证物室"],
+    ["school", "现代学校与中央操场"],
+    ["hotel", "1920年代酒店与宴会厅"],
   ] as const)("validates the specialised %s grammar across scale bands", (archetype, prompt) => {
     for (const size of ["small", "medium", "large"] as const) {
       const scene = generateScene({ ...request(`special-building-${archetype}-${size}`, size, 0.72), prompt }, "building");
@@ -187,7 +211,7 @@ describe("scene generators", () => {
   });
 
   it("makes institutional density structurally visible", () => {
-    for (const prompt of ["医院", "天文馆", "博物馆"] as const) {
+    for (const prompt of ["医院", "天文馆", "博物馆", "警察局", "学校", "酒店"] as const) {
       const sparse = generateScene({ ...request(`building-density-${prompt}`, "large", 0), prompt }, "building");
       const dense = generateScene({ ...request(`building-density-${prompt}`, "large", 1), prompt }, "building");
       expect(dense.primitives.length).toBeGreaterThan(sparse.primitives.length);

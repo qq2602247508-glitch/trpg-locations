@@ -125,6 +125,14 @@ describe("SceneProgram v1", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("keeps an explicit arcane dungeon out of the generic laboratory compiler", () => {
+    const scene = generateScene({ prompt: "奥术法师地牢，径向传送环、实验室和隐藏密室", seed: "arcane-dungeon", size: "large", density: 0.82 }, "adaptive");
+    expect(scene.archetype).toBe("dungeon:arcane");
+    expect(hasTag(scene, "arcane-node")).toBe(true);
+    expect(scene.rooms.length).toBeGreaterThanOrEqual(15);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
   it("realizes three actual floating island levels with vertical routes", () => {
     const scene = generateScene({ prompt: "阿弗纳斯地狱荒原，三层浮空岛屿、铁制战争道路和熔岩裂缝", seed: "three-islands", size: "large", density: 0.8 }, "adaptive");
     expect(scene.archetype).toBe("floating-islands");

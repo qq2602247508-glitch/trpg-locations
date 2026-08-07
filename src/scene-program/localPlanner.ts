@@ -49,10 +49,12 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   }
   // A city modifier describes context; an explicit institution still owns the
   // spatial domain (for example "modern city hospital").
-  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "工厂", "宅邸", "教堂", "建筑", "观测所", "天文馆", "天文台", "研究所", "实验室", "博物馆", "剧院", "车站", "hospital", "hotel", "school", "police", "factory", "manor", "church", "observatory", "planetarium", "laboratory", "museum", "theatre", "station"])) return { domain: "building", primaryKind: "building" };
+  // An explicit dungeon noun owns the topology even when the prompt also names
+  // a room function such as laboratory, temple, prison, or archive.
+  if (has(text, ["地牢", "地下城", "迷宫", "龙巢", "墓穴", "地下神殿", "dungeon", "labyrinth", "crypt", "lair"])) return { domain: "building", primaryKind: "dungeon" };
+  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "警察局", "工厂", "宅邸", "教堂", "建筑", "观测所", "天文馆", "天文台", "研究所", "实验室", "博物馆", "剧院", "车站", "hospital", "hotel", "school", "police", "factory", "manor", "church", "observatory", "planetarium", "laboratory", "museum", "theatre", "station"])) return { domain: "building", primaryKind: "building" };
   if (has(text, ["城市", "城镇", "村庄", "街区", "港区", "深水城", "city", "town", "village", "district", "harbor"])) return { domain: "settlement", primaryKind: "settlement" };
   if (has(text, ["下水道", "排水", "隧道", "地铁", "sewer", "drain", "subway"])) return { domain: "infrastructure", primaryKind: "sewer" };
-  if (has(text, ["地牢", "地下城", "迷宫", "龙巢", "墓穴", "地下神殿", "dungeon", "labyrinth", "crypt", "lair"])) return { domain: "building", primaryKind: "dungeon" };
   const classified = classifyInput(text);
   if (classified.kind !== "adaptive") return inferDomain(text, classified.kind);
   return { domain: "natural", primaryKind: "wilderness" };
@@ -71,7 +73,7 @@ function inferOperators(text: string): { morphology: MorphologyOperator[]; cover
   if (has(text, ["地牢", "地下城", "迷宫", "龙巢", "墓穴", "地下神殿", "dungeon", "labyrinth", "crypt", "lair"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["墓地", "埋葬", "墓园", "grave", "burial", "cemetery"])) morphology.push("burial-field", "crypt-sink");
   if (has(text, ["城市", "街区", "深水城", "city", "district"])) morphology.push("urban-blocks");
-  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "建筑", "hospital", "hotel", "school", "police"])) morphology.push("interior-partitions", "vertical-stack");
+  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "警察局", "建筑", "hospital", "hotel", "school", "police"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["观测所", "天文馆", "天文台", "observatory", "planetarium"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["森林", "树林", "forest", "woodland"])) coverage.push("woodland", "dense");
   if (has(text, ["蘑菇", "菌林", "fungal", "mushroom"])) coverage.push("fungal");
@@ -81,7 +83,7 @@ function inferOperators(text: string): { morphology: MorphologyOperator[]; cover
   if (has(text, ["浮空", "浮岛", "空岛", "floating island", "sky island", "levitating"])) coverage.push("floating-islands");
   if (has(text, ["灰烬", "焦土", "ash", "地狱", "阿弗纳斯"])) coverage.push("ash");
   if (has(text, ["遗迹", "废墟", "瓦砾", "ruin", "rubble"])) coverage.push("rubble");
-  if (has(text, ["医院", "学校", "警局", "hospital", "school", "police"])) coverage.push("institutional-rooms");
+  if (has(text, ["医院", "学校", "警局", "警察局", "hospital", "school", "police"])) coverage.push("institutional-rooms");
   if (has(text, ["旅馆", "酒店", "住宅", "hotel", "residential"])) coverage.push("residential-rooms");
   if (has(text, ["调查", "线索", "侦探", "investigation", "evidence", "coc"])) coverage.push("evidence");
   // Absence of a recognised landform is not evidence for a random one.

@@ -39,6 +39,81 @@ const styleTitles: Record<DungeonStyle, readonly string[]> = {
   arcane: ["The Broken Arcanum", "The Spellwright Vaults"],
 };
 
+interface DungeonRoomLayout {
+  x: number;
+  z: number;
+  w: number;
+  d: number;
+}
+
+function roomLayout(style: DungeonStyle, index: number, count: number, width: number, depth: number, rng: GeneratorContext["rng"]): DungeonRoomLayout {
+  const cx = width / 2 + 2;
+  const cz = depth / 2 + 2;
+  const bound = (value: number, span: number, limit: number) => Math.max(3 + span / 2, Math.min(limit + 1 - span / 2, value));
+  if (style === "temple") {
+    const rows = Math.ceil(count / 2);
+    const row = Math.floor(index / 2);
+    const isSanctum = index === count - 1;
+    const w = isSanctum ? Math.min(12, width * 0.34) : rng.int(5, 8);
+    const d = isSanctum ? Math.min(10, depth * 0.3) : rng.int(5, 7);
+    const x = isSanctum ? cx : cx + (index % 2 === 0 ? -1 : 1) * width * 0.2;
+    const z = 4 + row * Math.max(5, (depth - 8) / Math.max(1, rows - 1));
+    return { x: bound(x, w, width), z: bound(z, d, depth), w, d };
+  }
+  if (style === "mine") {
+    const branch = index % 3;
+    const rank = Math.floor(index / 3) + 1;
+    const angle = -Math.PI * 0.82 + branch * Math.PI * 0.82 + rng.float(-0.12, 0.12);
+    const radius = Math.min(width, depth) * Math.min(0.34, 0.1 + rank * 0.09);
+    const w = rng.int(5, 9);
+    const d = rng.int(5, 8);
+    return { x: bound(cx + Math.cos(angle) * radius, w, width), z: bound(cz + Math.sin(angle) * radius, d, depth), w, d };
+  }
+  if (style === "prison") {
+    const rows = Math.ceil(count / 2);
+    const w = index === 0 ? 8 : 4;
+    const d = index === 0 ? 7 : 5;
+    const x = index === 0 ? cx : cx + (index % 2 === 0 ? -1 : 1) * width * 0.2;
+    const z = index === 0 ? 4.5 : 6 + Math.floor((index - 1) / 2) * Math.max(4.5, (depth - 12) / Math.max(1, rows - 1));
+    return { x: bound(x, w, width), z: bound(z, d, depth), w, d };
+  }
+  if (style === "lair") {
+    if (index === 0) return { x: cx, z: cz, w: Math.min(15, width * 0.42), d: Math.min(13, depth * 0.4) };
+    const angle = (Math.PI * 2 * (index - 1)) / Math.max(1, count - 1) + rng.float(-0.16, 0.16);
+    const radius = Math.min(width, depth) * 0.31;
+    const w = rng.int(6, 10);
+    const d = rng.int(5, 9);
+    return { x: bound(cx + Math.cos(angle) * radius, w, width), z: bound(cz + Math.sin(angle) * radius, d, depth), w, d };
+  }
+  if (style === "sewer") {
+    const w = index % 3 === 0 ? 8 : 5;
+    const d = index % 3 === 0 ? 6 : 5;
+    const x = cx + (index % 3 === 0 ? 0 : index % 2 === 0 ? -width * 0.22 : width * 0.22);
+    const z = 4 + index * Math.max(4, (depth - 8) / Math.max(1, count - 1));
+    return { x: bound(x, w, width), z: bound(z, d, depth), w, d };
+  }
+  if (style === "arcane") {
+    if (index === 0) return { x: cx, z: cz, w: 9, d: 9 };
+    const angle = (Math.PI * 2 * (index - 1)) / Math.max(1, count - 1);
+    const radius = Math.min(width, depth) * 0.28;
+    const w = rng.int(5, 7);
+    const d = rng.int(5, 7);
+    return { x: bound(cx + Math.cos(angle) * radius, w, width), z: bound(cz + Math.sin(angle) * radius, d, depth), w, d };
+  }
+  const columns = Math.max(2, Math.ceil(Math.sqrt(count)));
+  const rows = Math.ceil(count / columns);
+  const column = index % columns;
+  const row = Math.floor(index / columns);
+  const w = rng.int(5, Math.max(6, Math.floor((width - 8) / columns) - 1));
+  const d = rng.int(5, Math.max(6, Math.floor((depth - 8) / rows) - 1));
+  return {
+    x: 4 + (column + 0.5) * ((width - 8) / columns) + rng.float(-1.5, 1.5),
+    z: 4 + (row + 0.5) * ((depth - 8) / rows) + rng.float(-1.5, 1.5),
+    w,
+    d,
+  };
+}
+
 /** Graph-first D&D dungeon grammar: rooms are authored as a connected graph
  * before walls, secret doors, stairs, and combat geometry are emitted. */
 export function generateDungeon(context: GeneratorContext): GeneratedScene {
@@ -58,22 +133,16 @@ export function generateDungeon(context: GeneratorContext): GeneratedScene {
   for (let level = 0; level < levels; level += 1) {
     const baseY = baseYs[level] ?? 0;
     const floorRoomCount = Math.min(roomsPerLevel, 4 + Math.ceil(roomCount / levels));
-    const columns = Math.max(2, Math.ceil(Math.sqrt(floorRoomCount)));
-    const rows = Math.ceil(floorRoomCount / columns);
     for (let index = 0; index < floorRoomCount; index += 1) {
-      const column = index % columns;
-      const row = Math.floor(index / columns);
-      const w = context.rng.int(5, Math.max(6, Math.floor((width - 8) / columns) - 1));
-      const d = context.rng.int(5, Math.max(6, Math.floor((depth - 8) / rows) - 1));
-      const x = 4 + (column + 0.5) * ((width - 8) / columns) + context.rng.float(-1.5, 1.5);
-      const z = 4 + (row + 0.5) * ((depth - 8) / rows) + context.rng.float(-1.5, 1.5);
+      const { x, z, w, d } = roomLayout(style, index, floorRoomCount, width, depth, context.rng.fork(`layout-${level}-${index}`));
       const hidden = index > 1 && (index + level) % 7 === 0;
       const id = `dungeon-room-${level}-${index}`;
       allRooms.push({ id, level, x, z, w, d, hidden });
       const role = hidden ? "private" : index === floorRoomCount - 1 ? "combat" : index === 0 ? "public" : "natural";
       scene.rooms.push(createRoom(id, hidden ? "Hidden chamber" : `${level + 1}F ${style} chamber ${index + 1}`, role, level, x, z, w, d, baseY));
       scene.primitives.push(...rectangularShell(`${id}-shell`, level, x, z, baseY, w, d, feetToMeters(floorHeights[level] ?? 12) - FLOOR_SLAB_METERS, "stone", style === "arcane" ? "darkStone" : "rock", ["dungeon", `dungeon-style:${style}`, hidden ? "secret-room" : "room", "door-frame"], {}));
-      scene.primitives.push(box(`${id}-feature`, level, x + context.rng.float(-w * 0.2, w * 0.2), baseY + FLOOR_SLAB_METERS, z + context.rng.float(-d * 0.2, d * 0.2), Math.max(1.2, w * 0.22), feetToMeters(hidden ? 5 : 2.5), Math.max(1.2, d * 0.2), hidden ? "warmLight" : style === "mine" ? "wood" : "darkStone", ["dungeon", hidden ? "secret" : "cover", `style:${style}`]));
+      const featureTags = style === "prison" ? ["bars", "cell"] : style === "temple" ? ["altar", "ritual"] : style === "lair" ? ["hoard", "bone-cover"] : style === "sewer" ? ["channel", "sluice"] : style === "arcane" ? ["arcane-node", "teleport-focus"] : style === "mine" ? ["ore-cart", "timber"] : ["sarcophagus", "grave-goods"];
+      scene.primitives.push(box(`${id}-feature`, level, x + context.rng.float(-w * 0.2, w * 0.2), baseY + FLOOR_SLAB_METERS, z + context.rng.float(-d * 0.2, d * 0.2), Math.max(1.2, w * 0.22), feetToMeters(hidden ? 5 : 2.5), Math.max(1.2, d * 0.2), hidden ? "warmLight" : style === "mine" ? "wood" : style === "prison" ? "metal" : "darkStone", ["dungeon", hidden ? "secret" : "cover", `style:${style}`, ...featureTags]));
       if (hidden) scene.tactical.push(tacticalFeature(`${id}-secret`, "secret", x, z, baseY, 2, "A concealed chamber is reached through a hidden door or false wall."));
       else if (index === floorRoomCount - 1) scene.tactical.push(tacticalFeature(`${id}-encounter`, "chokepoint", x, z, baseY, 3, "A larger chamber anchors an encounter and controls the level route."));
     }
@@ -83,7 +152,8 @@ export function generateDungeon(context: GeneratorContext): GeneratedScene {
   for (let level = 0; level < levels; level += 1) {
     const floorRooms = byLevel(level);
     for (let index = 1; index < floorRooms.length; index += 1) {
-      const previous = floorRooms[index - 1];
+      const parentIndex = style === "lair" || style === "arcane" ? 0 : style === "mine" ? Math.floor((index - 1) / 2) : index - 1;
+      const previous = floorRooms[parentIndex];
       const current = floorRooms[index];
       if (!previous || !current) continue;
       connectRooms(scene.rooms, previous.id, current.id);
