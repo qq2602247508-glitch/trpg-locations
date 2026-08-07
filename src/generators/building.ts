@@ -138,14 +138,22 @@ function buildSacred(scene: GeneratedScene, profile: BuildingProfile, width: num
     createRoom("sacred-nave", isTemple ? "Processional hall" : "Nave", "public", 0, centerX, z0 + (depth - sanctuaryDepth) / 2, width - 2, depth - sanctuaryDepth - 1),
     createRoom("sacred-sanctuary", isTemple ? "Inner sanctuary" : "Chancel and altar", "private", 0, centerX, sanctuaryStart + sanctuaryDepth / 2, width - 4, sanctuaryDepth - 1),
     createRoom("sacred-vestry", isTemple ? "Offering treasury" : "Vestry", "service", 0, x0 + width - 3, sanctuaryStart + sanctuaryDepth / 2, 4, sanctuaryDepth - 2),
+    createRoom("sacred-prayer-west", "West prayer room", "private", 0, x0 + width * 0.2, z0 + depth * 0.58, Math.max(4, width * 0.22), Math.max(4, depth * 0.2)),
+    createRoom("sacred-prayer-east", "East prayer room", "private", 0, x0 + width * 0.8, z0 + depth * 0.58, Math.max(4, width * 0.22), Math.max(4, depth * 0.2)),
   );
   connectRooms(scene.rooms, "sacred-nave", "sacred-sanctuary");
   connectRooms(scene.rooms, "sacred-sanctuary", "sacred-vestry");
+  connectRooms(scene.rooms, "sacred-nave", "sacred-prayer-west");
+  connectRooms(scene.rooms, "sacred-nave", "sacred-prayer-east");
 
   scene.primitives.push(
     ...rectangularShell("sacred-shell", 0, centerX, centerZ, 0, width, depth, wallHeight, profile.floor, profile.wall, [profile.archetype, "sacred"], { north: { widthCells: 2.2 } }),
     ...wallWithOpenings("sacred-screen", 0, centerX, sanctuaryStart, FLOOR_SLAB_METERS, width - 1, wallHeight * 0.75, "x", profile.wall, ["sanctuary-screen"], { widthCells: 2.4 }),
     box("sacred-altar", 0, centerX, FLOOR_SLAB_METERS, z0 + depth - 2.2, isTemple ? 3.2 : 2.5, 1.15, 1.3, isTemple ? "darkStone" : "stone", ["altar", "cover"]),
+    ...wallWithOpenings("sacred-prayer-west-shell", 0, x0 + width * 0.2, z0 + depth * 0.58, FLOOR_SLAB_METERS, Math.max(4, width * 0.22), wallHeight * 0.72, "x", profile.wall, ["prayer-room", "cover"], { widthCells: 1.4 }),
+    ...wallWithOpenings("sacred-prayer-east-shell", 0, x0 + width * 0.8, z0 + depth * 0.58, FLOOR_SLAB_METERS, Math.max(4, width * 0.22), wallHeight * 0.72, "x", profile.wall, ["prayer-room", "cover"], { widthCells: 1.4 }),
+    box("sacred-prayer-west-altar", 0, x0 + width * 0.2, FLOOR_SLAB_METERS, z0 + depth * 0.58, 1.4, 1.1, 1.2, "darkStone", ["prayer-room", "altar", "cover"]),
+    box("sacred-prayer-east-altar", 0, x0 + width * 0.8, FLOOR_SLAB_METERS, z0 + depth * 0.58, 1.4, 1.1, 1.2, "darkStone", ["prayer-room", "altar", "cover"]),
   );
   const columnPairs = Math.max(3, Math.floor((depth - sanctuaryDepth) / 5));
   for (let index = 0; index < columnPairs; index += 1) {
@@ -168,6 +176,19 @@ function buildSacred(scene: GeneratedScene, profile: BuildingProfile, width: num
     scene.routes.push(stairRoute("sacred-gallery-route", stair));
     scene.tactical.push(tacticalFeature("sacred-gallery-high-ground", "highGround", centerX, z0 + 4, upperY, 2, "The gallery commands the central processional aisle."));
   }
+  const cryptY = -feetToMeters(10);
+  scene.rooms.push(createRoom("sacred-crypt", "Underground burial crypt", "combat", 0, centerX, sanctuaryStart + sanctuaryDepth * 0.5, width * 0.58, depth * 0.22, cryptY));
+  scene.primitives.push(
+    box("sacred-crypt-floor", 0, centerX, cryptY, sanctuaryStart + sanctuaryDepth * 0.5, width * 0.62, FLOOR_SLAB_METERS, depth * 0.25, "rock", ["crypt", "underground", "secret-room", "floor"]),
+    box("sacred-crypt-coffin-row", 0, centerX, cryptY + FLOOR_SLAB_METERS, sanctuaryStart + sanctuaryDepth * 0.5, width * 0.42, 1.1, 1.4, "stone", ["coffin", "cover", "crypt"]),
+  );
+  scene.primitives.push(corridor("sacred-crypt-stair", 0, centerX - 2, sanctuaryStart - 1, centerX - 2, sanctuaryStart + 1, cryptY + FLOOR_SLAB_METERS, 1.4, "stone", ["vertical-route", "crypt-access", "vertical-opening", "descending-stair"]));
+  scene.routes.push(createRoute("sacred-crypt-route", "alternate", [{ x: centerX - 2, z: sanctuaryStart - 1, y: FLOOR_SLAB_METERS }, { x: centerX - 2, z: sanctuaryStart + 1, y: cryptY + FLOOR_SLAB_METERS }]));
+  scene.tactical.push(tacticalFeature("sacred-crypt-ambush", "secret", centerX, sanctuaryStart + sanctuaryDepth * 0.5, cryptY, 2, "The burial crypt is a concealed lower ambush route beneath the sanctuary."));
+  connectRooms(scene.rooms, "sacred-sanctuary", "sacred-crypt");
+  const bellY = feetToMeters(floorHeightFeet.reduce((sum, value) => sum + value, 0) + 4);
+  scene.primitives.push(box("sacred-bell-tower-platform", scene.floors - 1, x0 + width * 0.82, bellY, z0 + depth * 0.18, Math.max(4, width * 0.16), 0.5, Math.max(4, depth * 0.16), "stone", ["bell-tower", "high-ground", "platform", "standable"]));
+  scene.tactical.push(tacticalFeature("sacred-bell-tower-highground", "highGround", x0 + width * 0.82, z0 + depth * 0.18, bellY, 3, "The ruined bell tower rises above the nave as a dangerous exposed platform."));
   scene.routes.push(createRoute("sacred-primary-route", "primary", [{ x: centerX, z: z0 - 1 }, { x: centerX, z: z0 + 3 }, { x: centerX, z: sanctuaryStart + 1 }, { x: centerX, z: z0 + depth - 2 }]));
   scene.tactical.push(
     tacticalFeature("sacred-entrance", "entrance", centerX, z0, 0, 2, "Broad ceremonial doors open onto the central aisle."),
@@ -321,10 +342,27 @@ function buildFortress(scene: GeneratedScene, profile: BuildingProfile, width: n
     createRoom("fortress-gatehouse", "Gatehouse kill zone", "combat", 0, centerX, 4.5, 8, 5),
     createRoom("fortress-keep-room", "Inner keep", "private", 0, keepX, keepZ, keepWidth - 1, keepDepth - 1),
     createRoom("fortress-wall-room", "Curtain wall walk", "combat", 0, centerX, 3, width - 6, 2, wallWalkY),
+    createRoom("fortress-armory", "Underground armory", "service", 0, keepX, keepZ, keepWidth * 0.72, keepDepth * 0.62, -feetToMeters(11)),
+    createRoom("fortress-command", "Keep command hall", "private", 0, keepX, keepZ - keepDepth * 0.18, keepWidth - 2, Math.max(4, keepDepth * 0.26)),
+    createRoom("fortress-gate-guardroom", "Gate guardroom", "combat", 0, centerX - 3, 4.5, 3, 3),
+    createRoom("fortress-gate-inspection", "Gate inspection chamber", "service", 0, centerX + 3, 4.5, 3, 3),
+    createRoom("fortress-stables", "Courtyard stables and wagon bay", "service", 0, 2 + width * 0.2, 2 + depth * 0.78, width * 0.24, depth * 0.14),
   );
   connectRooms(scene.rooms, "fortress-courtyard-room", "fortress-gatehouse");
   connectRooms(scene.rooms, "fortress-courtyard-room", "fortress-keep-room");
   connectRooms(scene.rooms, "fortress-courtyard-room", "fortress-wall-room");
+  connectRooms(scene.rooms, "fortress-keep-room", "fortress-command");
+  scene.primitives.push(
+    ...rectangularShell("fortress-armory-shell", 0, keepX, keepZ, -feetToMeters(11), keepWidth * 0.78, keepDepth * 0.66, feetToMeters(9), "rock", "darkStone", ["underground", "armory", "fortress"], {}),
+    box("fortress-armory-racks", 0, keepX, -feetToMeters(10.2), keepZ, keepWidth * 0.5, 1.8, 1.2, "metal", ["weapon-rack", "cover", "armory"]),
+    box("fortress-armory-crates", 0, keepX + 3, -feetToMeters(10.2), keepZ + 2, 2.4, 1.5, 2.2, "wood", ["supply", "cover", "armory"]),
+  );
+  scene.primitives.push(corridor("fortress-armory-stair", 0, keepX - 2.5, keepZ - keepDepth / 2 + 1, keepX - 2.5, keepZ - keepDepth / 2 + 1, -feetToMeters(10.2), 1.5, "stone", ["vertical-route", "armory-access", "vertical-opening", "descending-stair"]));
+  scene.routes.push(createRoute("fortress-armory-route", "alternate", [{ x: keepX - 2.5, z: keepZ - keepDepth / 2 + 1, y: FLOOR_SLAB_METERS }, { x: keepX - 2.5, z: keepZ - keepDepth / 2 + 1, y: -feetToMeters(10.2) }]));
+  connectRooms(scene.rooms, "fortress-keep-room", "fortress-armory");
+  connectRooms(scene.rooms, "fortress-gatehouse", "fortress-gate-guardroom");
+  connectRooms(scene.rooms, "fortress-gatehouse", "fortress-gate-inspection");
+  connectRooms(scene.rooms, "fortress-courtyard-room", "fortress-stables");
   scene.routes.push(createRoute("fortress-primary-route", "primary", [{ x: centerX, z: 1 }, { x: centerX, z: 5 }, { x: centerX, z: centerZ }, { x: keepX, z: keepZ - keepDepth / 2 + 1 }]));
   scene.routes.push(createRoute("fortress-sally-route", "alternate", [{ x: keepX, z: keepZ }, { x: keepX, z: keepZ - keepDepth / 2 - 1 }, { x: centerX, z: centerZ }, { x: keepX + keepWidth / 2 + 2, z: centerZ }, { x: keepX + keepWidth / 2 + 2, z: depth - 1 }, { x: 2 + width * 0.78, z: depth + 2 }, { x: 2 + width * 0.78, z: depth + 3 }]));
   scene.routes.push(stairRoute("fortress-wall-route", wallStair));
@@ -335,6 +373,16 @@ function buildFortress(scene: GeneratedScene, profile: BuildingProfile, width: n
   );
   addCover(scene, "fortress-crate-cover-a", centerX - 4, centerZ - 2, rng);
   addCover(scene, "fortress-crate-cover-b", centerX + 5, centerZ + 2, rng);
+  for (let index = 0; index < 5; index += 1) {
+    const x = centerX - width * 0.28 + index * width * 0.14;
+    scene.primitives.push(box(`fortress-training-${index}`, 0, x, FLOOR_SLAB_METERS, centerZ - depth * 0.18, 1.1, 2.2, 1.1, "wood", ["training-dummy", "cover", "fortress"]));
+  }
+  scene.primitives.push(
+    box("fortress-gate-portcullis", 0, centerX, FLOOR_SLAB_METERS + feetToMeters(5), 4.5, 0.35, feetToMeters(9), 5.8, "metal", ["portcullis", "gatehouse", "chokepoint"]),
+    box("fortress-stable-bay", 0, 2 + width * 0.2, FLOOR_SLAB_METERS, 2 + depth * 0.78, width * 0.18, 1.6, 1.2, "wood", ["stable", "cover", "service"]),
+    box("fortress-siege-crate", 0, centerX - width * 0.18, FLOOR_SLAB_METERS, centerZ + depth * 0.16, 2.4, 1.8, 2.4, "metal", ["siege-supply", "cover"]),
+  );
+  scene.tactical.push(tacticalFeature("fortress-training-yard", "cover", centerX, centerZ - depth * 0.18, 0, 2, "Training dummies and supply lanes break the courtyard into usable combat pockets."));
 }
 
 function addCover(scene: GeneratedScene, id: string, x: number, z: number, rng: GeneratorContext["rng"]): void {

@@ -1317,7 +1317,9 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   if (archetype !== "floating-islands" && ["浮空岛", "浮岛", "空岛", "floating island", "sky island", "levitating"].some((term) => floatingText.includes(term))) {
     addFloatingIslandsOverlay(scene, profile.width, profile.depth, context.rng.fork("floating-overlay"));
   }
-  if (morphology.woodland && archetype !== "forest") {
+  const infernalText = [context.request.prompt, ...(context.semanticHints?.anchors ?? []), ...(context.semanticHints?.tags ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");
+  const infernalTheme = archetype === "infernal-waste" || ["阿弗纳斯", "avernus", "地狱", "hell", "infernal", "灰烬荒原", "ash waste"].some((term) => infernalText.includes(term));
+  if (morphology.woodland && archetype !== "forest" && !infernalTheme) {
     addWoodlandCoverage(scene, profile.width, profile.depth, profile.density, context.rng.fork("woodland-coverage"), archetype === "river-valley");
   }
   addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"));
