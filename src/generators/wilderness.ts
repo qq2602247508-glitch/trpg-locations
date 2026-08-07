@@ -41,7 +41,7 @@ export function classifyWildernessArchetype(prompt: string): WildernessArchetype
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number } {
   const { rng, request } = context;
-  const base: readonly [number, number, number] = archetype === "rift" ? [42, 34, 5] : archetype === "mountain" ? [38, 38, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
+  const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
   const scale = request.size === "small" ? 0.75 : request.size === "large" ? 1.3 : 1;
   return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2] };
 }
@@ -305,7 +305,80 @@ function buildMountainLegacy(scene: GeneratedScene, width: number, depth: number
 }
 
 function buildMountain(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
-  buildMountainHeightfield(scene, width, depth, rng);
+  buildMountainContinuous(scene, width, depth, rng);
+}
+
+/** Continuous macro-terrain grammar. Heights belong to regions, not isolated
+ * cells: large shelves stay flat, boundaries become cliff faces, and voids are
+ * carved as coherent cuts. This is the base grammar future outdoor themes can
+ * reuse without hard-coding a complete map. */
+function buildMountainContinuous(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  const tile = 1;
+  const cols = Math.max(24, Math.floor(width));
+  const rows = Math.max(24, Math.floor(depth));
+  const levels = rng.int(5, 7);
+  const heights: Array<number | undefined> = [];
+  const ridgeX = cols * rng.float(0.42, 0.58);
+  const voidX = cols * rng.float(0.35, 0.62);
+  const voidZ = rows * rng.float(0.42, 0.6);
+  const cellAt = (x: number, z: number) => (x < 0 || z < 0 || x >= cols || z >= rows ? undefined : heights[z * cols + x]);
+  for (let z = 0; z < rows; z += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+      const basin = Math.abs(x - cols * 0.24) < cols * 0.2 && z > rows * 0.55;
+      const upper = z < rows * 0.32 && Math.abs(x - ridgeX) < cols * 0.27;
+      const shelf = z >= rows * 0.28 && z < rows * 0.62;
+      const ravine = Math.abs(x - (voidX + Math.sin(z * 0.18) * 3.6)) < 2.3 && z > rows * 0.2 && z < rows * 0.88;
+      const collapsed = Math.hypot((x - voidX) / 5.5, (z - voidZ) / 4.2) < 1 && Math.sin(x * 0.7 + z * 0.33) > -0.2;
+      if (edge === 0 || ravine || collapsed) heights.push(undefined);
+      else {
+        const level = basin ? 0 : upper ? levels - 1 : shelf ? Math.max(2, levels - 3) : Math.max(1, Math.min(levels - 2, Math.floor((rows - z) / Math.max(1, rows / (levels - 1)))));
+        heights.push(level);
+      }
+    }
+  }
+  const yOf = (level: number) => feetToMeters(level * 10) + FLOOR_SLAB_METERS;
+  const routeCells: Array<{ x: number; z: number; level: number }> = [];
+  for (let z = rows - 3; z >= 2; z -= Math.max(2, Math.floor(rows / 8))) {
+    const desired = Math.round(cols * (0.2 + (rows - z) / rows * 0.58));
+    const x = [desired, desired - 1, desired + 1, Math.round(ridgeX)].find((candidate) => cellAt(candidate, z) !== undefined);
+    if (x !== undefined) routeCells.push({ x, z, level: cellAt(x, z) ?? 0 });
+  }
+  for (let z = 0; z < rows; z += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const level = cellAt(x, z);
+      if (level === undefined) continue;
+      const material = level === 0 ? "earth" : level >= levels - 1 ? "moss" : "rock";
+      scene.primitives.push(box(`mountain-region-cell-${x}-${z}`, 0, x + 0.5, 0, z + 0.5, 0.96, yOf(level), 0.96, material, ["floor", "terrain", "semantic-grid", "macro-region", `elevation:${level}`]));
+      for (const [dx, dz] of [[1, 0], [0, 1]] as const) {
+        const neighbour = cellAt(x + dx, z + dz);
+        if (neighbour !== undefined && Math.abs(neighbour - level) >= 1) {
+          scene.primitives.push(box(`mountain-cliff-face-${x}-${z}-${dx}-${dz}`, 0, x + 0.5 + dx * 0.49, yOf(Math.min(level, neighbour)) / 2, z + 0.5 + dz * 0.49, dx ? 0.14 : 0.96, Math.max(0.4, yOf(Math.max(level, neighbour)) - yOf(Math.min(level, neighbour))), dz ? 0.14 : 0.96, "darkStone", ["cliff-face", "vertical-face", "terrain"]));
+        }
+      }
+    }
+  }
+  for (let index = 1; index < routeCells.length; index += 1) {
+    const from = routeCells[index - 1];
+    const to = routeCells[index];
+    if (!from || !to) continue;
+    if (to.level !== from.level) {
+      const lower = from.level < to.level ? from : to;
+      const upper = from.level < to.level ? to : from;
+      const ramp = stairConnection(`mountain-switchback-${index}`, 0, { xCells: lower.x, zCells: lower.z, yMeters: yOf(lower.level) }, { xCells: upper.x, zCells: upper.z, yMeters: yOf(upper.level) }, 1.8, "rock", ["natural-ramp", "switchback", "semantic-grid"]);
+      scene.primitives.push(ramp.primitive);
+      scene.routes.push(stairRoute(`mountain-switchback-route-${index}`, ramp));
+    }
+  }
+  if (routeCells.length > 1) scene.routes.push(createRoute("mountain-semantic-trail", "primary", routeCells.map((cell) => ({ x: cell.x + 0.5, z: cell.z + 0.5, y: yOf(cell.level) }))));
+  const start = routeCells[0] ?? { x: 2, z: rows - 3, level: 0 };
+  const summit = routeCells.at(-1) ?? { x: ridgeX, z: 2, level: levels - 1 };
+  scene.rooms.push(createRoom("mountain-basin", "Lower basin", "natural", 0, cols * 0.22, rows * 0.72, cols * 0.3, rows * 0.32, yOf(0)), createRoom("mountain-middle-shelf", "Middle shelf", "natural", 0, cols * 0.55, rows * 0.45, cols * 0.4, rows * 0.22, yOf(Math.max(2, levels - 3))), createRoom("mountain-summit-shelf", "Summit high ground", "combat", 0, summit.x, summit.z, 9, 8, yOf(summit.level)));
+  connectRooms(scene.rooms, "mountain-basin", "mountain-middle-shelf");
+  connectRooms(scene.rooms, "mountain-middle-shelf", "mountain-summit-shelf");
+  scene.tactical.push(tacticalFeature("mountain-basin-entrance", "entrance", start.x, start.z, yOf(start.level), 2, "A trail enters the lower basin before climbing through the shelf system."), tacticalFeature("mountain-collapse-zone", "hazard", voidX, voidZ, -1, 3, "A collapsed section opens into a vertical void and breaks the plateau."), tacticalFeature("mountain-summit-highground", "highGround", summit.x, summit.z, yOf(summit.level), 3, "The summit is a coherent high ground, not a random raised tile."));
+  scene.description = `Mountain semantic grid with ${levels} elevation bands, continuous shelves, ${routeCells.length} route waypoints, a coherent ravine/collapse zone, and explicit vertical cliff faces.`;
+  scene.floorHeightFeet = [Math.ceil((yOf(levels - 1) + feetToMeters(12)) / 0.3048)];
 }
 
 function buildIce(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
@@ -419,6 +492,76 @@ function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchet
   scene.tactical.push(tacticalFeature("natural-complex-hazard", "hazard", hazardX, hazardZ, archetype === "rift" ? -1 : 0, 2, archetype === "ice" ? "Thin ice or a snow-covered void gives way under pressure." : "Unstable ground, loose rock, or deep growth turns this area into a danger zone."));
 }
 
+/** Theme pass for outdoor grammars. These are structural features (banks,
+ * fissures, terraces, hummocks), not a bag of decorative props. */
+function addSemanticThemeStructure(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  if (archetype === "river-valley") {
+    const fallX = width * rng.float(0.28, 0.72);
+    scene.primitives.push(box("river-west-cliff-face", 0, fallX, feetToMeters(5), depth * 0.32, 0.22, feetToMeters(10), depth * 0.42, "darkStone", ["cliff-face", "river-bank", "vertical-face"]), water("river-waterfall", 0, fallX + 0.2, feetToMeters(1), depth * 0.32, 0.5, feetToMeters(4), 2.4, ["waterfall", "hazard", "terrain"]));
+    scene.tactical.push(tacticalFeature("river-waterfall-hazard", "hazard", fallX, depth * 0.32, feetToMeters(1), 2, "A waterfall drops from the upper bank into a turbulent basin."));
+  } else if (archetype === "ice") {
+    for (let index = 0; index < 4; index += 1) {
+      const x = width * (0.18 + index * 0.2) + rng.float(-2, 2);
+      const z = depth * (0.3 + (index % 2) * 0.38);
+      scene.primitives.push(box(`ice-shelf-${index}`, 0, x, feetToMeters(5 + (index % 3) * 5), z, rng.int(5, 10), FLOOR_SLAB_METERS, rng.int(4, 8), "rock", ["floor", "terrain", "ice-shelf", "high-ground"]));
+      scene.tactical.push(tacticalFeature(`ice-shelf-feature-${index}`, "highGround", x, z, feetToMeters(5 + (index % 3) * 5), 2, "A raised ice shelf creates a clean elevation break and exposed crossing."));
+    }
+  } else if (archetype === "ruin") {
+    scene.primitives.push(box("ruin-collapsed-court", 0, width * 0.28, -0.5, depth * 0.58, width * 0.28, 0.16, depth * 0.22, "hazard", ["terrain", "collapse", "void-edge"]));
+    scene.tactical.push(tacticalFeature("ruin-collapse-hazard", "hazard", width * 0.28, depth * 0.58, -0.5, 3, "The collapsed court interrupts the processional route and exposes a drop."));
+  } else if (archetype === "underground-lake") {
+    scene.primitives.push(box("lake-north-cliff-face", 0, width * 0.5, feetToMeters(4), depth * 0.18, width * 0.58, feetToMeters(8), 0.2, "darkStone", ["cliff-face", "lake-ledge", "vertical-face"]), box("lake-south-cliff-face", 0, width * 0.5, feetToMeters(2), depth * 0.82, width * 0.58, feetToMeters(4), 0.2, "darkStone", ["cliff-face", "lake-ledge", "vertical-face"]));
+  } else if (archetype === "forest") {
+    scene.primitives.push(box("forest-ravine-bank", 0, width * 0.7, feetToMeters(3), depth * 0.62, width * 0.2, feetToMeters(6), depth * 0.28, "earth", ["terrain", "forest-slope", "cliff-face"]));
+    scene.tactical.push(tacticalFeature("forest-ravine-bank", "highGround", width * 0.7, depth * 0.62, feetToMeters(3), 2, "A raised forest bank overlooks the clearing and splits the trails."));
+  } else if (archetype === "swamp") {
+    for (let index = 0; index < 5; index += 1) {
+      const x = width * (0.14 + index * 0.18) + rng.float(-1.5, 1.5);
+      const z = depth * (0.28 + (index % 2) * 0.42);
+      scene.primitives.push(box(`swamp-hummock-${index}`, 0, x, feetToMeters(2), z, rng.int(3, 6), FLOOR_SLAB_METERS, rng.int(2, 5), "earth", ["floor", "terrain", "swamp-hummock", "high-ground"]));
+    }
+  }
+}
+
+/** Composable prompt traits. These modify the selected terrain grammar instead
+ * of selecting a one-off prebuilt scene, so "冰原 + 龙骨" and "裂谷 + 龙骨"
+ * share a skeletal vocabulary while retaining different terrain topology. */
+function addPromptDrivenTheme(scene: GeneratedScene, prompt: string, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const hasBone = ["dragonbone", "dragon bone", "bone", "skeleton", "龙骨", "骸骨", "骨骼"].some((term) => normalized.includes(term));
+  const hasFalls = ["waterfall", "cascade", "瀑布", "银瀑"].some((term) => normalized.includes(term));
+  const hasCrystal = ["crystal", "晶体", "水晶", "晶簇"].some((term) => normalized.includes(term));
+  const hasLava = ["lava", "magma", "熔岩", "岩浆"].some((term) => normalized.includes(term));
+  if (hasBone) {
+    const spineZ = depth * rng.float(0.42, 0.58);
+    scene.primitives.push(corridor("prompt-bone-spine", 0, width * 0.18, spineZ, width * 0.82, spineZ + rng.float(-3, 3), feetToMeters(8), 2.4, "stone", ["bridge", "dragon-spine", "prompt-trait", "combat-route"]));
+    for (let index = 0; index < 10; index += 1) {
+      const x = width * (0.23 + index * 0.055);
+      const z = spineZ + (index % 2 === 0 ? -1 : 1) * rng.float(2.5, 5.5);
+      scene.primitives.push(cylinder(`prompt-rib-${index}`, 0, x, feetToMeters(4), z, rng.float(0.35, 0.6), feetToMeters(rng.int(7, 14)), "stone", ["dragon-rib", "cover", "prompt-trait"]));
+      if (index % 2 === 0) scene.tactical.push(tacticalFeature(`prompt-rib-cover-${index}`, "cover", x, z, feetToMeters(4), 1, "A dragon rib is structural cover beside the elevated spine route."));
+    }
+    scene.routes.push(createRoute("prompt-spine-route", "alternate", [{ x: width * 0.18, z: spineZ, y: feetToMeters(8) }, { x: width * 0.5, z: spineZ, y: feetToMeters(8) }, { x: width * 0.82, z: spineZ, y: feetToMeters(8) }]));
+  }
+  if (hasFalls) {
+    const x = width * rng.float(0.6, 0.82);
+    scene.primitives.push(water("prompt-waterfall", 0, x, feetToMeters(9), depth * 0.22, 1.2, feetToMeters(18), 4, ["waterfall", "prompt-trait", "landmark"]), primitive("prompt-waterfall-cave", "sphere", 0, x + 3, feetToMeters(6), depth * 0.2, feetToMeters(8), feetToMeters(10), feetToMeters(6), "darkStone", ["cave-mouth", "prompt-trait", "landmark"]));
+    scene.tactical.push(tacticalFeature("prompt-waterfall-basin", "hazard", x, depth * 0.28, 0, 3, "The waterfall basin is hazardous, but conceals a route toward the cave mouth."));
+  }
+  if (hasCrystal) {
+    for (let index = 0; index < 8; index += 1) {
+      const x = rng.float(width * 0.2, width * 0.8);
+      const z = rng.float(depth * 0.2, depth * 0.8);
+      scene.primitives.push(primitive(`prompt-crystal-${index}`, "cone", 0, x, feetToMeters(rng.int(3, 8)), z, feetToMeters(rng.float(0.6, 1.4)), feetToMeters(rng.int(5, 13)), feetToMeters(rng.float(0.6, 1.4)), "warmLight", ["crystal", "prompt-trait", index % 3 === 0 ? "cover" : "landmark"]));
+    }
+  }
+  if (hasLava) {
+    const z = depth * rng.float(0.42, 0.62);
+    scene.primitives.push(corridor("prompt-lava-channel", 0, 2, z, width - 2, z + rng.float(-4, 4), -0.3, 3.2, "hazard", ["lava", "hazard", "prompt-trait"]));
+    scene.tactical.push(tacticalFeature("prompt-lava-hazard", "hazard", width * 0.5, z, -0.3, 3, "A lava channel cuts across the terrain grammar and forces a crossing decision."));
+  }
+}
+
 export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const archetype = classifyWildernessArchetype(context.request.prompt);
   const profile = bounds(context, archetype);
@@ -444,6 +587,8 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, context.rng.fork("swamp"));
   else if (archetype === "underdark") buildUnderdark(scene, profile.width, profile.depth, context.rng.fork("underdark"));
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
+  addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"));
+  addPromptDrivenTheme(scene, context.request.prompt, profile.width, profile.depth, context.rng.fork("prompt-theme"));
   addTerrainComplexity(scene, archetype, profile.width, profile.depth, context.rng.fork("terrain-complexity"));
   return scene;
 }
