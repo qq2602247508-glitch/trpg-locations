@@ -435,6 +435,9 @@ function generateProgramBuilding(context: GeneratorContext): GeneratedScene {
     scene.rooms.push(createRoom(`program-room-${region.id}`, region.label, role, level, x, z, roomWidth, Math.max(4, segmentDepth - 0.6), baseY));
     scene.primitives.push(
       ...wallWithOpenings(`program-room-${region.id}-front`, level, x, z - segmentDepth / 2, baseY + FLOOR_SLAB_METERS, roomWidth, feetToMeters(floorHeightFeet[level] ?? 11) - FLOOR_SLAB_METERS, "x", "plaster", ["program-building", `program-region:${region.id}`], { widthCells: 1.25 }),
+      ...wallWithOpenings(`program-room-${region.id}-back`, level, x, z + segmentDepth / 2, baseY + FLOOR_SLAB_METERS, roomWidth, feetToMeters(floorHeightFeet[level] ?? 11) - FLOOR_SLAB_METERS, "x", "plaster", ["program-building", `program-region:${region.id}`, "room-boundary"], { widthCells: 1.1 }),
+      ...wallWithOpenings(`program-room-${region.id}-west`, level, x - roomWidth / 2, z, baseY + FLOOR_SLAB_METERS, segmentDepth, feetToMeters(floorHeightFeet[level] ?? 11) - FLOOR_SLAB_METERS, "z", "plaster", ["program-building", `program-region:${region.id}`, "room-boundary"], { widthCells: 1.1 }),
+      ...wallWithOpenings(`program-room-${region.id}-east`, level, x + roomWidth / 2, z, baseY + FLOOR_SLAB_METERS, segmentDepth, feetToMeters(floorHeightFeet[level] ?? 11) - FLOOR_SLAB_METERS, "z", "plaster", ["program-building", `program-region:${region.id}`, "room-boundary"], { widthCells: 1.1 }),
       box(`program-room-${region.id}-fixture`, level, x + side * roomWidth * 0.2, baseY + FLOOR_SLAB_METERS, z, Math.max(0.8, roomWidth * 0.16), feetToMeters(region.function === "service" ? 4 : 3), Math.max(1.2, segmentDepth * 0.28), region.function === "hazard" ? "hazard" : "wood", ["program-building", `program-region:${region.id}`, "functional-fixture", region.function === "investigation" ? "evidence" : "cover"]),
     );
     addProgramRegionFixtures(scene, region, level, x, z, baseY, roomWidth, segmentDepth);

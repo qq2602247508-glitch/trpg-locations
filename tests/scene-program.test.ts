@@ -96,6 +96,23 @@ describe("SceneProgram v1", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("classifies a planetarium as a building instead of a mountain", () => {
+    const scene = generateScene({ prompt: "天文馆，穹顶影院、天文展厅和地下设备层", seed: "planetarium", size: "medium", density: 0.7 }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("building");
+    expect(scene.archetype).toBe("program-building:timeless");
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("composes floating islands on top of an impact crater", () => {
+    const scene = generateScene({ prompt: "陨石坑、森林、浮空岛", seed: "crater-forest-islands", size: "large", density: 0.8 }, "adaptive");
+    expect(scene.archetype).toBe("impact-crater");
+    expect(hasTag(scene, "impact-rim")).toBe(true);
+    expect(hasTag(scene, "woodland-cover")).toBe(true);
+    expect(hasTag(scene, "floating-island")).toBe(true);
+    expect(scene.routes.filter((route) => route.kind === "vertical").length).toBeGreaterThanOrEqual(2);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
   it("realizes three actual floating island levels with vertical routes", () => {
     const scene = generateScene({ prompt: "阿弗纳斯地狱荒原，三层浮空岛屿、铁制战争道路和熔岩裂缝", seed: "three-islands", size: "large", density: 0.8 }, "adaptive");
     expect(scene.archetype).toBe("floating-islands");

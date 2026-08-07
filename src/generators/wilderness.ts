@@ -691,6 +691,28 @@ function buildImpactCrater(scene: GeneratedScene, width: number, depth: number, 
   scene.floorHeightFeet = [44];
 }
 
+function addFloatingIslandsOverlay(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  const islands = [
+    { id: "low", x: width * 0.22, z: depth * 0.28, y: feetToMeters(10), w: 8, d: 7 },
+    { id: "mid", x: width * 0.72, z: depth * 0.42, y: feetToMeters(22), w: 10, d: 8 },
+    { id: "high", x: width * 0.48, z: depth * 0.76, y: feetToMeters(36), w: 7, d: 6 },
+  ];
+  for (const [index, island] of islands.entries()) {
+    const x = island.x + rng.float(-1.2, 1.2);
+    scene.primitives.push(box(`impact-floating-${island.id}-surface`, 0, x, island.y, island.z, island.w, FLOOR_SLAB_METERS, island.d, "darkStone", ["floor", "terrain", "floating-island", "secondary-structure"]), box(`impact-floating-${island.id}-underside`, 0, x, island.y - feetToMeters(5), island.z, island.w * 0.72, feetToMeters(10), island.d * 0.72, "rock", ["vertical-face", "floating-island", "secondary-structure"]));
+    scene.rooms.push(createRoom(`impact-floating-${island.id}-room`, `${index + 1}F floating ejecta shelf`, "combat", 0, x, island.z, island.w, island.d, island.y));
+    scene.tactical.push(tacticalFeature(`impact-floating-${island.id}-highground`, "highGround", x, island.z, island.y, 3, `A broken floating ejecta shelf hangs ${Math.round(island.y / 0.3048)} ft above the crater floor.`));
+  }
+  for (let index = 0; index < islands.length - 1; index += 1) {
+    const lower = islands[index];
+    const upper = islands[index + 1];
+    if (!lower || !upper) continue;
+    const stair = stairConnection(`impact-floating-route-${index}`, 0, { xCells: lower.x, zCells: lower.z, yMeters: lower.y + FLOOR_SLAB_METERS }, { xCells: upper.x, zCells: upper.z, yMeters: upper.y + FLOOR_SLAB_METERS }, 1.2, "wood", ["vertical-route", "vertical-opening", "floating-island", "secondary-structure"]);
+    scene.primitives.push(stair.primitive);
+    scene.routes.push(stairRoute(`impact-floating-route-${index}`, stair));
+  }
+}
+
 function buildVolcanic(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const cols = Math.max(30, Math.floor(width));
   const rows = Math.max(28, Math.floor(depth));
@@ -1291,6 +1313,10 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "underdark") buildUnderdark(scene, profile.width, profile.depth, profile.density, context.rng.fork("underdark"));
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
   const morphology = analyzeTerrainMorphology(context.request.prompt, context.semanticHints);
+  const floatingText = [context.request.prompt, ...(context.semanticHints?.anchors ?? []), ...(context.semanticHints?.tags ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");
+  if (archetype !== "floating-islands" && ["浮空岛", "浮岛", "空岛", "floating island", "sky island", "levitating"].some((term) => floatingText.includes(term))) {
+    addFloatingIslandsOverlay(scene, profile.width, profile.depth, context.rng.fork("floating-overlay"));
+  }
   if (morphology.woodland && archetype !== "forest") {
     addWoodlandCoverage(scene, profile.width, profile.depth, profile.density, context.rng.fork("woodland-coverage"), archetype === "river-valley");
   }

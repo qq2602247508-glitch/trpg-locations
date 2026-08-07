@@ -48,7 +48,7 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   }
   // A city modifier describes context; an explicit institution still owns the
   // spatial domain (for example "modern city hospital").
-  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "工厂", "宅邸", "教堂", "建筑", "观测所", "研究所", "实验室", "博物馆", "剧院", "车站", "hospital", "hotel", "school", "police", "factory", "manor", "church", "observatory", "laboratory", "museum", "theatre", "station"])) return { domain: "building", primaryKind: "building" };
+  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "工厂", "宅邸", "教堂", "建筑", "观测所", "天文馆", "天文台", "研究所", "实验室", "博物馆", "剧院", "车站", "hospital", "hotel", "school", "police", "factory", "manor", "church", "observatory", "planetarium", "laboratory", "museum", "theatre", "station"])) return { domain: "building", primaryKind: "building" };
   if (has(text, ["城市", "城镇", "村庄", "街区", "港区", "深水城", "city", "town", "village", "district", "harbor"])) return { domain: "settlement", primaryKind: "settlement" };
   if (has(text, ["下水道", "排水", "隧道", "地铁", "sewer", "drain", "subway"])) return { domain: "infrastructure", primaryKind: "sewer" };
   const classified = classifyInput(text);
@@ -69,7 +69,7 @@ function inferOperators(text: string): { morphology: MorphologyOperator[]; cover
   if (has(text, ["墓地", "埋葬", "墓园", "grave", "burial", "cemetery"])) morphology.push("burial-field", "crypt-sink");
   if (has(text, ["城市", "街区", "深水城", "city", "district"])) morphology.push("urban-blocks");
   if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "建筑", "hospital", "hotel", "school", "police"])) morphology.push("interior-partitions", "vertical-stack");
-  if (has(text, ["观测所", "天文台", "observatory"])) morphology.push("interior-partitions", "vertical-stack");
+  if (has(text, ["观测所", "天文馆", "天文台", "observatory", "planetarium"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["森林", "树林", "forest", "woodland"])) coverage.push("woodland", "dense");
   if (has(text, ["蘑菇", "菌林", "fungal", "mushroom"])) coverage.push("fungal");
   if (has(text, ["墓碑", "墓地", "tombstone", "cemetery"])) coverage.push("grave-markers");
@@ -102,7 +102,7 @@ function buildingRegions(text: string): SceneProgramRegion[] {
     region("service", "Kitchen, laundry and plant", "service", 0.15, "low", ["service-corridor", "boiler"], ["machinery"]),
     region("morgue", "Basement morgue", "hazard", 0.13, "sunken", ["cold-room", "autopsy"], ["restricted-access"]),
   ];
-  if (has(text, ["观测所", "天文台", "observatory"])) return [
+  if (has(text, ["观测所", "天文馆", "天文台", "observatory", "planetarium"])) return [
     region("arrival", "Instrument court and public entry", "approach", 0.14, "level", ["brass-instruments", "visitor-control"], []),
     region("dome", "Rotating observatory dome", "combat", 0.22, "high", ["telescope", "open-sky-dome"], ["exposed-edge"]),
     region("archive", "Restricted astronomical archive", "investigation", 0.16, "sunken", ["star-charts", "sealed-drawers"], ["forbidden-records"]),
