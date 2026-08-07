@@ -90,6 +90,52 @@ function buildRiverValley(scene: GeneratedScene, width: number, depth: number, r
   addCover(scene, rng, "river", width * 0.22, depth * 0.24, 0, 3);
 }
 
+function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  const cols = Math.floor(width);
+  const rows = Math.floor(depth);
+  const channel = rows * rng.float(0.46, 0.55);
+  const heights: Array<number | undefined> = [];
+  const at = (x: number, z: number) => (x < 0 || z < 0 || x >= cols || z >= rows ? undefined : heights[z * cols + x]);
+  for (let z = 0; z < rows; z += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const riverLine = channel + Math.sin(x * 0.16) * 2.8 + Math.sin(x * 0.045) * 3;
+      const inWater = Math.abs(z - riverLine) <= 2.1;
+      const bankBreak = Math.abs(z - riverLine) > 2.1 && Math.abs(z - riverLine) < 4.1 && x > cols * 0.12 && x < cols * 0.88;
+      if (inWater) heights.push(undefined);
+      else heights.push(z < riverLine ? (bankBreak ? 2 : 3) : (bankBreak ? 1 : 2));
+    }
+  }
+  const yOf = (level: number) => feetToMeters(level * 10) + FLOOR_SLAB_METERS;
+  let cliffCount = 0;
+  for (let z = 0; z < rows; z += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const level = at(x, z);
+      if (level === undefined) continue;
+      scene.primitives.push(box(`river-grid-cell-${x}-${z}`, 0, x + 0.5, 0, z + 0.5, 0.96, yOf(level), 0.96, level >= 3 ? "moss" : "earth", ["floor", "terrain", "semantic-grid", "macro-region", `river-elevation:${level}`]));
+      for (const [dx, dz] of [[1, 0], [0, 1]] as const) {
+        const neighbour = at(x + dx, z + dz);
+        if (neighbour !== undefined && Math.abs(neighbour - level) >= 1) {
+          cliffCount += 1;
+          scene.primitives.push(box(`river-bank-cliff-${x}-${z}-${dx}-${dz}`, 0, x + 0.5 + dx * 0.49, yOf(Math.min(level, neighbour)) / 2, z + 0.5 + dz * 0.49, dx ? 0.12 : 0.96, yOf(Math.max(level, neighbour)) - yOf(Math.min(level, neighbour)), dz ? 0.12 : 0.96, "rock", ["cliff-face", "vertical-face", "river-bank"]));
+        }
+      }
+    }
+  }
+  scene.primitives.push(water("river-semantic-channel", 0, cols / 2, feetToMeters(8), channel, cols - 2, 0.34, 4.1, ["river", "watercourse", "terrain"]));
+  const crossingX = cols * rng.float(0.42, 0.62);
+  scene.primitives.push(corridor("river-semantic-old-bridge", 0, crossingX, channel - 4, crossingX, channel + 4, yOf(2), 2.4, "stone", ["bridge", "semantic-grid", "old-bridge"]));
+  scene.primitives.push(corridor("river-semantic-shallow-ford", 0, 3, channel + 5, cols - 3, channel + 5, yOf(1), 1.6, "earth", ["terrain", "semantic-grid", "shallow-ford"]));
+  scene.rooms.push(createRoom("river-upper-ridge", "Upper ridge", "natural", 0, cols * 0.5, rows * 0.2, cols - 6, rows * 0.25, yOf(3)), createRoom("river-floodplain", "River floodplain", "natural", 0, cols * 0.5, channel, cols - 6, 8, yOf(1)), createRoom("river-falls-basin", "Waterfall basin", "combat", 0, cols * 0.7, rows * 0.76, cols * 0.3, rows * 0.22, yOf(1)));
+  connectRooms(scene.rooms, "river-upper-ridge", "river-floodplain");
+  connectRooms(scene.rooms, "river-floodplain", "river-falls-basin");
+  scene.routes.push(createRoute("river-ridge-route", "primary", [{ x: 2, z: rows * 0.18, y: yOf(3) }, { x: cols * 0.32, z: rows * 0.32, y: yOf(3) }, { x: crossingX, z: channel - 4, y: yOf(2) }, { x: cols - 2, z: rows * 0.76, y: yOf(1) }]));
+  scene.routes.push(createRoute("river-shallow-ford", "alternate", [{ x: 3, z: channel + 5, y: yOf(1) }, { x: cols * 0.3, z: channel + 5, y: yOf(1) }, { x: cols * 0.74, z: channel + 5, y: yOf(1) }, { x: cols - 3, z: channel + 5, y: yOf(1) }]));
+  scene.routes.push(createRoute("river-downstream", "waterflow", [{ x: 2, z: channel, y: feetToMeters(8) }, { x: cols * 0.5, z: channel, y: feetToMeters(5) }, { x: cols - 2, z: channel, y: feetToMeters(2) }]));
+  scene.tactical.push(tacticalFeature("river-semantic-entrance", "entrance", 2, rows * 0.18, yOf(3), 2, "The high ridge is the main approach into the valley."), tacticalFeature("river-ford", "chokepoint", cols * 0.5, channel, yOf(1), 2, "A shallow ford is a legal crossing but exposes anyone in the channel."), tacticalFeature("river-falls", "hazard", cols * 0.7, rows * 0.76, yOf(1), 3, "The waterfall basin drops below the floodplain and hides a side route."));
+  scene.description = `River-valley semantic grid with ${cliffCount} bank cliff segments, continuous high ridge, floodplain, waterfall basin, old bridge, shallow ford, and downhill waterflow.`;
+  scene.floorHeightFeet = [Math.ceil((yOf(3) + feetToMeters(12)) / 0.3048)];
+}
+
 function buildRift(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
   const gap = Math.max(7, Math.round(width * 0.24));
   const left = (width - gap) / 2;
@@ -592,7 +638,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   };
   const scene = baseScene("wilderness", choose(context.rng, titlePool[archetype]), `${archetype} terrain with elevation bands, route choices, tactical cover, and explicit hazards.`, context.request.seed, { x: profile.width, z: profile.depth }, 1, [Math.ceil(profile.height + 11)]);
   scene.archetype = archetype;
-  if (archetype === "river-valley") buildRiverValley(scene, profile.width, profile.depth, context.rng.fork("river"));
+  if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, context.rng.fork("river"));
   else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, context.rng.fork("rift"));
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, context.rng.fork("mountain"));
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, context.rng.fork("ice"));

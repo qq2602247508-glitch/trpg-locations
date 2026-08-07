@@ -652,7 +652,7 @@ export class SceneRenderer {
         );
         matrix.compose(position, rotation, scale);
         mesh.setMatrixAt(index, matrix);
-        mesh.setColorAt(index, this.tintedMaterialColor(batch.material, primitive.id));
+        mesh.setColorAt(index, this.tintedMaterialColor(batch.material, primitive.id, primitive.tags));
       }
       mesh.instanceMatrix.needsUpdate = true;
       mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
@@ -866,7 +866,14 @@ export class SceneRenderer {
     return material;
   }
 
-  private tintedMaterialColor(material: MaterialKey, id: string): THREE.Color {
+  private tintedMaterialColor(material: MaterialKey, id: string, tags: readonly string[] = []): THREE.Color {
+    // Tactical terrain must read as continuous regions. Per-instance hash tint
+    // is useful for props, but makes a cell-based heightfield look like noisy
+    // mosaic tiles. Keep authored floors, shelves, banks and semantic grids
+    // on one stable material tone; retain subtle variation for loose props.
+    if (tags.includes("terrain") || tags.includes("floor") || tags.includes("semantic-grid") || tags.includes("macro-region")) {
+      return new THREE.Color(MATERIAL_STYLE[material].color);
+    }
     let hash = 2166136261;
     for (let index = 0; index < id.length; index += 1) {
       hash ^= id.charCodeAt(index);
