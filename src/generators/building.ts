@@ -67,6 +67,11 @@ export function classifyBuildingArchetype(prompt: string): BuildingArchetype {
   return values[(hash >>> 0) % values.length] ?? "warehouse";
 }
 
+function hasKnownBuildingArchetype(prompt: string): boolean {
+  const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  return (Object.keys(ARCHETYPE_TERMS) as BuildingArchetype[]).some((archetype) => ARCHETYPE_TERMS[archetype].some((term) => normalized.includes(term)));
+}
+
 function scaledRange(range: readonly [number, number], size: GeneratorContext["request"]["size"]): readonly [number, number] {
   const scale = size === "small" ? 0.78 : size === "large" ? 1.14 : 1;
   return [Math.max(10, Math.round(range[0] * scale)), Math.max(12, Math.round(range[1] * scale))];
@@ -341,7 +346,92 @@ function buildMine(scene: GeneratedScene, profile: BuildingProfile, width: numbe
   void profile;
 }
 
+/** Compiles an open-ended SceneProgram region graph into a plausible civic or
+ * real-world building. Domain-specific generators still handle known churches,
+ * mines, and fortresses; this grammar prevents hospitals, hotels, schools, and
+ * other institutions from hashing into an unrelated fantasy archetype. */
+function generateProgramBuilding(context: GeneratorContext): GeneratedScene {
+  const program = context.sceneProgram;
+  if (!program) throw new Error("Program building generation requires SceneProgram input.");
+  const scale = context.request.size === "small" ? 0.78 : context.request.size === "large" ? 1.28 : 1;
+  const width = Math.round((28 + program.regions.length * 2.2) * scale);
+  const depth = Math.round((22 + program.regions.length * 2.5) * scale);
+  const hasBasement = program.regions.some((region) => region.elevation === "sunken" || region.elevation === "low");
+  const needsUpper = program.regions.some((region) => region.elevation === "raised" || region.elevation === "high" || region.elevation === "vertical") || program.morphology.includes("vertical-stack");
+  const floors = 1 + (hasBasement ? 1 : 0) + (needsUpper ? 1 : 0);
+  const groundLevel = hasBasement ? 1 : 0;
+  const upperLevel = needsUpper ? groundLevel + 1 : groundLevel;
+  const floorHeightFeet = Array.from({ length: floors }, (_, index) => index === groundLevel ? context.rng.int(11, 14) : context.rng.int(10, 13));
+  const scene = baseScene("building", program.title, `${program.era} ${program.ruleset} building compiled from ${program.regions.length} functional regions and explicit circulation relations.`, context.request.seed, { x: width + 4, z: depth + 4 }, floors, floorHeightFeet);
+  scene.archetype = `program-building:${program.era}`;
+  const centerX = 2 + width / 2;
+  const centerZ = 2 + depth / 2;
+  const stairX = centerX;
+  const stairZ = 5.5;
+  const baseYs = floorHeightFeet.map((_, level) => feetToMeters(floorHeightFeet.slice(0, level).reduce((sum, feet) => sum + feet, 0)));
+  const stairOpening = [{ id: "program-main-stair", centerXCells: stairX, centerZCells: stairZ, widthCells: 2.8, depthCells: 4.2 }];
+  for (let level = 0; level < floors; level += 1) {
+    const baseY = baseYs[level] ?? 0;
+    const wallHeight = feetToMeters(floorHeightFeet[level] ?? 11) - FLOOR_SLAB_METERS;
+    scene.primitives.push(
+      ...rectangularShell(`program-building-shell-${level}`, level, centerX, centerZ, baseY, width, depth, wallHeight, program.era === "modern" ? "stone" : "wood", program.era === "modern" ? "plaster" : "stone", ["program-building", "realistic-function", level < groundLevel ? "basement" : level > groundLevel ? "upper-floor" : "ground-floor"], level === groundLevel ? {
+        north: { widthCells: 3 },
+        west: { widthCells: 1.6, offsetCells: depth * 0.34 },
+        east: { widthCells: 1.6, offsetCells: depth * 0.34 },
+      } : {}, level > 0 ? stairOpening : []),
+      corridor(`program-building-corridor-${level}`, level, centerX, 3, centerX, 1 + depth, baseY + FLOOR_SLAB_METERS, 2.4, program.era === "modern" ? "stone" : "wood", ["program-building", "main-corridor"]),
+      ...wallWithOpenings(`program-building-spine-${level}`, level, centerX, centerZ, baseY + FLOOR_SLAB_METERS, depth - 3, wallHeight, "z", "plaster", ["program-building", "corridor-wall"], Array.from({ length: 5 }, (_, index) => ({ offsetCells: -depth * 0.36 + index * depth * 0.18, widthCells: 1.3 }))),
+    );
+  }
+  for (let level = 0; level < floors - 1; level += 1) {
+    const stair = stairConnection(`program-building-main-stair-${level}`, level, { xCells: stairX - 2.4, zCells: stairZ, yMeters: (baseYs[level] ?? 0) + FLOOR_SLAB_METERS }, { xCells: stairX, zCells: stairZ, yMeters: (baseYs[level + 1] ?? 0) + FLOOR_SLAB_METERS }, 1.7, "stone", ["program-building", "vertical-circulation"]);
+    scene.primitives.push(stair.primitive);
+    scene.routes.push(stairRoute(`program-building-vertical-route-${level}`, stair));
+  }
+  const perSide = Math.ceil(program.regions.length / 2);
+  const segmentDepth = (depth - 6) / Math.max(1, perSide);
+  const roomWidth = width / 2 - 2.2;
+  for (const [index, region] of program.regions.entries()) {
+    const side = index % 2 === 0 ? -1 : 1;
+    const row = Math.floor(index / 2);
+    const level = region.elevation === "sunken" || region.elevation === "low"
+      ? 0
+      : needsUpper && (region.elevation === "raised" || region.elevation === "high" || region.elevation === "vertical")
+        ? upperLevel
+        : groundLevel;
+    const baseY = baseYs[level] ?? 0;
+    const x = centerX + side * (width * 0.25 + 0.5);
+    const z = 4 + segmentDepth * (row + 0.5);
+    const role = region.function === "public" || region.function === "commercial" || region.function === "civic" ? "public" : region.function === "service" || region.function === "industrial" ? "service" : region.function === "combat" || region.function === "hazard" ? "combat" : "private";
+    scene.rooms.push(createRoom(`program-room-${region.id}`, region.label, role, level, x, z, roomWidth, Math.max(4, segmentDepth - 0.6), baseY));
+    scene.primitives.push(
+      ...wallWithOpenings(`program-room-${region.id}-front`, level, x, z - segmentDepth / 2, baseY + FLOOR_SLAB_METERS, roomWidth, feetToMeters(floorHeightFeet[level] ?? 11) - FLOOR_SLAB_METERS, "x", "plaster", ["program-building", `program-region:${region.id}`], { widthCells: 1.25 }),
+      box(`program-room-${region.id}-fixture`, level, x + side * roomWidth * 0.2, baseY + FLOOR_SLAB_METERS, z, Math.max(0.8, roomWidth * 0.16), feetToMeters(region.function === "service" ? 4 : 3), Math.max(1.2, segmentDepth * 0.28), region.function === "hazard" ? "hazard" : "wood", ["program-building", `program-region:${region.id}`, "functional-fixture", region.function === "investigation" ? "evidence" : "cover"]),
+    );
+  }
+  for (const relation of program.relations) {
+    const from = `program-room-${relation.from}`;
+    const to = `program-room-${relation.to}`;
+    if (scene.rooms.some((room) => room.id === from) && scene.rooms.some((room) => room.id === to)) connectRooms(scene.rooms, from, to);
+  }
+  const groundY = baseYs[groundLevel] ?? 0;
+  const groundRouteY = groundY + FLOOR_SLAB_METERS;
+  const groundRooms = scene.rooms.filter((room) => room.level === groundLevel);
+  if (groundRooms.length >= 1) scene.routes.push(createRoute("program-building-primary-route", "primary", [{ x: centerX, z: 1, y: groundRouteY }, ...groundRooms.map((room) => ({ x: room.center.x / 1.524, z: room.center.z / 1.524, y: groundRouteY }))]));
+  scene.routes.push(createRoute("program-building-service-route", "alternate", [{ x: 3, z: depth - 2, y: groundRouteY }, { x: centerX, z: centerZ, y: groundRouteY }, { x: width + 1, z: depth - 2, y: groundRouteY }]));
+  scene.tactical.push(tacticalFeature("program-building-entrance", "entrance", centerX, 2, groundY, 2, "The public entrance feeds the primary institutional circulation spine."));
+  addRoof(scene, "program-building", floors - 1, centerX, feetToMeters(floorHeightFeet.reduce((sum, value) => sum + value, 0)), centerZ, width, depth, program.era === "modern" ? "stone" : "roof");
+  return scene;
+}
+
 export function generateBuilding(context: GeneratorContext): GeneratedScene {
+  if (context.sceneProgram && (
+    context.sceneProgram.coverage.includes("institutional-rooms")
+    || context.sceneProgram.coverage.includes("residential-rooms")
+    || context.sceneProgram.domain === "building" && !hasKnownBuildingArchetype(context.request.prompt)
+  )) {
+    return generateProgramBuilding(context);
+  }
   const archetype = classifyBuildingArchetype(context.request.prompt);
   const profile = PROFILES[archetype];
   const widthRange = scaledRange(profile.width, context.request.size);

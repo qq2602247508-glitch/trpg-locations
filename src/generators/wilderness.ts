@@ -18,14 +18,16 @@ import {
   water,
 } from "./shared";
 
-export type WildernessArchetype = "river-valley" | "dry-riverbed" | "volcanic" | "burial-ground" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp";
+export type WildernessArchetype = "river-valley" | "dry-riverbed" | "impact-crater" | "volcanic" | "infernal-waste" | "burial-ground" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp";
 
 interface TerrainMorphology {
   channel: boolean;
   dryChannel: boolean;
+  impactCrater: boolean;
   crater: boolean;
   lava: boolean;
   burial: boolean;
+  infernal: boolean;
   woodland: boolean;
   fungal: boolean;
   wetland: boolean;
@@ -35,7 +37,9 @@ interface TerrainMorphology {
 const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>> = {
   "river-valley": ["river", "valley", "riverbank", "河谷", "河流", "河川", "溪谷", "峡谷河"],
   "dry-riverbed": ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床", "河床"],
+  "impact-crater": ["impact crater", "meteor crater", "陨石坑", "撞击坑", "流星坑"],
   volcanic: ["volcano", "volcanic", "caldera", "火山", "火山口", "破火山口"],
+  "infernal-waste": ["avernus", "hellscape", "infernal waste", "阿弗纳斯", "地狱荒原", "地狱"],
   "burial-ground": ["cemetery", "graveyard", "burial ground", "墓地", "墓园", "坟场", "陵园"],
   rift: ["rift", "chasm", "ravine", "裂谷", "裂隙", "深坑", "断崖"],
   mountain: ["mountain", "cliff", "ridge", "山地", "山脊", "高山", "峭壁"],
@@ -52,7 +56,7 @@ function includesAny(text: string, terms: readonly string[]): boolean {
 }
 
 function analyzeTerrainMorphology(prompt: string, hints?: SemanticGenerationHints): TerrainMorphology {
-  const normalized = [prompt, ...(hints?.anchors ?? []), ...(hints?.hazards ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");
+  const normalized = [prompt, ...(hints?.anchors ?? []), ...(hints?.hazards ?? []), ...(hints?.tags ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");
   const dry = includesAny(normalized, ["dry", "dried", "arid", "desiccated", "干涸", "枯竭", "无水", "旱"]);
   const riverbed = includesAny(normalized, ["riverbed", "river bed", "wash", "wadi", "河床"]);
   const channel = includesAny(normalized, WILDERNESS_TERMS["river-valley"]) || riverbed || hints?.water === "major";
@@ -60,9 +64,11 @@ function analyzeTerrainMorphology(prompt: string, hints?: SemanticGenerationHint
   return {
     channel,
     dryChannel: riverbed && dry || includesAny(normalized, ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床"]),
-    crater: includesAny(normalized, WILDERNESS_TERMS.volcanic) || lava,
+    impactCrater: includesAny(normalized, WILDERNESS_TERMS["impact-crater"]) || normalized.includes("morphology:impact-crater"),
+    crater: includesAny(normalized, WILDERNESS_TERMS.volcanic) || normalized.includes("morphology:caldera"),
     lava,
     burial: includesAny(normalized, WILDERNESS_TERMS["burial-ground"]) || includesAny(normalized, ["grave", "tombstone", "mausoleum", "crypt", "坟墓", "墓碑", "陵墓", "墓穴"]),
+    infernal: includesAny(normalized, WILDERNESS_TERMS["infernal-waste"]) || normalized.includes("coverage:ash") && lava,
     woodland: includesAny(normalized, WILDERNESS_TERMS.forest) || (hints?.environment === "wilderness" && hints.cover === "dense"),
     fungal: includesAny(normalized, ["mushroom", "fungus", "fungal", "蘑菇", "菌类", "菌林"]),
     wetland: includesAny(normalized, WILDERNESS_TERMS.swamp),
@@ -73,6 +79,8 @@ function analyzeTerrainMorphology(prompt: string, hints?: SemanticGenerationHint
 export function classifyWildernessArchetype(prompt: string, hints?: SemanticGenerationHints): WildernessArchetype {
   const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const morphology = analyzeTerrainMorphology(prompt, hints);
+  if (morphology.impactCrater) return "impact-crater";
+  if (morphology.infernal) return "infernal-waste";
   if (morphology.crater) return "volcanic";
   if (morphology.burial) return "burial-ground";
   if (morphology.dryChannel) return "dry-riverbed";
@@ -106,7 +114,7 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number; density: number } {
   const { rng, request } = context;
-  const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "dry-riverbed" ? [58, 44, 5] : archetype === "volcanic" ? [54, 50, 8] : archetype === "burial-ground" ? [46, 38, 4] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
+  const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "dry-riverbed" ? [58, 44, 5] : archetype === "impact-crater" ? [56, 52, 7] : archetype === "volcanic" ? [54, 50, 8] : archetype === "infernal-waste" ? [60, 48, 6] : archetype === "burial-ground" ? [46, 38, 4] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
   const scale = request.size === "small" ? 0.62 : request.size === "large" ? 1.55 : 1;
   return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2], density: request.density };
 }
@@ -607,6 +615,80 @@ function buildDryRiverbed(scene: GeneratedScene, width: number, depth: number, d
   scene.description = `Dry-channel morphology with ${rendered.walkable} walkable cells, ${rendered.cliffs} eroded vertical faces, three crossings, scoured boulders, and a continuous low river bed.`;
 }
 
+function buildImpactCrater(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const cols = Math.max(30, Math.floor(width));
+  const rows = Math.max(28, Math.floor(depth));
+  const cx = cols * rng.float(0.44, 0.56);
+  const cz = rows * rng.float(0.43, 0.55);
+  const radius = Math.min(cols, rows) * rng.float(0.28, 0.35);
+  const rayAngles = Array.from({ length: Math.round(4 + density * 4) }, (_, index) => (Math.PI * 2 * index) / Math.round(4 + density * 4) + rng.float(-0.2, 0.2));
+  const heights: Array<number | undefined> = [];
+  for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+    const dx = x - cx;
+    const dz = z - cz;
+    const angle = Math.atan2(dz, dx);
+    const distance = Math.hypot(dx, dz);
+    const warped = distance / (radius * (1 + Math.sin(angle * 5 + 0.4) * 0.08));
+    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+    const angularDistance = Math.min(...rayAngles.map((ray) => Math.abs(Math.atan2(Math.sin(angle - ray), Math.cos(angle - ray)))));
+    const fracture = angularDistance < 0.035 + density * 0.016 && warped > 0.28 && warped < 1.45 && Math.sin(distance * 0.8) > -0.35;
+    const ejectaGap = warped > 1.05 && warped < 1.45 && Math.sin(x * 0.37 + z * 0.23) > 0.93;
+    if (edge === 0 || fracture || ejectaGap) heights.push(undefined);
+    else if (warped < 0.2) heights.push(0);
+    else if (warped < 0.48) heights.push(1);
+    else if (warped < 0.68) heights.push(3);
+    else if (warped < 0.92) heights.push(6);
+    else if (warped < 1.14) heights.push(4);
+    else heights.push(Math.max(1, 4 - Math.floor((warped - 1.1) * 5)));
+  }
+  const rimPoint = (angle: number): { x: number; z: number; level: number } => {
+    const targetX = cx + Math.cos(angle) * radius;
+    const targetZ = cz + Math.sin(angle) * radius;
+    let best: { x: number; z: number; level: number; score: number } | undefined;
+    for (let z = Math.max(1, Math.floor(targetZ) - 4); z <= Math.min(rows - 2, Math.ceil(targetZ) + 4); z += 1) {
+      for (let x = Math.max(1, Math.floor(targetX) - 4); x <= Math.min(cols - 2, Math.ceil(targetX) + 4); x += 1) {
+        const level = heights[z * cols + x];
+        if (level === undefined) continue;
+        const radialError = Math.abs(Math.hypot(x - cx, z - cz) - radius);
+        const targetError = Math.hypot(x - targetX, z - targetZ);
+        const score = radialError + targetError * 0.35 - level * 0.45;
+        if (!best || score < best.score) best = { x, z, level, score };
+      }
+    }
+    return best ?? { x: Math.round(targetX), z: Math.round(targetZ), level: 4 };
+  };
+  const rendered = renderMorphologyField(scene, {
+    prefix: "impact",
+    cols,
+    rows,
+    heights,
+    materialFor: (level, x, z) => Math.hypot(x - cx, z - cz) < radius * 0.24 ? "metal" : level >= 5 ? "darkStone" : level <= 1 ? "earth" : "rock",
+    tagsFor: (level, x, z) => [level >= 5 ? "impact-rim" : Math.hypot(x - cx, z - cz) < radius * 0.48 ? "crater-basin" : "ejecta-field"],
+  });
+  scene.primitives.push(
+    primitive("impact-meteor-core", "sphere", 0, cx, rendered.yOf(0), cz, feetToMeters(9), feetToMeters(7), feetToMeters(9), "metal", ["meteor-core", "impact-landmark", "cover"]),
+    corridor("impact-rim-breach", 0, cx - radius * 1.1, cz + radius * 0.2, cx - radius * 0.42, cz + radius * 0.08, rendered.yOf(3), 2.2, "rock", ["impact-route", "rim-breach", "semantic-grid"]),
+  );
+  for (let index = 0; index < Math.round(8 + density * 18); index += 1) {
+    const angle = rng.float(0, Math.PI * 2);
+    const distance = radius * rng.float(0.95, 1.5);
+    const x = cx + Math.cos(angle) * distance;
+    const z = cz + Math.sin(angle) * distance;
+    scene.primitives.push(primitive(`impact-ejecta-${index}`, index % 3 === 0 ? "cone" : "sphere", 0, x, rendered.yOf(2), z, feetToMeters(rng.float(2, 6)), feetToMeters(rng.float(2, 8)), feetToMeters(rng.float(2, 6)), index % 5 === 0 ? "metal" : "rock", ["ejecta", "cover", "impact-crater"]));
+  }
+  scene.rooms.push(createRoom("impact-approach", "Ejecta approach", "natural", 0, cols * 0.16, rows * 0.72, cols * 0.24, rows * 0.28, rendered.yOf(2)), createRoom("impact-rim", "Broken impact rim", "combat", 0, cx, cz, radius * 2, radius * 2, rendered.yOf(6)), createRoom("impact-basin", "Crater basin", "natural", 0, cx, cz, radius * 0.9, radius * 0.9, rendered.yOf(1)), createRoom("impact-core", "Meteor core", "combat", 0, cx, cz, radius * 0.35, radius * 0.35, rendered.yOf(0)));
+  connectRooms(scene.rooms, "impact-approach", "impact-rim");
+  connectRooms(scene.rooms, "impact-rim", "impact-basin");
+  connectRooms(scene.rooms, "impact-basin", "impact-core");
+  const westRim = rimPoint(Math.PI);
+  const northRim = rimPoint(-Math.PI / 2);
+  const eastRim = rimPoint(0);
+  scene.routes.push(createRoute("impact-descent", "primary", [{ x: 2, z: rows * 0.72, y: rendered.yOf(2) }, { x: cx - radius * 0.9, z: cz + radius * 0.25, y: rendered.yOf(5) }, { x: cx - radius * 0.42, z: cz + radius * 0.08, y: rendered.yOf(2) }, { x: cx, z: cz, y: rendered.yOf(0) }]), createRoute("impact-rim-route", "alternate", [westRim, northRim, eastRim].map((point) => ({ x: point.x + 0.5, z: point.z + 0.5, y: rendered.yOf(point.level) }))));
+  scene.tactical.push(tacticalFeature("impact-entrance", "entrance", 2, rows * 0.72, rendered.yOf(2), 2, "The approach crosses unstable ejecta toward a breached rim."), tacticalFeature("impact-rim-highground", "highGround", northRim.x + 0.5, northRim.z + 0.5, rendered.yOf(northRim.level), 4, "The impact rim overlooks the basin and radial fractures."), tacticalFeature("impact-core-hazard", "hazard", cx, cz, rendered.yOf(0), 3, "The meteor core is the encounter objective and an unknown environmental hazard."));
+  scene.description = `Impact-crater program with warped rim, sunken basin, ${rayAngles.length} radial fracture systems, ejecta cover, breached descent, and a central meteor objective.`;
+  scene.floorHeightFeet = [44];
+}
+
 function buildVolcanic(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const cols = Math.max(30, Math.floor(width));
   const rows = Math.max(28, Math.floor(depth));
@@ -660,6 +742,24 @@ function buildVolcanic(scene: GeneratedScene, width: number, depth: number, dens
   scene.tactical.push(tacticalFeature("volcanic-entrance", "entrance", 2, rows * 0.72, rendered.yOf(1), 2, "An ash-choked switchback climbs toward the caldera."), tacticalFeature("volcanic-crater-hazard", "hazard", cx, cz, -0.2, Math.ceil(radius * 0.25), "The crater and its lava outlet divide the battlefield."), tacticalFeature("volcanic-rim-highground", "highGround", cx - radius * 0.55, cz, rendered.yOf(6), 4, "The irregular caldera rim dominates the crater floor and basalt crossing."));
   scene.description = `Volcanic morphology with an irregular caldera, ${rendered.cliffs} exposed basalt faces, crater lava, a downhill outlet, fumarole cover, and a rim combat route.`;
   scene.floorHeightFeet = [48];
+}
+
+function buildInfernalWaste(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  buildDryRiverbed(scene, width, depth, density, rng.fork("infernal-base"));
+  const riverZ = depth * rng.float(0.42, 0.58);
+  scene.primitives.push(
+    corridor("infernal-war-road", 0, 2, depth * 0.24, width - 2, depth * 0.31, feetToMeters(12), 3.2, "metal", ["infernal-war-road", "high-ground", "scene-program"]),
+    corridor("infernal-lava-fissure", 0, width * 0.18, riverZ, width * 0.86, riverZ + rng.float(-5, 5), -0.25, 3.4, "hazard", ["lava", "lava-flow", "infernal", "hazard"]),
+  );
+  const wreckCount = Math.round(7 + density * 17);
+  for (let index = 0; index < wreckCount; index += 1) {
+    const x = rng.float(width * 0.15, width * 0.85);
+    const z = rng.float(depth * 0.5, depth * 0.86);
+    scene.primitives.push(box(`infernal-wreck-${index}`, 0, x, FLOOR_SLAB_METERS, z, rng.float(1.5, 4.2), feetToMeters(rng.int(3, 8)), rng.float(1.2, 3.5), index % 4 === 0 ? "hazard" : "metal", ["wreck-field", "infernal", "cover", "blocks-sight"]));
+  }
+  scene.routes.push(createRoute("infernal-war-road-route", "alternate", [{ x: 2, z: depth * 0.24, y: feetToMeters(12) }, { x: width * 0.5, z: depth * 0.27, y: feetToMeters(12) }, { x: width - 2, z: depth * 0.31, y: feetToMeters(12) }]));
+  scene.tactical.push(tacticalFeature("infernal-road-highground", "highGround", width * 0.5, depth * 0.27, feetToMeters(12), 3, "The iron war road crosses the waste above wreck cover and lava fissures."));
+  scene.description = `Infernal-waste composition with eroded ash terrain, an elevated war road, lava fissure, ${wreckCount} war-machine wrecks, crossings, and flanking channels.`;
 }
 
 function buildBurialGround(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
@@ -1032,7 +1132,9 @@ function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype
   const specs: Partial<Record<WildernessArchetype, StandablePropSpec>> = {
     "river-valley": { material: "rock", label: "river boulder", width: 2.6, depth: 2.2, heightFeet: 5, count: 8 },
     "dry-riverbed": { material: "rock", label: "scoured boulder", width: 2.5, depth: 2.1, heightFeet: 5, count: 8 },
+    "impact-crater": { material: "rock", label: "ejecta block", width: 2.7, depth: 2.3, heightFeet: 7, count: 9 },
     volcanic: { material: "darkStone", label: "basalt block", width: 2.5, depth: 2.2, heightFeet: 7, count: 9 },
+    "infernal-waste": { material: "metal", label: "war wreck", width: 2.8, depth: 2.1, heightFeet: 6, count: 9 },
     "burial-ground": { material: "stone", label: "broken grave slab", width: 2.3, depth: 1.5, heightFeet: 5, count: 5 },
     rift: { material: "rock", label: "rift pillar", width: 1.8, depth: 1.8, heightFeet: 10, count: 7 },
     mountain: { material: "rock", label: "summit boulder", width: 2.4, depth: 2.1, heightFeet: 5, count: 10 },
@@ -1090,7 +1192,9 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const titlePool: Record<WildernessArchetype, readonly string[]> = {
     "river-valley": ["Silverfall Valley", "The Two-Bank Reach"],
     "dry-riverbed": ["The Thirsting Wash", "Deadwater Channel"],
+    "impact-crater": ["The Fallen Star", "Glass-Rim Impact"],
     volcanic: ["The Cinder Caldera", "Ashmouth Crater"],
+    "infernal-waste": ["The Iron Wastes", "War Road of Ash"],
     "burial-ground": ["The Crooked Rest", "Graves of the Old Road"],
     rift: ["Dragonbone Rift", "The Split Earth"],
     mountain: ["The Broken Heights", "Ridge of Seven Shelves"],
@@ -1105,7 +1209,9 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   scene.archetype = archetype;
   if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, context.rng.fork("river"));
   else if (archetype === "dry-riverbed") buildDryRiverbed(scene, profile.width, profile.depth, profile.density, context.rng.fork("dry-riverbed"));
+  else if (archetype === "impact-crater") buildImpactCrater(scene, profile.width, profile.depth, profile.density, context.rng.fork("impact-crater"));
   else if (archetype === "volcanic") buildVolcanic(scene, profile.width, profile.depth, profile.density, context.rng.fork("volcanic"));
+  else if (archetype === "infernal-waste") buildInfernalWaste(scene, profile.width, profile.depth, profile.density, context.rng.fork("infernal-waste"));
   else if (archetype === "burial-ground") buildBurialGround(scene, profile.width, profile.depth, profile.density, context.rng.fork("burial-ground"));
   else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, context.rng.fork("rift"));
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));

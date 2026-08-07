@@ -21,6 +21,7 @@ import { generateTower } from "./tower";
 import { generateBuilding } from "./building";
 import { generateSettlement } from "./settlement";
 import { generateWilderness } from "./wilderness";
+import { applySceneProgram, planSceneProgramLocally, semanticHintsFromProgram, summarizeSceneProgram, type SceneProgram } from "../scene-program";
 
 export type FixedSceneKind = Exclude<SceneKind, "adaptive">;
 export type SceneGenerator = (context: GeneratorContext) => GeneratedScene;
@@ -258,7 +259,7 @@ export function generateAdaptiveScene(
  * Public generation entry point.  It always validates/repairs the finished
  * scene, including adaptive compositions, before a renderer receives it.
  */
-export function generateScene(request: GenerationRequest, requestedKind: SceneKind = "adaptive", suppliedClassification?: InputClassification): GeneratedScene {
+export function generateScene(request: GenerationRequest, requestedKind: SceneKind = "adaptive", suppliedClassification?: InputClassification, suppliedProgram?: SceneProgram): GeneratedScene {
   const normalized = normalizeRequest(request);
   const kind = isSceneKind(requestedKind) ? requestedKind : "adaptive";
   // Prompt semantics must influence deterministic variation even when the user
@@ -266,27 +267,29 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   // “洞窟 + 水晶” and “洞窟 + 熔岩” do not collapse to the same layout.
   const promptKey = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const rootRng = new SeededRandom(`${normalized.seed}|prompt:${promptKey}`);
-  let generated: GeneratedScene;
-
+  const program = suppliedProgram ?? planSceneProgramLocally(normalized.prompt, kind);
+  const primary = kind === "adaptive" ? program.primaryKind : kind;
+  const semanticHints = suppliedClassification?.traits ?? semanticHintsFromProgram(program);
+  const generated = generatorRegistry[primary]({
+    request: normalized,
+    // Fixed generators retain their established seed stream so adding the
+    // semantic compiler does not silently reshuffle already-valid layouts.
+    // Adaptive generation intentionally uses a program-owned stream because
+    // the compiled primary domain is part of its public result.
+    rng: rootRng.fork(kind === "adaptive" ? `program:${primary}` : `fixed:${kind}`),
+    semanticHints,
+    sceneProgram: program,
+  });
+  applySceneProgram(generated, program, rootRng.fork("scene-program-realization"));
   if (kind === "adaptive") {
-    const classification = suppliedClassification ?? classifyInput(normalized.prompt);
-    generated = generateAdaptiveScene(
-      { request: normalized, rng: rootRng.fork("adaptive") },
-      classification,
-    );
-    generated.semantic = classification.source === "ollama"
-      ? { source: "ollama", ...(classification.semanticModel ? { model: classification.semanticModel } : {}) }
-      : { source: "local" };
-  } else {
-    generated = generatorRegistry[kind]({
-      request: normalized,
-      rng: rootRng.fork(`fixed:${kind}`),
-      ...(suppliedClassification ? { semanticHints: suppliedClassification.traits } : {}),
-    });
-    generated.semantic = suppliedClassification?.source === "ollama"
-      ? { source: "ollama", ...(suppliedClassification.semanticModel ? { model: suppliedClassification.semanticModel } : {}) }
-      : { source: "local" };
+    generated.kind = "adaptive";
+    generated.title = `SceneProgram · ${generated.title}`;
+    generated.description = `${generated.description} Compiled from ${program.regions.length} semantic regions for ${program.gameplay.mode} play.`;
   }
+  const semanticSource = program.source === "ollama" || suppliedClassification?.source === "ollama" ? "ollama" : "local";
+  const semanticModel = program.model ?? suppliedClassification?.semanticModel;
+  generated.semantic = { source: semanticSource, ...(semanticModel ? { model: semanticModel } : {}) };
+  generated.sceneProgram = summarizeSceneProgram(program);
 
   return validateScene(generated, { repair: true }).scene;
 }

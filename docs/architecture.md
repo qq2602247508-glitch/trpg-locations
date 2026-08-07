@@ -16,12 +16,26 @@ TRPG Locations 将空间逻辑与渲染分离。渲染器只消费 `GeneratedSce
 
 ```text
 GenerationRequest
-  -> semantic classification
-  -> seeded generator registry
+  -> SceneProgram v1 (local planner or constrained Ollama planner)
+  -> deterministic SceneProgram compiler
+  -> seeded domain generator registry
   -> scene primitives / rooms / routes / tactical features
   -> validation and bounded repair
   -> Three.js renderer
 ```
+
+## SceneProgram v1
+
+`SceneProgram` is the semantic intermediate representation between prose and geometry. It contains domain, ruleset, era, topology, morphology/coverage operators, abstract regions, region relations, gameplay objectives and bounded constraints. It never contains coordinates, exact dimensions, cells or meshes.
+
+- The model may propose regions and relations, but deterministic generators still own every 5-ft dimension, elevation, opening, route point and primitive.
+- The local parser rejects unknown shapes, undeclared relation endpoints and invalid enums. A narrow Ollama boundary normalizes only unambiguous synonyms before the same strict parser.
+- Recognised physical operators and known functional domains use the fast local planner. Ollama is reserved for unresolved building or natural concepts; failure falls back to the local plan without stopping generation.
+- Fixed generators retain their established named RNG streams. Adding semantic compilation therefore does not reshuffle already-valid maps.
+- The compiler annotates domain output and may place non-blocking evidence, but it cannot invent routes across room centres. Only a domain generator with knowledge of real surfaces and openings may author movement geometry.
+- D&D plans favour combat routes and control points. CoC plans favour real functions, evidence, restricted spaces and escape routes.
+
+Current cross-domain realizations include impact craters, radial fractures, infernal wastes, dragon-bone coverage, functional institutions, three-level basement/ground/upper circulation, and settlement networks. Unknown constructed locations use the functional building compiler instead of hashing into a manor, fortress or other unrelated fantasy archetype.
 
 ## 坐标约定
 
@@ -29,7 +43,7 @@ GenerationRequest
 - 规划尺寸以战术格表达，进入几何层时乘以 `GRID_METERS`。
 - `position.x/z` 是几何中心，`position.y` 是几何底面高度；`size` 是完整世界尺寸。渲染器只在构造矩阵时把底面高度换算为几何中心，楼层与路线因此共享同一基准面。
 - `level` 是逻辑楼层，`position.y` 是实际高度，两者都必须存在，便于剖切和验证。
-- 网格不是单独贴在地面上的装饰：渲染器按 `floorHeightFeet` 累加每个楼层的底面高度，在每个楼板上生成独立的 5 英尺线框，并与楼层剖切共享过滤规则。
+- 网格不是单独贴在地面上的装饰：渲染器按 `floorHeightFeet` 累加每个楼层的底面高度，在每个楼板上生成 5 英尺线框，并与楼层剖切共享过滤规则。同楼层的数千个地形格会合并为一个线段批次，既保留每个高低面上的格线，也避免每格一个 draw call。
 - 建筑半透明是渲染器的可切换表现层：带墙体/建筑标签的实例批次进入 ghost 材质分组，使用低 opacity、关闭 depthWrite 来显示内部，不改变规则层的碰撞或可达性。
 
 ## 扩展场景
@@ -63,9 +77,9 @@ GenerationRequest
 - 调试线框、路线和战术标记可独立关闭。
 - 小场景继续全域实例合批；世界跨度超过 60 格时，实例按 28 格空间块分批，使放大查看街区时的视锥剔除真正生效。
 - 规划与校验由 `generation.worker.ts` 移出渲染主线程；不支持 Worker 的环境使用按需加载的确定性回退。
-- Three.js/`SceneRenderer` 是独立延迟块；当前首屏 JS 约 18 KB，规划 worker 约 96 KB，渲染块约 552 KB（压缩前）。
+- Three.js/`SceneRenderer` 是独立延迟块；当前首屏 JS 约 20 KB，SceneProgram + 规划 worker 约 163 KB，渲染块约 555 KB（压缩前）。
 - 大型聚落后续按区块生成，建筑内部按需加载。
 
 ## 本地语义边界
 
-`semantic/ollama.ts` 默认只在本地关键词分类没有类别证据时请求 Ollama；固定 `wilderness` 模式会强制做一次受约束的语义分解，使“森林 + 河流”或用户自造地名也能得到可组合 traits。成功结果在 worker 内按规范化提示缓存。请求同时使用 JSON Schema 和显式字段/枚举提示，返回值还必须经过本地解析器二次验证。语义结果只能影响基础生成域和地貌/覆盖 traits；米/英尺尺寸、高程 realization、路线边、随机流、碰撞和修复不存在模型入口。
+`scene-program/ollamaPlanner.ts` 请求本机 Ollama 返回完整但抽象的 SceneProgram。请求同时提供 JSON Schema、精确对象模板和枚举约束；由于部分 MLX runner 只把 schema 当提示，返回值仍必须经过本地规范化和严格解析。成功结果在 worker 内按规范化提示缓存 32 条。模型不可用、超时或返回不合规时立即使用本地 SceneProgram；米/英尺尺寸、高程 realization、路线边、随机流、碰撞和修复不存在模型入口。

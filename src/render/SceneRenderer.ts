@@ -533,6 +533,7 @@ export class SceneRenderer {
     this.gridRoot.add(ground);
 
     const surfaceTags = new Set(["floor", "platform", "ledge", "terrain", "bridge", "boardwalk", "ice-island", "road", "plaza", "quay", "clearing"]);
+    const surfaceLinesByLevel = new Map<number, number[]>();
     const addSurfaceGrid = (surface: ScenePrimitive): void => {
       if (surface.shape !== "box" || !surface.tags?.some((tag) => surfaceTags.has(tag))) return;
       const cosine = Math.cos(surface.rotationY ?? 0);
@@ -542,7 +543,8 @@ export class SceneRenderer {
         surface.position.y + surface.size.y + 0.035,
         surface.position.z - localX * sine + localZ * cosine,
       ];
-      const linePositions: number[] = [];
+      const linePositions = surfaceLinesByLevel.get(surface.level) ?? [];
+      surfaceLinesByLevel.set(surface.level, linePositions);
       const push = (a: [number, number, number], b: [number, number, number]) => linePositions.push(...a, ...b);
       const minLocalX = -surface.size.x / 2;
       const maxLocalX = surface.size.x / 2;
@@ -550,20 +552,23 @@ export class SceneRenderer {
       const maxLocalZ = surface.size.z / 2;
       for (let x = minLocalX; x <= maxLocalX + 0.001; x += GRID_METERS) push(toWorld(x, minLocalZ), toWorld(x, maxLocalZ));
       for (let z = minLocalZ; z <= maxLocalZ + 0.001; z += GRID_METERS) push(toWorld(minLocalX, z), toWorld(maxLocalX, z));
+    };
+    for (const surface of scene.primitives) addSurfaceGrid(surface);
+    for (const [level, linePositions] of surfaceLinesByLevel) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
       const material = new THREE.LineBasicMaterial({ color: 0x9bb8bd, transparent: true, opacity: 0.78, depthTest: true, depthWrite: false, toneMapped: false });
       const grid = new THREE.LineSegments(geometry, material);
-      grid.name = `surface grid · ${surface.id}`;
-      grid.userData.levels = [surface.level];
+      grid.name = `surface grid batch · level ${level + 1}`;
+      grid.userData.levels = [level];
       grid.renderOrder = 2;
       this.gridRoot.add(grid);
-    };
-    for (const surface of scene.primitives) addSurfaceGrid(surface);
+    }
 
     // Stair treads are walkable faces too. Draw a small grid on every tread,
     // transformed with the authored stair rotation, instead of leaving stairs
     // as ungridded solid ramps.
+    const stairLinesByLevel = new Map<number, number[]>();
     for (const stair of scene.primitives.filter((primitive) => primitive.shape === "stairs")) {
       const steps = Math.max(2, Math.round(stair.size.y / 0.18));
       const treadDepth = stair.size.z / steps;
@@ -574,7 +579,8 @@ export class SceneRenderer {
         y,
         stair.position.z - localX * sine + localZ * cosine,
       ];
-      const linePositions: number[] = [];
+      const linePositions = stairLinesByLevel.get(stair.level) ?? [];
+      stairLinesByLevel.set(stair.level, linePositions);
       const push = (a: [number, number, number], b: [number, number, number]) => linePositions.push(...a, ...b);
       for (let step = 0; step < steps; step += 1) {
         const z0 = -stair.size.z / 2 + step * treadDepth;
@@ -583,12 +589,14 @@ export class SceneRenderer {
         for (let x = -stair.size.x / 2; x <= stair.size.x / 2 + 0.001; x += GRID_METERS) push(toWorld(x, z0, y), toWorld(x, z1, y));
         push(toWorld(-stair.size.x / 2, z0, y), toWorld(stair.size.x / 2, z0, y));
       }
+    }
+    for (const [level, linePositions] of stairLinesByLevel) {
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
       const material = new THREE.LineBasicMaterial({ color: 0xb9d7c8, transparent: true, opacity: 0.9, depthTest: true, depthWrite: false, toneMapped: false });
       const grid = new THREE.LineSegments(geometry, material);
-      grid.name = `stair grid · ${stair.id}`;
-      grid.userData.levels = [stair.level];
+      grid.name = `stair grid batch · level ${level + 1}`;
+      grid.userData.levels = [level];
       grid.renderOrder = 2;
       this.gridRoot.add(grid);
     }

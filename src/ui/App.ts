@@ -334,7 +334,9 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       const floorView = elements.floor.value;
       renderer.setFloorView(floorView === "cut" || floorView === "roof" ? floorView : Number(floorView));
       setStatus(elements, scene.diagnostics.valid ? "校验通过" : "需要注意", scene.diagnostics.valid ? "ok" : "warn");
-      const semanticLabel = scene.semantic?.source === "ollama" ? " · Ollama 语义" : "";
+      const semanticLabel = scene.sceneProgram
+        ? ` · SceneProgram v${scene.sceneProgram.version} · ${scene.sceneProgram.regionCount} 区域${scene.sceneProgram.source === "ollama" ? " · Ollama" : ""}`
+        : scene.semantic?.source === "ollama" ? " · Ollama 语义" : "";
       elements.statusDetail.textContent = `${scene.primitives.length} 个可批处理图元 · ${scene.generationMs.toFixed(0)} ms 生成${semanticLabel}`;
     } catch (error) {
       const description = error instanceof Error ? error.message : "未知生成错误";
@@ -429,6 +431,13 @@ function renderSceneDetails(elements: AppElements, scene: GeneratedScene, stats:
   roomCount.textContent = `${scene.rooms.length} 间`;
 }
 
+function floorLabel(scene: GeneratedScene, level: number): string {
+  const groundLevel = scene.primitives.find((primitive) => primitive.tags?.includes("ground-floor"))?.level;
+  if (groundLevel === undefined) return `${level + 1}F`;
+  if (level < groundLevel) return `B${groundLevel - level}`;
+  return `${level - groundLevel + 1}F`;
+}
+
 function populateFloorOptions(select: HTMLSelectElement, scene: GeneratedScene): void {
   const previous = select.value;
   select.replaceChildren();
@@ -436,7 +445,7 @@ function populateFloorOptions(select: HTMLSelectElement, scene: GeneratedScene):
   select.add(new Option("完整 · 显示屋顶", "roof"));
   const maxFloor = Math.max(scene.floors, ...scene.primitives.map((primitive) => primitive.level + 1), 1);
   for (let level = 0; level < maxFloor; level += 1) {
-    select.add(new Option(`仅查看 ${level + 1} 层`, String(level)));
+    select.add(new Option(`仅查看 ${floorLabel(scene, level)}`, String(level)));
   }
   select.value = previous === "roof" || previous === "cut" || Number(previous) < maxFloor ? previous : "cut";
   if (!select.value) select.value = "cut";
@@ -481,6 +490,7 @@ function renderDiagnostics(container: HTMLElement, scene: GeneratedScene): void 
   const list = document.createElement("ul");
   list.className = "diagnostic-list";
   const notes = [
+    ...(scene.sceneProgram ? [{ type: "规划", text: `${scene.sceneProgram.ruleset.toUpperCase()} · ${scene.sceneProgram.era} · ${scene.sceneProgram.gameplay} · ${scene.sceneProgram.morphology.join(" + ")}` }] : []),
     ...diagnostics.warnings.map((note) => ({ type: "警告", text: note })),
     ...diagnostics.repairs.map((note) => ({ type: "修复", text: note })),
   ];
@@ -508,7 +518,7 @@ function renderRooms(container: HTMLElement, scene: GeneratedScene): void {
       const name = document.createElement("strong");
       name.textContent = room.name;
       const type = document.createElement("small");
-      type.textContent = `${room.level + 1}F · ${room.sizeCells.x} × ${room.sizeCells.z} 格`;
+      type.textContent = `${floorLabel(scene, room.level)} · ${room.sizeCells.x} × ${room.sizeCells.z} 格`;
       detail.append(name, type);
       const role = document.createElement("span");
       role.className = "room-role";

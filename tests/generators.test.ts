@@ -438,7 +438,7 @@ describe("scene generators", () => {
     }
   });
 
-  it("composes adaptive traits and degrades excess modifiers deterministically", () => {
+  it("compiles adaptive prompts through an auditable SceneProgram deterministically", () => {
     const adaptiveRequest: GenerationRequest = {
       prompt: "A flooded cave below a ruined watchtower, with an altar, collapse, dense rubble, and a dark upper platform.",
       seed: "adaptive-contract",
@@ -447,9 +447,10 @@ describe("scene generators", () => {
     };
     const scene = generateScene(adaptiveRequest, "adaptive");
     expect(scene.kind).toBe("adaptive");
-    expect(scene.description).toContain("Adaptive composition");
-    expect(scene.description).toContain("Degraded deterministically");
-    expect(scene.primitives.some((primitive) => primitive.tags?.includes("adaptive"))).toBe(true);
+    expect(scene.description).toContain("Compiled from");
+    expect(scene.sceneProgram?.version).toBe(1);
+    expect(scene.sceneProgram?.regionCount).toBeGreaterThanOrEqual(2);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("scene-program"))).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
     expect(scene).toEqual(generateScene(adaptiveRequest, "adaptive"));
   });

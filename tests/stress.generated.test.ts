@@ -39,7 +39,7 @@ describe("high-volume procedural regression", () => {
     "潮汐周期会改变路线的珊瑚庭院",
     "倒挂在峡谷下方的使馆和索桥",
     "时间断层里的玻璃花园与破碎回廊",
-  ])("degrades an unknown theme into a deterministic playable composition: %s", (prompt) => {
+  ])("compiles an unknown theme into a deterministic playable SceneProgram: %s", (prompt) => {
     const request: GenerationRequest = { prompt, seed: `unknown-${prompt.length}`, size: "large", density: 0.78 };
     const first = generateScene(request, "adaptive");
     const second = generateScene(request, "adaptive");
@@ -48,6 +48,8 @@ describe("high-volume procedural regression", () => {
     expect(first.primitives.length).toBeGreaterThan(0);
     expect(first.routes.some((route) => route.kind === "primary")).toBe(true);
     expect(first.tactical.some((feature) => feature.kind === "entrance")).toBe(true);
-    expect(first.description).toContain("Adaptive composition");
+    expect(first.description).toContain("Compiled from");
+    expect(first.sceneProgram?.version).toBe(1);
+    expect(first.sceneProgram?.regionCount).toBeGreaterThanOrEqual(2);
   });
 });
