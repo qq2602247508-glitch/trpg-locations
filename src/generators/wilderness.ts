@@ -17,7 +17,7 @@ import {
   water,
 } from "./shared";
 
-export type WildernessArchetype = "river-valley" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "forest" | "swamp";
+export type WildernessArchetype = "river-valley" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp";
 
 const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>> = {
   "river-valley": ["river", "valley", "riverbank", "河谷", "河流", "溪谷", "峡谷河"],
@@ -25,7 +25,8 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   mountain: ["mountain", "cliff", "ridge", "山地", "山脊", "高山", "峭壁"],
   ice: ["ice", "glacier", "tundra", "冰原", "冰川", "冻土", "雪原"],
   ruin: ["ruin", "ruined", "wilderness ruin", "遗迹", "废墟", "残垣", "荒野遗迹"],
-  "underground-lake": ["underground lake", "dark lake", "subterranean lake", "地下湖", "幽暗地域", "地底湖"],
+  "underground-lake": ["underground lake", "dark lake", "subterranean lake", "地下湖", "地底湖"],
+  underdark: ["underdark", "幽暗地域", "地底世界", "地下洞窟", "菌林", "发光水晶"],
   forest: ["forest", "woodland", "林地", "森林", "树林"],
   swamp: ["swamp", "marsh", "bog", "沼泽", "湿地"],
 };
@@ -40,7 +41,7 @@ export function classifyWildernessArchetype(prompt: string): WildernessArchetype
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number } {
   const { rng, request } = context;
-  const base: readonly [number, number, number] = archetype === "rift" ? [42, 34, 5] : archetype === "mountain" ? [38, 38, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
+  const base: readonly [number, number, number] = archetype === "rift" ? [42, 34, 5] : archetype === "mountain" ? [38, 38, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
   const scale = request.size === "small" ? 0.75 : request.size === "large" ? 1.3 : 1;
   return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2] };
 }
@@ -92,6 +93,84 @@ function buildRift(scene: GeneratedScene, width: number, depth: number, rng: Gen
   scene.routes.push(createRoute("rift-primary-route", "primary", [{ x: 1, z: bridgeZ }, { x: left, z: bridgeZ, y: 0 }, { x: right, z: bridgeZ, y: feetToMeters(3.15) }, { x: width - 1, z: bridgeZ, y: feetToMeters(3.15) }]), stairRoute("rift-ramp-route", ramp));
   scene.tactical.push(tacticalFeature("rift-entrance", "entrance", 1, bridgeZ, 0, 2, "A broken trail enters the west shelf."), tacticalFeature("rift-bridge-choke", "chokepoint", width / 2, bridgeZ, feetToMeters(3.15), 2, "The narrow bridge concentrates every attack across the gap."), tacticalFeature("rift-void-hazard", "hazard", width / 2, depth / 2, -1, 3, "Falling into the rift removes a combatant from the fight."));
   addCover(scene, rng, "rift", left * 0.55, depth * 0.28, 0, 4);
+}
+
+/** A semantic underdark map: connected walkable cells are shaped first, then
+ * rendered as elevation bands, a continuous ravine, bridges, and biome zones.
+ * This is deliberately different from the generic chamber cave generator. */
+function buildUnderdark(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  const cols = Math.max(24, Math.floor(width));
+  const rows = Math.max(20, Math.floor(depth));
+  const levels = 5;
+  const heights: Array<number | undefined> = [];
+  const ravineX = Math.floor(cols * rng.float(0.43, 0.57));
+  const bridgeRows = [Math.floor(rows * 0.28), Math.floor(rows * 0.68)];
+  const cellAt = (x: number, z: number) => (x < 0 || z < 0 || x >= cols || z >= rows ? undefined : heights[z * cols + x]);
+  for (let z = 0; z < rows; z += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const boundary = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+      const caveShape = boundary >= 1 && (Math.sin(x * 0.31) + Math.cos(z * 0.23) > -1.15 || boundary > 3);
+      const inRavine = Math.abs(x - (ravineX + Math.sin(z * 0.22) * 2.2)) < 2.1 && !bridgeRows.some((row) => Math.abs(z - row) <= 1);
+      if (!caveShape || inRavine) heights.push(undefined);
+      else {
+        const westHighland = x < cols * 0.33 && z > rows * 0.18;
+        const northRuin = z < rows * 0.27 && x > cols * 0.58;
+        const fungalBasin = x > cols * 0.54 && z > rows * 0.56;
+        const level = westHighland ? 3 : northRuin ? 2 : fungalBasin ? 0 : Math.max(0, Math.min(levels - 1, Math.floor((rows - z) / Math.max(1, rows / 4))));
+        heights.push(level);
+      }
+    }
+  }
+  const yOf = (level: number) => feetToMeters(level * 10) + FLOOR_SLAB_METERS;
+  let walkable = 0;
+  let cliffSegments = 0;
+  for (let z = 0; z < rows; z += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const level = cellAt(x, z);
+      if (level === undefined) continue;
+      walkable += 1;
+      const material = level === 0 ? "moss" : level === 3 ? "darkStone" : "rock";
+      scene.primitives.push(box(`underdark-cell-${x}-${z}`, 0, x + 0.5, 0, z + 0.5, 0.96, yOf(level), 0.96, material, ["floor", "terrain", "semantic-grid", `elevation:${level}`, level === 3 ? "highland" : level === 0 ? "fungal-basin" : "shelf"]));
+      for (const [dx, dz] of [[1, 0], [0, 1]] as const) {
+        const neighbour = cellAt(x + dx, z + dz);
+        if (neighbour !== undefined && Math.abs(neighbour - level) >= 1) {
+          cliffSegments += 1;
+          const h = yOf(Math.max(neighbour, level)) - yOf(Math.min(neighbour, level));
+          scene.primitives.push(box(`underdark-cliff-${x}-${z}-${dx}-${dz}`, 0, x + 0.5 + dx * 0.49, yOf(Math.min(neighbour, level)) / 2, z + 0.5 + dz * 0.49, dx ? 0.12 : 0.96, Math.max(0.4, h), dz ? 0.12 : 0.96, "darkStone", ["cliff-face", "vertical-face", "terrain"]));
+        }
+      }
+    }
+  }
+  for (const [index, row] of bridgeRows.entries()) {
+    scene.primitives.push(corridor(`underdark-stone-bridge-${index}`, 0, ravineX - 3, row + 0.5, ravineX + 3, row + 0.5, yOf(1), 2.2, "stone", ["bridge", "semantic-grid", "ravine-crossing"]));
+  }
+  const zones = [
+    ["West highland", "combat", cols * 0.18, rows * 0.48, 12, 12, yOf(3)],
+    ["North relic shelf", "natural", cols * 0.73, rows * 0.16, 11, 8, yOf(2)],
+    ["Fungal basin", "combat", cols * 0.68, rows * 0.74, 13, 10, yOf(0)],
+    ["Ravine floor", "natural", ravineX, rows * 0.5, 4, rows - 4, yOf(0)],
+  ] as const;
+  for (const [index, zone] of zones.entries()) {
+    const [name, role, x, z, w, d, y] = zone;
+    const id = `underdark-zone-${index}`;
+    scene.rooms.push(createRoom(id, name, role, 0, x, z, w, d, y));
+    if (index > 0) connectRooms(scene.rooms, `underdark-zone-${index - 1}`, id);
+  }
+  const routePoints = [{ x: 2, z: rows - 3, y: yOf(1) }, { x: cols * 0.25, z: rows * 0.72, y: yOf(3) }, { x: ravineX, z: bridgeRows[0] ?? rows * 0.28, y: yOf(1) }, { x: cols * 0.75, z: rows * 0.18, y: yOf(2) }];
+  scene.routes.push(createRoute("underdark-main-route", "primary", routePoints), createRoute("underdark-ravine-route", "alternate", [{ x: 2, z: rows - 3, y: yOf(1) }, { x: ravineX, z: rows * 0.82, y: yOf(0) }, { x: cols - 3, z: rows * 0.68, y: yOf(0) }]));
+  scene.tactical.push(tacticalFeature("underdark-entrance", "entrance", 2, rows - 3, yOf(1), 2, "A descending tunnel opens into the lower cavern."), tacticalFeature("underdark-ravine", "hazard", ravineX, rows * 0.5, -1, 4, "A continuous ravine divides the cavern and blocks direct movement."), tacticalFeature("underdark-highland", "highGround", cols * 0.18, rows * 0.48, yOf(3), 3, "The western highland overlooks the basin and both bridge approaches."));
+  for (let index = 0; index < 18; index += 1) {
+    const x = rng.float(cols * 0.56, cols * 0.86);
+    const z = rng.float(rows * 0.58, rows * 0.88);
+    scene.primitives.push(primitive(`underdark-fungus-${index}`, "cone", 0, x, yOf(0) + feetToMeters(rng.int(3, 8)), z, feetToMeters(rng.float(1, 2.4)), feetToMeters(rng.int(3, 8)), feetToMeters(rng.float(1, 2.4)), "moss", ["fungal-forest", "underdark", "cover"]));
+  }
+  for (let index = 0; index < 9; index += 1) {
+    const x = rng.float(cols * 0.6, cols * 0.94);
+    const z = rng.float(rows * 0.08, rows * 0.48);
+    scene.primitives.push(primitive(`underdark-crystal-${index}`, "cone", 0, x, yOf(1) + feetToMeters(rng.int(2, 6)), z, feetToMeters(0.7), feetToMeters(rng.int(4, 10)), feetToMeters(0.7), "warmLight", ["crystal", "underdark", "landmark"]));
+  }
+  scene.description = `Underdark semantic grid: ${walkable} connected walkable cells, ${cliffSegments} vertical cliff segments, a bent ravine with two stone bridges, western highland, relic shelf, fungal basin, and alternate routes.`;
+  scene.floorHeightFeet = [Math.ceil((yOf(levels - 1) + feetToMeters(12)) / 0.3048)];
 }
 
 function buildMountainHeightfield(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
@@ -343,7 +422,18 @@ function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchet
 export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const archetype = classifyWildernessArchetype(context.request.prompt);
   const profile = bounds(context, archetype);
-  const scene = baseScene("wilderness", choose(context.rng, ["The Broken Wilds", "A Tactical Reach", "The Unmapped Boundary"]), `${archetype} terrain with elevation, route choices, tactical cover, and explicit hazards.`, context.request.seed, { x: profile.width, z: profile.depth }, 1, [Math.ceil(profile.height + 11)]);
+  const titlePool: Record<WildernessArchetype, readonly string[]> = {
+    "river-valley": ["Silverfall Valley", "The Two-Bank Reach"],
+    rift: ["Dragonbone Rift", "The Split Earth"],
+    mountain: ["The Broken Heights", "Ridge of Seven Shelves"],
+    ice: ["Whiteglass Expanse", "The Blue Fracture"],
+    ruin: ["The Overgrown Reliquary", "Ruins at the Last Ridge"],
+    "underground-lake": ["The Blackwater Hollow", "Lake Beneath Stone"],
+    underdark: ["The Fungal Deep", "The Five-Shelf Underdark"],
+    forest: ["The Canopy Run", "Mosswood Crossing"],
+    swamp: ["The Sinking Fen", "Reedwater Marsh"],
+  };
+  const scene = baseScene("wilderness", choose(context.rng, titlePool[archetype]), `${archetype} terrain with elevation bands, route choices, tactical cover, and explicit hazards.`, context.request.seed, { x: profile.width, z: profile.depth }, 1, [Math.ceil(profile.height + 11)]);
   scene.archetype = archetype;
   if (archetype === "river-valley") buildRiverValley(scene, profile.width, profile.depth, context.rng.fork("river"));
   else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, context.rng.fork("rift"));
@@ -352,6 +442,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));
   else if (archetype === "forest") buildForest(scene, profile.width, profile.depth, context.rng.fork("forest"));
   else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, context.rng.fork("swamp"));
+  else if (archetype === "underdark") buildUnderdark(scene, profile.width, profile.depth, context.rng.fork("underdark"));
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
   addTerrainComplexity(scene, archetype, profile.width, profile.depth, context.rng.fork("terrain-complexity"));
   return scene;

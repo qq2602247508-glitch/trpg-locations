@@ -70,6 +70,10 @@ function normalizeRequest(request: GenerationRequest): GenerationRequest {
 function selectAdaptivePrimary(classification: InputClassification, rng: SeededRandom): FixedSceneKind {
   if (classification.kind !== "adaptive") return classification.kind;
   const { traits } = classification;
+  // Explicit wilderness keywords (幽暗地域、河谷、裂谷、冰原等) must retain
+  // the wilderness grammar. Previously `theme:wild` was checked earlier and
+  // collapsed these prompts into the generic chamber cave generator.
+  if (classification.categoryScores.wilderness > 0) return "wilderness";
   if (traits.verticality === "high" || traits.topology === "vertical") return "tower";
   if (traits.water === "major" || (traits.environment === "underground" && traits.water !== "none")) return "sewer";
   if (traits.environment === "underground" || traits.topology === "branching" || traits.theme === "wild") return "cave";
