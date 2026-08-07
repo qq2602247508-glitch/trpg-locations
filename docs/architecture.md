@@ -56,3 +56,7 @@ GenerationRequest
 - 规划与校验由 `generation.worker.ts` 移出渲染主线程；不支持 Worker 的环境使用按需加载的确定性回退。
 - Three.js/`SceneRenderer` 是独立延迟块；当前首屏 JS 约 18 KB，规划 worker 约 96 KB，渲染块约 552 KB（压缩前）。
 - 大型聚落后续按区块生成，建筑内部按需加载。
+
+## 本地语义边界
+
+`semantic/ollama.ts` 只在本地关键词分类没有类别证据时请求 Ollama。请求同时使用 JSON Schema 和显式字段/枚举提示，返回值还必须经过本地解析器二次验证。语义结果只能影响基础生成域和组合式 traits；米/英尺尺寸、房间图、路线边、随机流、碰撞和修复不存在模型入口。

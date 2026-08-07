@@ -1,4 +1,5 @@
 import { generateScene } from "../generators";
+import { classifyWithOllama } from "../semantic/ollama";
 import type { GenerationRequest, SceneKind } from "../schema";
 
 interface GenerationWorkerRequest {
@@ -21,10 +22,11 @@ interface WorkerScope {
 // Keep the main tsconfig on DOM types; Vite evaluates this module in a worker.
 const scope = globalThis as unknown as WorkerScope;
 
-scope.addEventListener("message", (event: MessageEvent<GenerationWorkerRequest>) => {
+scope.addEventListener("message", async (event: MessageEvent<GenerationWorkerRequest>) => {
   const { id, request, kind } = event.data;
   try {
-    const scene = generateScene(request, kind);
+    const classification = kind === "adaptive" ? await classifyWithOllama(request.prompt) : undefined;
+    const scene = generateScene(request, kind, classification);
     scope.postMessage({ id, scene } satisfies GenerationWorkerResponse);
   } catch (error) {
     scope.postMessage({

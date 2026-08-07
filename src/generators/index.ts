@@ -253,22 +253,27 @@ export function generateAdaptiveScene(
  * Public generation entry point.  It always validates/repairs the finished
  * scene, including adaptive compositions, before a renderer receives it.
  */
-export function generateScene(request: GenerationRequest, requestedKind: SceneKind = "adaptive"): GeneratedScene {
+export function generateScene(request: GenerationRequest, requestedKind: SceneKind = "adaptive", suppliedClassification?: InputClassification): GeneratedScene {
   const normalized = normalizeRequest(request);
   const kind = isSceneKind(requestedKind) ? requestedKind : "adaptive";
   const rootRng = new SeededRandom(normalized.seed);
   let generated: GeneratedScene;
 
   if (kind === "adaptive") {
+    const classification = suppliedClassification ?? classifyInput(normalized.prompt);
     generated = generateAdaptiveScene(
       { request: normalized, rng: rootRng.fork("adaptive") },
-      classifyInput(normalized.prompt),
+      classification,
     );
+    generated.semantic = classification.source === "ollama"
+      ? { source: "ollama", ...(classification.semanticModel ? { model: classification.semanticModel } : {}) }
+      : { source: "local" };
   } else {
     generated = generatorRegistry[kind]({
       request: normalized,
       rng: rootRng.fork(`fixed:${kind}`),
     });
+    generated.semantic = { source: "local" };
   }
 
   return validateScene(generated, { repair: true }).scene;

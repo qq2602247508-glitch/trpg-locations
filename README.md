@@ -33,6 +33,8 @@ npm run build
 
 浏览器中的规划与几何校验在 Web Worker 执行；Three.js 渲染核心延迟加载。当 Worker 不可用时，会按需加载同一确定性生成器作为回退。
 
+对本地分类器确实不认识的题材，worker 可选请求 `http://127.0.0.1:11434` 上的 `qwen3.6:35b-mlx`。模型只能返回枚举化的环境、拓扑偏好、高差、水体、光照、掩体、主题和短地标/危险词。超时、服务不可用或返回不合规都立即回退，不影响一键生成。
+
 架构和扩展约束见 [docs/architecture.md](docs/architecture.md)。
 
 完整的阶段路线、尺寸策略和自动/人工验收清单见 [docs/execution-plan.md](docs/execution-plan.md)。

@@ -3,7 +3,7 @@ import { hashSeed } from "../core/random";
 
 type KnownSceneKind = Exclude<SceneKind, "adaptive">;
 
-export type ClassificationSource = "keyword" | "adaptive";
+export type ClassificationSource = "keyword" | "adaptive" | "ollama";
 export type AdaptiveEnvironment = "interior" | "urban" | "underground" | "wilderness" | "coastal" | "ruin";
 export type AdaptiveTopology = "linear" | "branching" | "open" | "vertical" | "loop";
 export type AdaptiveVerticality = "low" | "medium" | "high";
@@ -41,6 +41,7 @@ export interface InputClassification {
   matchedKeywords: string[];
   categoryScores: Record<KnownSceneKind, number>;
   traits: AdaptiveFeatures;
+  semanticModel?: string;
 }
 
 interface KeywordRule {

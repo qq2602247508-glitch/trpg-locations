@@ -91,6 +91,10 @@ export interface GeneratedScene {
   tactical: TacticalFeature[];
   diagnostics: SceneDiagnostics;
   generationMs: number;
+  semantic?: {
+    source: "local" | "ollama";
+    model?: string;
+  };
 }
 
 export interface GenerationRequest {

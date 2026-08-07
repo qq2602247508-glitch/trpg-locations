@@ -292,7 +292,8 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       const floorView = elements.floor.value;
       renderer.setFloorView(floorView === "cut" || floorView === "roof" ? floorView : Number(floorView));
       setStatus(elements, scene.diagnostics.valid ? "校验通过" : "需要注意", scene.diagnostics.valid ? "ok" : "warn");
-      elements.statusDetail.textContent = `${scene.primitives.length} 个可批处理图元 · ${scene.generationMs.toFixed(0)} ms 生成`;
+      const semanticLabel = scene.semantic?.source === "ollama" ? " · Ollama 语义" : "";
+      elements.statusDetail.textContent = `${scene.primitives.length} 个可批处理图元 · ${scene.generationMs.toFixed(0)} ms 生成${semanticLabel}`;
     } catch (error) {
       const description = error instanceof Error ? error.message : "未知生成错误";
       setStatus(elements, "生成失败", "error");
