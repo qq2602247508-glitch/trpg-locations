@@ -558,6 +558,38 @@ export class SceneRenderer {
       this.gridRoot.add(grid);
     }
 
+    // Stair treads are walkable faces too. Draw a small grid on every tread,
+    // transformed with the authored stair rotation, instead of leaving stairs
+    // as ungridded solid ramps.
+    for (const stair of scene.primitives.filter((primitive) => primitive.shape === "stairs")) {
+      const steps = Math.max(2, Math.round(stair.size.y / 0.18));
+      const treadDepth = stair.size.z / steps;
+      const cosine = Math.cos(stair.rotationY ?? 0);
+      const sine = Math.sin(stair.rotationY ?? 0);
+      const toWorld = (localX: number, localZ: number, y: number): [number, number, number] => [
+        stair.position.x + localX * cosine + localZ * sine,
+        y,
+        stair.position.z - localX * sine + localZ * cosine,
+      ];
+      const linePositions: number[] = [];
+      const push = (a: [number, number, number], b: [number, number, number]) => linePositions.push(...a, ...b);
+      for (let step = 0; step < steps; step += 1) {
+        const z0 = -stair.size.z / 2 + step * treadDepth;
+        const z1 = z0 + treadDepth;
+        const y = stair.position.y + stair.size.y * ((step + 1) / steps) + 0.035;
+        for (let x = -stair.size.x / 2; x <= stair.size.x / 2 + 0.001; x += GRID_METERS) push(toWorld(x, z0, y), toWorld(x, z1, y));
+        push(toWorld(-stair.size.x / 2, z0, y), toWorld(stair.size.x / 2, z0, y));
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+      const material = new THREE.LineBasicMaterial({ color: 0xb9d7c8, transparent: true, opacity: 0.9, depthTest: true, depthWrite: false, toneMapped: false });
+      const grid = new THREE.LineSegments(geometry, material);
+      grid.name = `stair grid · ${stair.id}`;
+      grid.userData.levels = [stair.level];
+      grid.renderOrder = 2;
+      this.gridRoot.add(grid);
+    }
+
     // Wilderness terrain is authored as stepped slabs rather than one abstract
     // floor. Add local grid patches at each walkable top surface so the 5 ft
     // tactical cells follow ledges, plateaus, islands, and ice shelves.

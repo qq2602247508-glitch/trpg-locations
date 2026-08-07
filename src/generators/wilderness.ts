@@ -17,7 +17,7 @@ import {
   water,
 } from "./shared";
 
-export type WildernessArchetype = "river-valley" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake";
+export type WildernessArchetype = "river-valley" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "forest" | "swamp";
 
 const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>> = {
   "river-valley": ["river", "valley", "riverbank", "河谷", "河流", "溪谷", "峡谷河"],
@@ -26,6 +26,8 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   ice: ["ice", "glacier", "tundra", "冰原", "冰川", "冻土", "雪原"],
   ruin: ["ruin", "ruined", "wilderness ruin", "遗迹", "废墟", "残垣", "荒野遗迹"],
   "underground-lake": ["underground lake", "dark lake", "subterranean lake", "地下湖", "幽暗地域", "地底湖"],
+  forest: ["forest", "woodland", "林地", "森林", "树林"],
+  swamp: ["swamp", "marsh", "bog", "沼泽", "湿地"],
 };
 
 export function classifyWildernessArchetype(prompt: string): WildernessArchetype {
@@ -38,7 +40,7 @@ export function classifyWildernessArchetype(prompt: string): WildernessArchetype
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number } {
   const { rng, request } = context;
-  const base: readonly [number, number, number] = archetype === "rift" ? [42, 34, 5] : archetype === "mountain" ? [38, 38, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underground-lake" ? [44, 36, 6] : [48, 34, 4];
+  const base: readonly [number, number, number] = archetype === "rift" ? [42, 34, 5] : archetype === "mountain" ? [38, 38, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
   const scale = request.size === "small" ? 0.75 : request.size === "large" ? 1.3 : 1;
   return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2] };
 }
@@ -93,14 +95,22 @@ function buildRift(scene: GeneratedScene, width: number, depth: number, rng: Gen
 }
 
 function buildMountain(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
-  const terraces = 4;
+  const terraces = rng.int(4, Math.min(6, Math.max(4, Math.floor(width / 6))));
   const rooms: string[] = [];
+  let summitX = width / 2;
+  let summitZ = depth - 3;
+  let summitY = feetToMeters(15);
   for (let index = 0; index < terraces; index += 1) {
     const levelY = feetToMeters(index * 5);
-    const terraceW = width - index * 6;
+    const terraceW = Math.max(6, width - index * 4.5);
     const terraceD = Math.max(6, depth / terraces + 3);
     const x = width / 2 + rng.float(-2, 2);
     const z = 3 + terraceD / 2 + index * (depth / terraces - 1);
+    if (index === terraces - 1) {
+      summitX = x;
+      summitZ = z;
+      summitY = levelY;
+    }
     const id = `mountain-terrace-${index}`;
     rooms.push(id);
     scene.primitives.push(box(`${id}-floor`, 0, x, levelY, z, terraceW, FLOOR_SLAB_METERS, terraceD, index === terraces - 1 ? "moss" : "rock", ["floor", "terrain", "ledge", "platform"]));
@@ -116,8 +126,8 @@ function buildMountain(scene: GeneratedScene, width: number, depth: number, rng:
     }
     addCover(scene, rng, id, x + terraceW * 0.25, z, levelY, 2);
   }
-  scene.routes.push(createRoute("mountain-trail", "primary", [{ x: 1, z: 2, y: 0 }, { x: width / 2 - 3, z: depth * 0.2, y: feetToMeters(5) }, { x: width / 2 - 3, z: depth - 3, y: feetToMeters(15) }]));
-  scene.tactical.push(tacticalFeature("mountain-entrance", "entrance", 1, 2, 0, 2, "A switchback trail begins below the first terrace."), tacticalFeature("mountain-summit", "highGround", width / 2, depth - 3, feetToMeters(15), 3, "The summit shelf dominates every lower approach."));
+  scene.routes.push(createRoute("mountain-trail", "primary", [{ x: 1, z: 2, y: 0 }, { x: width / 2 - 3, z: depth * 0.2, y: feetToMeters(5) }, { x: summitX, z: summitZ, y: summitY }]));
+  scene.tactical.push(tacticalFeature("mountain-entrance", "entrance", 1, 2, 0, 2, "A switchback trail begins below the first terrace."), tacticalFeature("mountain-summit", "highGround", summitX, summitZ, summitY, 3, "The summit shelf dominates every lower approach."));
 }
 
 function buildIce(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
@@ -167,6 +177,50 @@ function buildUndergroundLake(scene: GeneratedScene, width: number, depth: numbe
   addCover(scene, rng, "lake", width * 0.2, depth * 0.3, 0, 3);
 }
 
+function buildForest(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  scene.primitives.push(box("forest-floor", 0, width / 2, 0, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "moss", ["floor", "terrain", "forest"]));
+  const clearX = width * 0.52;
+  const clearZ = depth * 0.5;
+  scene.primitives.push(box("forest-clearing", 0, clearX, FLOOR_SLAB_METERS, clearZ, width * 0.3, FLOOR_SLAB_METERS, depth * 0.24, "earth", ["floor", "platform", "clearing"]));
+  for (let index = 0; index < 28; index += 1) {
+    const x = rng.float(2, width - 2);
+    const z = rng.float(2, depth - 2);
+    if (Math.abs(x - clearX) < width * 0.2 && Math.abs(z - clearZ) < depth * 0.16) continue;
+    const trunk = rng.float(0.35, 0.8);
+    const height = feetToMeters(rng.int(8, 18));
+    scene.primitives.push(cylinder(`forest-tree-${index}`, 0, x, FLOOR_SLAB_METERS, z, trunk, height, "darkStone", ["forest", "natural-cover", "cover"]));
+    scene.primitives.push(primitive(`forest-canopy-${index}`, "cone", 0, x, FLOOR_SLAB_METERS + height, z, trunk * 3.4 * 1.524, height * 0.42, trunk * 3.4 * 1.524, "moss", ["forest", "canopy", "cover"]));
+    if (index % 4 === 0) scene.tactical.push(tacticalFeature(`forest-tree-cover-${index}`, "cover", x, z, 0, 1, "Dense trunks create alternating sight-line breaks."));
+  }
+  scene.rooms.push(createRoom("forest-edge", "Forest edge", "natural", 0, width / 2, 4, width - 4, 6), createRoom("forest-clearing-room", "Hunter clearing", "combat", 0, clearX, clearZ, width * 0.3, depth * 0.24), createRoom("forest-deep", "Deep woodland", "natural", 0, width / 2, depth - 5, width - 4, 7));
+  connectRooms(scene.rooms, "forest-edge", "forest-clearing-room");
+  connectRooms(scene.rooms, "forest-clearing-room", "forest-deep");
+  scene.routes.push(createRoute("forest-primary-route", "primary", [{ x: 1, z: 4 }, { x: width * 0.28, z: depth * 0.32 }, { x: clearX, z: clearZ }, { x: width - 2, z: depth - 5 }]));
+  scene.routes.push(createRoute("forest-hunter-trail", "alternate", [{ x: 3, z: depth - 4 }, { x: width * 0.25, z: depth * 0.7 }, { x: clearX, z: clearZ }, { x: width - 3, z: 4 }]));
+  scene.tactical.push(tacticalFeature("forest-entrance", "entrance", 1, 4, 0, 2, "A narrow game trail enters beneath the canopy."), tacticalFeature("forest-clearing-choke", "chokepoint", clearX, clearZ, 0, 3, "The clearing is exposed but controls both forest trails."));
+}
+
+function buildSwamp(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  scene.primitives.push(box("swamp-ground", 0, width / 2, -0.12, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "moss", ["floor", "terrain", "swamp"]));
+  const pools = 5;
+  for (let index = 0; index < pools; index += 1) {
+    const x = rng.float(5, width - 5);
+    const z = rng.float(5, depth - 5);
+    const poolW = rng.int(4, 9);
+    const poolD = rng.int(3, 7);
+    scene.primitives.push(water(`swamp-pool-${index}`, 0, x, -0.24, z, poolW, 0.18, poolD, ["swamp", "water", "hazard"]));
+    scene.tactical.push(tacticalFeature(`swamp-pool-hazard-${index}`, "hazard", x, z, -0.24, 2, "Deep stagnant water slows movement and conceals a drop."));
+  }
+  const boardwalkZ = depth * 0.48;
+  scene.primitives.push(corridor("swamp-boardwalk", 0, 2, boardwalkZ, width - 2, boardwalkZ, FLOOR_SLAB_METERS + 0.2, 2, "wood", ["bridge", "boardwalk", "swamp"]));
+  scene.rooms.push(createRoom("swamp-edge", "Dry reed edge", "natural", 0, width / 2, 4, width - 4, 6), createRoom("swamp-boardwalk-room", "Raised boardwalk", "circulation", 0, width / 2, boardwalkZ, width - 4, 2), createRoom("swamp-deep", "Deep marsh", "combat", 0, width / 2, depth - 5, width - 4, 7));
+  connectRooms(scene.rooms, "swamp-edge", "swamp-boardwalk-room");
+  connectRooms(scene.rooms, "swamp-boardwalk-room", "swamp-deep");
+  scene.routes.push(createRoute("swamp-boardwalk-route", "primary", [{ x: 1, z: boardwalkZ }, { x: width / 2, z: boardwalkZ }, { x: width - 1, z: boardwalkZ }]), createRoute("swamp-reed-route", "alternate", [{ x: 3, z: 4 }, { x: width * 0.28, z: depth * 0.35 }, { x: width * 0.72, z: depth * 0.7 }, { x: width - 3, z: depth - 4 }]));
+  addCover(scene, rng, "swamp", width * 0.25, depth * 0.72, 0, 5, "moss");
+  scene.tactical.push(tacticalFeature("swamp-entrance", "entrance", 1, boardwalkZ, 0, 2, "A half-sunken path reaches the raised boardwalk."), tacticalFeature("swamp-boardwalk-choke", "chokepoint", width / 2, boardwalkZ, 0.2, 2, "The narrow boardwalk forces movement above the pools."));
+}
+
 /** Adds a second layer of authored natural structure instead of leaving large
  * wilderness maps as a few empty slabs. These pieces intentionally remain
  * generic terrain vocabulary so new biomes can reuse the same composition pass. */
@@ -197,6 +251,8 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, context.rng.fork("mountain"));
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, context.rng.fork("ice"));
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));
+  else if (archetype === "forest") buildForest(scene, profile.width, profile.depth, context.rng.fork("forest"));
+  else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, context.rng.fork("swamp"));
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
   addTerrainComplexity(scene, archetype, profile.width, profile.depth, context.rng.fork("terrain-complexity"));
   return scene;

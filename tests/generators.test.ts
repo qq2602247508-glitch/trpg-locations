@@ -94,6 +94,15 @@ describe("scene generators", () => {
     }
   });
 
+  it("uses prompt semantics as a deterministic variation stream", () => {
+    const seed = "same-seed-different-prompt";
+    const crystal = generateScene({ ...request(seed), prompt: "幽暗洞窟，水晶桥和地下湖" }, "adaptive");
+    const lava = generateScene({ ...request(seed), prompt: "幽暗洞窟，熔岩裂缝和崩塌矿道" }, "adaptive");
+    expect(crystal).not.toEqual(lava);
+    expect(crystal.diagnostics.valid).toBe(true);
+    expect(lava.diagnostics.valid).toBe(true);
+  });
+
   it("emits cleanly valid output across a small seed/scale matrix", () => {
     const kinds: readonly Exclude<SceneKind, "adaptive">[] = ["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness"];
     const sizes: readonly GenerationRequest["size"][] = ["small", "medium", "large"];

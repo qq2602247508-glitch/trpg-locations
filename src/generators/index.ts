@@ -256,7 +256,11 @@ export function generateAdaptiveScene(
 export function generateScene(request: GenerationRequest, requestedKind: SceneKind = "adaptive", suppliedClassification?: InputClassification): GeneratedScene {
   const normalized = normalizeRequest(request);
   const kind = isSceneKind(requestedKind) ? requestedKind : "adaptive";
-  const rootRng = new SeededRandom(normalized.seed);
+  // Prompt semantics must influence deterministic variation even when the user
+  // keeps the same explicit Seed. This preserves replayability while ensuring
+  // “洞窟 + 水晶” and “洞窟 + 熔岩” do not collapse to the same layout.
+  const promptKey = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const rootRng = new SeededRandom(`${normalized.seed}|prompt:${promptKey}`);
   let generated: GeneratedScene;
 
   if (kind === "adaptive") {
