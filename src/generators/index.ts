@@ -226,6 +226,7 @@ export function generateAdaptiveScene(
   const base = generatorRegistry[primary]({
     request: context.request,
     rng: context.rng.fork(`base:${primary}`),
+    semanticHints: classification.traits,
   });
   const requestedModifiers = modifierRequests(classification.traits);
   const budget = compositionBudget(context.request);
@@ -280,8 +281,11 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
     generated = generatorRegistry[kind]({
       request: normalized,
       rng: rootRng.fork(`fixed:${kind}`),
+      ...(suppliedClassification ? { semanticHints: suppliedClassification.traits } : {}),
     });
-    generated.semantic = { source: "local" };
+    generated.semantic = suppliedClassification?.source === "ollama"
+      ? { source: "ollama", ...(suppliedClassification.semanticModel ? { model: suppliedClassification.semanticModel } : {}) }
+      : { source: "local" };
   }
 
   return validateScene(generated, { repair: true }).scene;

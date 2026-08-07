@@ -25,7 +25,10 @@ const scope = globalThis as unknown as WorkerScope;
 scope.addEventListener("message", async (event: MessageEvent<GenerationWorkerRequest>) => {
   const { id, request, kind } = event.data;
   try {
-    const classification = kind === "adaptive" ? await classifyWithOllama(request.prompt) : undefined;
+    // Fixed wilderness mode still needs semantic help for novel biomes such as
+    // 河川、蘑菇地 or user-coined fantasy regions. Known local prompts bypass
+    // Ollama inside classifyWithOllama, so only ambiguous prompts pay latency.
+    const classification = kind === "adaptive" || kind === "wilderness" ? await classifyWithOllama(request.prompt) : undefined;
     const scene = generateScene(request, kind, classification);
     scope.postMessage({ id, scene } satisfies GenerationWorkerResponse);
   } catch (error) {

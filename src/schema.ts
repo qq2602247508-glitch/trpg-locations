@@ -127,7 +127,21 @@ export interface GenerationRequest {
   density: number;
 }
 
+export interface SemanticGenerationHints {
+  environment: string;
+  topology: string;
+  verticality: string;
+  water: string;
+  lighting: string;
+  cover: string;
+  theme: string;
+  anchors: string[];
+  hazards: string[];
+  tags: string[];
+}
+
 export interface GeneratorContext {
   request: GenerationRequest;
   rng: import("./core/random").SeededRandom;
+  semanticHints?: SemanticGenerationHints;
 }

@@ -1,4 +1,4 @@
-import type { GeneratedScene, GeneratorContext, MaterialKey } from "../schema";
+import type { GeneratedScene, GeneratorContext, MaterialKey, SemanticGenerationHints } from "../schema";
 import {
   CELL,
   FLOOR_SLAB_METERS,
@@ -21,18 +21,18 @@ import {
 export type WildernessArchetype = "river-valley" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp";
 
 const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>> = {
-  "river-valley": ["river", "valley", "riverbank", "河谷", "河流", "溪谷", "峡谷河"],
+  "river-valley": ["river", "valley", "riverbank", "河谷", "河流", "河川", "溪谷", "峡谷河"],
   rift: ["rift", "chasm", "ravine", "裂谷", "裂隙", "深坑", "断崖"],
   mountain: ["mountain", "cliff", "ridge", "山地", "山脊", "高山", "峭壁"],
   ice: ["ice", "glacier", "tundra", "冰原", "冰川", "冻土", "雪原"],
   ruin: ["ruin", "ruined", "wilderness ruin", "遗迹", "废墟", "残垣", "荒野遗迹"],
   "underground-lake": ["underground lake", "dark lake", "subterranean lake", "地下湖", "地底湖"],
-  underdark: ["underdark", "幽暗地域", "地底世界", "地下洞窟", "菌林", "发光水晶"],
+  underdark: ["underdark", "幽暗地域", "地底世界", "地下洞窟", "菌林", "发光水晶", "mushroom", "fungal", "蘑菇", "菌类"],
   forest: ["forest", "woodland", "林地", "森林", "树林"],
   swamp: ["swamp", "marsh", "bog", "沼泽", "湿地"],
 };
 
-export function classifyWildernessArchetype(prompt: string): WildernessArchetype {
+export function classifyWildernessArchetype(prompt: string, hints?: SemanticGenerationHints): WildernessArchetype {
   const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   // Named biome/domain beats a secondary landmark in the same prompt. For
   // example “幽暗地域，连续裂谷” is an underdark map with a rift feature,
@@ -51,13 +51,18 @@ export function classifyWildernessArchetype(prompt: string): WildernessArchetype
       }
     }
   }
+  if (firstIndex < Number.POSITIVE_INFINITY) return selected;
+  if (hints?.water === "major") return "river-valley";
+  if (hints?.environment === "underground") return "underdark";
+  if (hints?.environment === "ruin") return "ruin";
+  if (hints?.environment === "wilderness" && hints.cover === "dense") return "forest";
   return selected;
 }
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number; density: number } {
   const { rng, request } = context;
   const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
-  const scale = request.size === "small" ? 0.75 : request.size === "large" ? 1.3 : 1;
+  const scale = request.size === "small" ? 0.62 : request.size === "large" ? 1.55 : 1;
   return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2], density: request.density };
 }
 
@@ -552,7 +557,7 @@ function buildSwamp(scene: GeneratedScene, width: number, depth: number, rng: Ge
  * wilderness maps as a few empty slabs. These pieces intentionally remain
  * generic terrain vocabulary so new biomes can reuse the same composition pass. */
 function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
-  const obstacleCount = rng.int(Math.round(5 + density * 8), Math.round(9 + density * 14));
+  const obstacleCount = rng.int(Math.round(3 + density * 16), Math.round(6 + density * 26));
   for (let index = 0; index < obstacleCount; index += 1) {
     const x = rng.float(2.5, width - 2.5);
     const z = rng.float(2.5, depth - 2.5);
@@ -641,6 +646,58 @@ function addPromptDrivenTheme(scene: GeneratedScene, prompt: string, width: numb
   }
 }
 
+function semanticHash(value: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
+  return hash >>> 0;
+}
+
+function addGiantFungalLandmarks(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const count = Math.round(5 + density * 11);
+  for (let index = 0; index < count; index += 1) {
+    const x = rng.float(4, width - 4);
+    const z = rng.float(4, depth - 4);
+    const heightFeet = rng.int(12, 32);
+    const height = feetToMeters(heightFeet);
+    const capWidth = rng.float(3.2, 6.5);
+    const stemWidth = rng.float(0.7, 1.35);
+    scene.primitives.push(
+      cylinder(`giant-fungus-stem-${index}`, 0, x, FLOOR_SLAB_METERS, z, stemWidth, height, "plaster", ["giant-fungus", "stem", "cover", "blocks-sight"]),
+      primitive(`giant-fungus-cap-${index}`, "sphere", 0, x, height, z, capWidth * 1.524, feetToMeters(rng.float(2.2, 4.5)), capWidth * 1.524, index % 3 === 0 ? "warmLight" : "moss", ["giant-fungus", "cap", "landmark"]),
+      box(`giant-fungus-platform-${index}`, 0, x, height + feetToMeters(0.8), z, capWidth * 0.72, FLOOR_SLAB_METERS, capWidth * 0.72, index % 3 === 0 ? "warmLight" : "moss", ["floor", "terrain", "standable", "fungus-cap-platform", "high-ground"]),
+    );
+    scene.tactical.push(tacticalFeature(`giant-fungus-highground-${index}`, "highGround", x, z, height, Math.max(2, Math.ceil(capWidth / 2)), `A ${heightFeet}-ft giant mushroom cap is a standable tactical platform with a sight-blocking stem.`));
+    if (index < 2) {
+      const ramp = stairConnection(`giant-fungus-access-${index}`, 0, { xCells: x - 3, zCells: z, yMeters: FLOOR_SLAB_METERS }, { xCells: x, zCells: z, yMeters: height + FLOOR_SLAB_METERS }, 1.3, "wood", ["fungus-access", "climbable"]);
+      scene.primitives.push(ramp.primitive);
+      scene.routes.push(stairRoute(`giant-fungus-access-route-${index}`, ramp));
+    }
+  }
+}
+
+/** Ollama may return arbitrary short anchor concepts. Every anchor receives a
+ * deterministic landmark cluster even when no hand-authored visual vocabulary
+ * exists, so novel themes degrade into distinct geometry instead of silence. */
+function addSemanticAnchorLandmarks(scene: GeneratedScene, hints: SemanticGenerationHints | undefined, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  if (!hints || hints.anchors.length === 0) return;
+  for (const [anchorIndex, anchor] of hints.anchors.slice(0, 5).entries()) {
+    const hash = semanticHash(anchor);
+    const x = width * (0.18 + ((hash % 57) / 100));
+    const z = depth * (0.18 + (((hash >>> 7) % 57) / 100));
+    const count = 2 + (hash % 3);
+    const material: MaterialKey = hints.theme === "mystic" ? "warmLight" : hints.environment === "ruin" ? "stone" : hints.environment === "underground" ? "darkStone" : "rock";
+    for (let index = 0; index < count; index += 1) {
+      const angle = (Math.PI * 2 * index) / count + rng.float(-0.35, 0.35);
+      const px = x + Math.cos(angle) * rng.float(1.5, 4);
+      const pz = z + Math.sin(angle) * rng.float(1.5, 4);
+      const height = feetToMeters(5 + ((hash >>> (index + 3)) % 16));
+      const shape = (["cylinder", "cone", "sphere"] as const)[(hash + index) % 3] ?? "cylinder";
+      scene.primitives.push(primitive(`semantic-anchor-${anchorIndex}-${index}`, shape, 0, px, FLOOR_SLAB_METERS, pz, feetToMeters(rng.float(2.5, 5)), height, feetToMeters(rng.float(2.5, 5)), material, ["semantic-anchor", `concept:${anchor.slice(0, 24)}`, "landmark", index === 0 ? "cover" : "detail"]));
+    }
+    scene.tactical.push(tacticalFeature(`semantic-anchor-feature-${anchorIndex}`, anchorIndex === 0 ? "highGround" : "cover", x, z, 0, 2, `Prompt-derived landmark cluster: ${anchor}.`));
+  }
+}
+
 interface StandablePropSpec {
   material: MaterialKey;
   label: string;
@@ -683,7 +740,7 @@ function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype
     const nextZ = next ? next.z / CELL : pointZ;
     return distanceToSegment(x, z, pointX, pointZ, nextX, nextZ) < 3.4;
   }));
-  const count = Math.max(2, Math.round(spec.count * (0.45 + density * 0.85)));
+  const count = Math.max(2, Math.round(spec.count * (0.15 + density * 1.55)));
   for (let index = 0; index < count; index += 1) {
     let x = rng.float(3, width - 3);
     let z = rng.float(3, depth - 3);
@@ -708,7 +765,7 @@ function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype
 }
 
 export function generateWilderness(context: GeneratorContext): GeneratedScene {
-  const archetype = classifyWildernessArchetype(context.request.prompt);
+  const archetype = classifyWildernessArchetype(context.request.prompt, context.semanticHints);
   const profile = bounds(context, archetype);
   const titlePool: Record<WildernessArchetype, readonly string[]> = {
     "river-valley": ["Silverfall Valley", "The Two-Bank Reach"],
@@ -734,6 +791,11 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
   addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"));
   addPromptDrivenTheme(scene, context.request.prompt, profile.width, profile.depth, context.rng.fork("prompt-theme"));
+  addSemanticAnchorLandmarks(scene, context.semanticHints, profile.width, profile.depth, context.rng.fork("semantic-anchors"));
+  const fungalText = [context.request.prompt, ...(context.semanticHints?.anchors ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");
+  if (["mushroom", "fungus", "fungal", "蘑菇", "菌类", "菌林"].some((term) => fungalText.includes(term))) {
+    addGiantFungalLandmarks(scene, profile.width, profile.depth, profile.density, context.rng.fork("giant-fungi"));
+  }
   addStandableProps(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("standable-props"));
   addTerrainComplexity(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("terrain-complexity"));
   return scene;
