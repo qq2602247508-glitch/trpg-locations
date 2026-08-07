@@ -14,7 +14,7 @@ import {
   type SceneProgram,
 } from "./schema";
 
-const PRIMARY_KINDS = ["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness"] as const;
+const PRIMARY_KINDS = ["tavern", "tower", "sewer", "cave", "dungeon", "building", "settlement", "wilderness"] as const;
 const TOPOLOGIES = ["linear", "branching", "open", "vertical", "loop", "radial", "network"] as const;
 
 export interface SceneProgramPlannerOptions {

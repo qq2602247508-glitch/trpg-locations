@@ -68,10 +68,10 @@ describe("scene generators", () => {
   });
 
   it("registers each fixed topology", () => {
-    expect(Object.keys(generatorRegistry).sort()).toEqual(["building", "cave", "settlement", "sewer", "tavern", "tower", "wilderness"]);
+    expect(Object.keys(generatorRegistry).sort()).toEqual(["building", "cave", "dungeon", "settlement", "sewer", "tavern", "tower", "wilderness"]);
   });
 
-  it.each(["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness"] as const)("is seed-reproducible and validated for %s", (kind) => {
+  it.each(["tavern", "tower", "sewer", "cave", "dungeon", "building", "settlement", "wilderness"] as const)("is seed-reproducible and validated for %s", (kind) => {
     const first = generateScene(request(`repeatable-${kind}`), kind);
     const second = generateScene(request(`repeatable-${kind}`), kind);
     expect(first).toEqual(second);
@@ -170,6 +170,28 @@ describe("scene generators", () => {
       expect(scene.archetype).toBe(archetype);
       expect(scene.diagnostics.valid).toBe(true);
       expect(scene.diagnostics.repairs).toEqual([]);
+    }
+  });
+
+  it.each([
+    ["hospital", "1920年代 CoC 医院"],
+    ["planetarium", "天文馆与旋转穹顶"],
+    ["museum", "CoC 博物馆与封闭档案室"],
+  ] as const)("validates the specialised %s grammar across scale bands", (archetype, prompt) => {
+    for (const size of ["small", "medium", "large"] as const) {
+      const scene = generateScene({ ...request(`special-building-${archetype}-${size}`, size, 0.72), prompt }, "building");
+      expect(scene.archetype).toBe(archetype);
+      expect(scene.diagnostics.valid).toBe(true);
+      expect(scene.diagnostics.metrics.errorCount).toBe(0);
+    }
+  });
+
+  it("makes institutional density structurally visible", () => {
+    for (const prompt of ["医院", "天文馆", "博物馆"] as const) {
+      const sparse = generateScene({ ...request(`building-density-${prompt}`, "large", 0), prompt }, "building");
+      const dense = generateScene({ ...request(`building-density-${prompt}`, "large", 1), prompt }, "building");
+      expect(dense.primitives.length).toBeGreaterThan(sparse.primitives.length);
+      expect(sparse.diagnostics.valid && dense.diagnostics.valid).toBe(true);
     }
   });
 

@@ -99,7 +99,9 @@ describe("SceneProgram v1", () => {
   it("classifies a planetarium as a building instead of a mountain", () => {
     const scene = generateScene({ prompt: "天文馆，穹顶影院、天文展厅和地下设备层", seed: "planetarium", size: "medium", density: 0.7 }, "adaptive");
     expect(scene.sceneProgram?.domain).toBe("building");
-    expect(scene.archetype).toBe("program-building:timeless");
+    expect(scene.archetype).toBe("planetarium");
+    expect(hasTag(scene, "dome")).toBe(true);
+    expect(hasTag(scene, "radial-gallery")).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
   });
 
@@ -109,6 +111,16 @@ describe("SceneProgram v1", () => {
     expect(hasTag(scene, "impact-rim")).toBe(true);
     expect(hasTag(scene, "woodland-cover")).toBe(true);
     expect(hasTag(scene, "floating-island")).toBe(true);
+    expect(scene.routes.filter((route) => route.kind === "vertical").length).toBeGreaterThanOrEqual(2);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("builds a multi-level D&D dungeon graph with secrets and vertical routes", () => {
+    const scene = generateScene({ prompt: "D&D 多层神殿地牢，有陷阱、隐藏房间、宝库和首领厅", seed: "temple-dungeon", size: "large", density: 0.86 }, "adaptive");
+    expect(scene.archetype).toBe("dungeon:temple");
+    expect(scene.floors).toBeGreaterThanOrEqual(3);
+    expect(scene.rooms.length).toBeGreaterThanOrEqual(15);
+    expect(scene.tactical.some((feature) => feature.kind === "secret")).toBe(true);
     expect(scene.routes.filter((route) => route.kind === "vertical").length).toBeGreaterThanOrEqual(2);
     expect(scene.diagnostics.valid).toBe(true);
   });
@@ -135,10 +147,10 @@ describe("SceneProgram v1", () => {
     ["现代城市医院，急诊、病房、手术室与后勤通道", "modern", "generic"],
   ] as const)("uses a functional institutional grammar for %s", (prompt, era, ruleset) => {
     const scene = generateScene({ prompt, seed: `program-hospital-${era}`, size: "medium", density: 0.68 }, "adaptive");
-    expect(scene.archetype).toBe(`program-building:${era}`);
+    expect(scene.archetype).toBe("hospital");
     expect(scene.sceneProgram?.era).toBe(era);
     expect(scene.sceneProgram?.ruleset).toBe(ruleset);
-    expect(hasTag(scene, "program-building")).toBe(true);
+    expect(hasTag(scene, "hospital")).toBe(true);
     expect(scene.rooms.some((room) => room.name.includes("ward"))).toBe(true);
     expect(scene.floors).toBeGreaterThanOrEqual(3);
     expect(scene.rooms.find((room) => room.name.includes("morgue"))?.level).toBe(0);

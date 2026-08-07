@@ -3,7 +3,7 @@ export const GRID_METERS = 1.524;
 
 import type { SceneProgram, SceneProgramSummary } from "./scene-program/schema";
 
-export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "building" | "settlement" | "wilderness" | "adaptive";
+export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "dungeon" | "building" | "settlement" | "wilderness" | "adaptive";
 export type PrimitiveShape = "box" | "cylinder" | "cone" | "sphere" | "stairs" | "water";
 export type MaterialKey =
   | "stone"

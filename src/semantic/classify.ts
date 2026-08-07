@@ -54,7 +54,7 @@ interface SignalRule<T extends string> {
   terms: readonly string[];
 }
 
-const KNOWN_KINDS = ["tavern", "tower", "sewer", "cave", "building", "settlement", "wilderness"] as const satisfies readonly KnownSceneKind[];
+const KNOWN_KINDS = ["tavern", "tower", "sewer", "cave", "dungeon", "building", "settlement", "wilderness"] as const satisfies readonly KnownSceneKind[];
 
 const CATEGORY_RULES: Readonly<Record<KnownSceneKind, readonly KeywordRule[]>> = {
   tavern: [
@@ -101,6 +101,10 @@ const CATEGORY_RULES: Readonly<Record<KnownSceneKind, readonly KeywordRule[]>> =
     { term: "溶洞", weight: 4 },
     { term: "矿洞", weight: 3 },
     { term: "地洞", weight: 3 },
+  ],
+  dungeon: [
+    { term: "dungeon", weight: 5 }, { term: "labyrinth", weight: 4 }, { term: "crypt", weight: 4 },
+    { term: "地牢", weight: 5 }, { term: "地下城", weight: 5 }, { term: "迷宫", weight: 4 }, { term: "墓穴", weight: 4 }, { term: "龙巢", weight: 4 },
   ],
   building: [
     { term: "church", weight: 4 },
@@ -261,6 +265,7 @@ const KIND_DEFAULTS: Readonly<Record<KnownSceneKind, Omit<AdaptiveFeatures, "anc
   tower: { environment: "interior", topology: "vertical", verticality: "high", water: "none", lighting: "dim", cover: "moderate", theme: "neutral" },
   sewer: { environment: "underground", topology: "branching", verticality: "low", water: "minor", lighting: "dim", cover: "moderate", theme: "grim" },
   cave: { environment: "underground", topology: "branching", verticality: "medium", water: "minor", lighting: "dark", cover: "dense", theme: "wild" },
+  dungeon: { environment: "underground", topology: "branching", verticality: "high", water: "minor", lighting: "dim", cover: "moderate", theme: "grim" },
   building: { environment: "interior", topology: "linear", verticality: "medium", water: "none", lighting: "dim", cover: "moderate", theme: "neutral" },
   settlement: { environment: "urban", topology: "open", verticality: "low", water: "none", lighting: "bright", cover: "moderate", theme: "neutral" },
   wilderness: { environment: "wilderness", topology: "branching", verticality: "medium", water: "minor", lighting: "dim", cover: "dense", theme: "wild" },

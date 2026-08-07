@@ -20,7 +20,7 @@ import {
   wallWithOpenings,
 } from "./shared";
 
-export type BuildingArchetype = "church" | "temple" | "manor" | "barracks" | "library" | "workshop" | "warehouse" | "fortress" | "mine";
+export type BuildingArchetype = "church" | "temple" | "manor" | "barracks" | "library" | "workshop" | "warehouse" | "fortress" | "mine" | "hospital" | "planetarium" | "museum";
 
 function addProgramRegionFixtures(scene: GeneratedScene, region: SceneProgramRegion, level: number, x: number, z: number, baseY: number, width: number, depth: number): void {
   const features = new Set(region.features);
@@ -70,6 +70,9 @@ const PROFILES: Readonly<Record<BuildingArchetype, BuildingProfile>> = {
   warehouse: { archetype: "warehouse", title: ["Warehouse Nine", "The Salt and Rope Depot", "East Quay Stores"], wall: "darkStone", floor: "stone", width: [21, 34], depth: [18, 29], floors: [1, 2], floorHeight: [14, 19] },
   fortress: { archetype: "fortress", title: ["The Blackstone Hold", "Westreach Bastion", "The Four Towers"], wall: "darkStone", floor: "stone", width: [30, 44], depth: [26, 40], floors: [1, 1], floorHeight: [18, 24] },
   mine: { archetype: "mine", title: ["The Red Seam Mine", "Deepdelve Works", "The Abandoned Silver Levels"], wall: "rock", floor: "rock", width: [32, 48], depth: [28, 42], floors: [2, 2], floorHeight: [11, 14] },
+  hospital: { archetype: "hospital", title: ["St. Orra Infirmary", "North Ward Hospital", "The Quiet Sanatorium"], wall: "plaster", floor: "stone", width: [28, 38], depth: [24, 34], floors: [3, 4], floorHeight: [11, 14] },
+  planetarium: { archetype: "planetarium", title: ["The Meridian Dome", "Asterion Observatory", "The Black Lens"], wall: "stone", floor: "stone", width: [24, 34], depth: [24, 34], floors: [2, 3], floorHeight: [13, 18] },
+  museum: { archetype: "museum", title: ["The Grand Cabinet", "Museum of Unquiet Things", "The Civic Collection"], wall: "plaster", floor: "stone", width: [30, 42], depth: [22, 32], floors: [2, 3], floorHeight: [12, 16] },
 };
 
 const ARCHETYPE_TERMS: Readonly<Record<BuildingArchetype, readonly string[]>> = {
@@ -82,6 +85,9 @@ const ARCHETYPE_TERMS: Readonly<Record<BuildingArchetype, readonly string[]>> = 
   warehouse: ["warehouse", "depot", "storehouse", "granary", "仓库", "货栈", "粮仓", "堆栈"],
   fortress: ["fortress", "fort", "bastion", "citadel", "堡垒", "要塞", "堡寨", "城塞"],
   mine: ["mine", "mineshaft", "colliery", "矿井", "矿场", "矿坑", "矿山"],
+  hospital: ["hospital", "infirmary", "sanatorium", "医院", "医馆", "疗养院", "精神病院"],
+  planetarium: ["planetarium", "天文馆", "天文台"],
+  museum: ["museum", "博物馆", "展馆", "陈列馆"],
 };
 
 export function classifyBuildingArchetype(prompt: string): BuildingArchetype {
@@ -458,10 +464,154 @@ function generateProgramBuilding(context: GeneratorContext): GeneratedScene {
   return scene;
 }
 
+/** Cross-wing hospital: public front, sterile clinical spine, ward wings and a
+ * service/basement route.  It deliberately avoids the generic corridor band
+ * grammar so medical prompts have a recognisable operational layout. */
+function buildHospital(scene: GeneratedScene, profile: BuildingProfile, width: number, depth: number, heights: number[], density: number, rng: GeneratorContext["rng"]): void {
+  const cx = 2 + width / 2;
+  const cz = 2 + depth / 2;
+  const wing = Math.max(6, Math.round(width * 0.28));
+  const spine = Math.max(5, Math.round(depth * 0.22));
+  const wallHeight = feetToMeters(heights[0] ?? 12) - FLOOR_SLAB_METERS;
+  const shell = (id: string, x: number, z: number, w: number, d: number, level: number, y: number, tags: string[]) => scene.primitives.push(...rectangularShell(id, level, x, z, y, w, d, wallHeight, profile.floor, profile.wall, ["hospital", "opening-frame", ...tags], level === 0 ? { north: { widthCells: 3 } } : {}));
+  shell("hospital-front", cx, 2 + depth * 0.16, width, Math.max(5, Math.round(depth * 0.24)), 0, 0, ["public-wing"]);
+  shell("hospital-west-ward", 2 + wing / 2, cz, wing, depth * 0.68, 0, 0, ["ward-wing", "patient-flow"]);
+  shell("hospital-east-ward", 2 + width - wing / 2, cz, wing, depth * 0.68, 0, 0, ["ward-wing", "patient-flow"]);
+  shell("hospital-clinical-spine", cx, cz, width - wing * 2 + 2, spine, 0, 0, ["sterile-spine", "surgery"]);
+  scene.rooms.push(
+    createRoom("hospital-reception", "Reception and waiting", "public", 0, cx, 2 + depth * 0.16, width - 2, 4),
+    createRoom("hospital-west-ward", "West patient wing", "private", 0, 2 + wing / 2, cz, wing - 1, depth * 0.62),
+    createRoom("hospital-east-ward", "East patient wing", "private", 0, 2 + width - wing / 2, cz, wing - 1, depth * 0.62),
+    createRoom("hospital-surgery", "Operating theatre", "combat", 0, cx, cz, width - wing * 2, spine - 1),
+    createRoom("hospital-morgue-and-plant", "hospital morgue and plant", "service", 0, cx, 2 + depth * 0.84, Math.max(6, width * 0.32), 5),
+  );
+  connectRooms(scene.rooms, "hospital-reception", "hospital-west-ward");
+  connectRooms(scene.rooms, "hospital-reception", "hospital-east-ward");
+  connectRooms(scene.rooms, "hospital-west-ward", "hospital-surgery");
+  connectRooms(scene.rooms, "hospital-east-ward", "hospital-surgery");
+  connectRooms(scene.rooms, "hospital-surgery", "hospital-morgue-and-plant");
+  scene.primitives.push(
+    box("hospital-clinical-floor", 0, cx, FLOOR_SLAB_METERS, cz, width - 2, FLOOR_SLAB_METERS, depth - 2, "stone", ["hospital", "floor", "corridor"]),
+    box("hospital-morgue-floor", 0, cx, FLOOR_SLAB_METERS, 2 + depth * 0.84, Math.max(6, width * 0.32), FLOOR_SLAB_METERS, 5, "stone", ["hospital", "floor", "morgue", "evidence"]),
+    box("hospital-operating-table", 0, cx, FLOOR_SLAB_METERS, cz, 2, feetToMeters(3), 3, "metal", ["hospital", "operating-room", "investigation", "evidence"]),
+    cylinder("hospital-surgical-lamp", 0, cx, feetToMeters(10), cz, 0.45, feetToMeters(2), "warmLight", ["hospital", "landmark"]),
+  );
+  const bedsPerWing = 4 + Math.round(density * 8);
+  for (let index = 0; index < bedsPerWing; index += 1) {
+    const t = bedsPerWing === 1 ? 0.5 : index / (bedsPerWing - 1);
+    const z = cz - depth * 0.25 + t * depth * 0.5;
+    scene.primitives.push(
+      box(`hospital-west-bed-${index}`, 0, 2 + wing * 0.48, FLOOR_SLAB_METERS, z, 1.1, feetToMeters(2.4), 2.2, "wood", ["hospital", "bed", "patient", "cover"]),
+      box(`hospital-east-bed-${index}`, 0, 2 + width - wing * 0.48, FLOOR_SLAB_METERS, z, 1.1, feetToMeters(2.4), 2.2, "wood", ["hospital", "bed", "patient", "cover"]),
+    );
+  }
+  const floorY = [0];
+  for (let level = 1; level < scene.floors; level += 1) floorY[level] = floorY[level - 1]! + feetToMeters(heights[level - 1] ?? 12);
+  for (let level = 1; level < scene.floors; level += 1) {
+    const y = floorY[level] ?? 0;
+    const upper = level === scene.floors - 1 && scene.floors > 2;
+    const id = upper ? "hospital-research-floor" : level === 1 ? "hospital-upper-wards" : "hospital-service-basement";
+    const w = upper ? width * 0.62 : width - 2;
+    const d = upper ? depth * 0.58 : depth * 0.7;
+    scene.primitives.push(...rectangularShell(id, level, cx, cz, y, w, d, feetToMeters(heights[level] ?? 12) - FLOOR_SLAB_METERS, profile.floor, profile.wall, ["hospital", upper ? "research" : level === 1 ? "ward-floor" : "service-floor"], {}, [{ id: `hospital-stair-${level}`, centerXCells: cx - width * 0.28, centerZCells: cz, widthCells: 2.4, depthCells: 3 }]));
+    const roomId = upper ? `hospital-research-${level}` : level === 1 ? "hospital-upper-ward" : `hospital-service-${level}`;
+    scene.rooms.push(createRoom(roomId, upper ? "Restricted research ward" : level === 1 ? "Upper patient ward" : "hospital morgue and plant", level === 1 ? "private" : "service", level, cx, cz, w - 2, d - 2, y));
+    const stair = stairConnection(`hospital-stair-${level}`, level - 1, { xCells: cx - width * 0.28, zCells: cz, yMeters: (floorY[level - 1] ?? 0) + FLOOR_SLAB_METERS }, { xCells: cx - width * 0.28, zCells: cz, yMeters: y + FLOOR_SLAB_METERS }, 1.7, "metal", ["hospital", "vertical-circulation", upper ? "restricted" : "public-stair"]);
+    scene.primitives.push(stair.primitive);
+    scene.routes.push(stairRoute(`hospital-vertical-${level}`, stair));
+    const previousId = level === 1 ? "hospital-surgery" : level === 2 ? "hospital-morgue-and-plant" : `hospital-service-${level - 1}`;
+    const previousExists = scene.rooms.some((room) => room.id === previousId);
+    if (previousExists && previousId !== roomId) connectRooms(scene.rooms, previousId, roomId);
+  }
+  scene.routes.push(createRoute("hospital-public-route", "primary", [{ x: cx, z: 1, y: FLOOR_SLAB_METERS }, { x: cx, z: cz, y: FLOOR_SLAB_METERS }, { x: 2 + wing, z: cz, y: FLOOR_SLAB_METERS }]));
+  scene.routes.push(createRoute("hospital-service-route", "alternate", [{ x: 2, z: depth - 1, y: FLOOR_SLAB_METERS }, { x: cx, z: cz + 2, y: FLOOR_SLAB_METERS }, { x: width + 2, z: depth - 1, y: FLOOR_SLAB_METERS }]));
+  scene.tactical.push(tacticalFeature("hospital-entrance", "entrance", cx, 2, 0, 2, "Public entrance opens into triage and a split ward route."), tacticalFeature("hospital-surgery-choke", "chokepoint", cx, cz, 0, 2, "The sterile theatre controls both ward approaches."));
+  addRoof(scene, "hospital", scene.floors - 1, cx, feetToMeters(heights.reduce((sum, value) => sum + value, 0)), cz, width, depth, "stone");
+  void rng;
+}
+
+/** Radial observatory/planetarium: a central dome and ring galleries produce
+ * sight-line breaks and a very different silhouette from rectilinear rooms. */
+function buildPlanetarium(scene: GeneratedScene, profile: BuildingProfile, width: number, depth: number, heights: number[], density: number, rng: GeneratorContext["rng"]): void {
+  const cx = 2 + width / 2;
+  const cz = 2 + depth / 2;
+  const radius = Math.min(width, depth) * 0.29;
+  const floorY = [0];
+  for (let level = 1; level < scene.floors; level += 1) floorY[level] = floorY[level - 1]! + feetToMeters(heights[level - 1] ?? 14);
+  scene.primitives.push(box("planetarium-foundation", 0, cx, 0, cz, width - 2, FLOOR_SLAB_METERS, depth - 2, "stone", ["planetarium", "foundation", "floor", "corridor"]));
+  scene.primitives.push(cylinder("planetarium-dome", 0, cx, feetToMeters(heights[0] ?? 15), cz, radius * 1.08, feetToMeters(14), "roof", ["planetarium", "dome", "landmark"]));
+  scene.rooms.push(createRoom("planetarium-dome-room", "Rotating star dome", "combat", 0, cx, cz, radius * 1.55, radius * 1.55));
+  const galleryCount = 6 + Math.round(density * 4);
+  for (let index = 0; index < galleryCount; index += 1) {
+    const angle = (Math.PI * 2 * index) / galleryCount;
+    const x = cx + Math.cos(angle) * radius * 1.42;
+    const z = cz + Math.sin(angle) * radius * 1.42;
+    const id = `planetarium-gallery-${index}`;
+    scene.rooms.push(createRoom(id, index % 2 === 0 ? "Exhibit gallery" : "Instrument gallery", "public", 0, x, z, 5, 5));
+    scene.primitives.push(...rectangularShell(`${id}-shell`, 0, x, z, 0, 5.8, 5.8, feetToMeters(heights[0] ?? 15) - FLOOR_SLAB_METERS, profile.floor, profile.wall, ["planetarium", "radial-gallery", "opening-frame"], {}));
+    scene.primitives.push(box(`${id}-floor`, 0, x, FLOOR_SLAB_METERS, z, 5.1, FLOOR_SLAB_METERS, 5.1, "stone", ["planetarium", "floor", "corridor"]));
+    scene.primitives.push(cylinder(`${id}-instrument`, 0, x, FLOOR_SLAB_METERS, z, 0.5, feetToMeters(4 + (index % 3) * 2), index % 2 ? "metal" : "warmLight", ["planetarium", "instrument", "cover"]));
+    connectRooms(scene.rooms, "planetarium-dome-room", id);
+    scene.routes.push(createRoute(`${id}-radial-route`, index === 0 ? "primary" : "alternate", [{ x: cx, z: cz, y: FLOOR_SLAB_METERS }, { x, z, y: FLOOR_SLAB_METERS }]));
+  }
+  for (let level = 1; level < scene.floors; level += 1) {
+    const y = floorY[level] ?? 0;
+    const upper = level === scene.floors - 1;
+    scene.primitives.push(...rectangularShell(`planetarium-ring-${level}`, level, cx, cz, y, width * 0.76, depth * 0.76, feetToMeters(heights[level] ?? 14) - FLOOR_SLAB_METERS, profile.floor, profile.wall, ["planetarium", "opening-frame", upper ? "roof-ring" : "archive-ring"], {}, [{ id: `planetarium-stair-${level}`, centerXCells: cx - radius, centerZCells: cz, widthCells: 2.4, depthCells: 2.4 }]));
+    scene.primitives.push(box(`planetarium-ring-floor-${level}`, level, cx, y, cz, width * 0.72, FLOOR_SLAB_METERS, depth * 0.72, "stone", ["planetarium", "floor", "platform"]));
+    const roomId = upper ? "planetarium-roof-platform" : "planetarium-archive";
+    scene.rooms.push(createRoom(roomId, upper ? "Open rooftop observation deck" : "Restricted star archive", upper ? "combat" : "private", level, cx, cz, width * 0.7, depth * 0.7, y));
+    const previousRoomId = level === 1 ? "planetarium-dome-room" : "planetarium-archive";
+    connectRooms(scene.rooms, previousRoomId, roomId);
+    const stair = stairConnection(`planetarium-stair-${level}`, level - 1, { xCells: cx - radius, zCells: cz, yMeters: (floorY[level - 1] ?? 0) + FLOOR_SLAB_METERS }, { xCells: cx - radius, zCells: cz, yMeters: y + FLOOR_SLAB_METERS }, 1.6, "metal", ["planetarium", "vertical-circulation"]);
+    scene.primitives.push(stair.primitive); scene.routes.push(stairRoute(`planetarium-vertical-${level}`, stair));
+  }
+  scene.tactical.push(tacticalFeature("planetarium-entrance", "entrance", cx, 2, 0, 2, "Visitors enter a radial gallery before reaching the dome."), tacticalFeature("planetarium-dome-objective", "highGround", cx, cz, feetToMeters(heights[0] ?? 15), 3, "The dome mechanism is an exposed central objective."));
+  addRoof(scene, "planetarium", scene.floors - 1, cx, feetToMeters(heights.reduce((sum, value) => sum + value, 0)), cz, width, depth, "roof");
+  void rng;
+}
+
+function buildMuseum(scene: GeneratedScene, profile: BuildingProfile, width: number, depth: number, heights: number[], density: number, rng: GeneratorContext["rng"]): void {
+  const cx = 2 + width / 2; const cz = 2 + depth / 2;
+  const courtyard = Math.max(6, Math.round(Math.min(width, depth) * 0.22));
+  const wallHeight = feetToMeters(heights[0] ?? 14) - FLOOR_SLAB_METERS;
+  scene.primitives.push(box("museum-courtyard", 0, cx, FLOOR_SLAB_METERS, cz, courtyard, 0.2, courtyard, "stone", ["museum", "courtyard", "open-sightline", "floor", "corridor"]));
+  const wings: Array<[string, number, number, number, number]> = [["north", cx, 2 + (depth - courtyard) * 0.25, width, Math.max(5, (depth - courtyard) * 0.42)], ["south", cx, 2 + depth - (depth - courtyard) * 0.25, width, Math.max(5, (depth - courtyard) * 0.42)], ["west", 2 + (width - courtyard) * 0.25, cz, Math.max(5, (width - courtyard) * 0.42), courtyard], ["east", 2 + width - (width - courtyard) * 0.25, cz, Math.max(5, (width - courtyard) * 0.42), courtyard]];
+  for (const [name, x, z, w, d] of wings) scene.primitives.push(...rectangularShell(`museum-${name}-wing`, 0, x, z, 0, w, d, wallHeight, profile.floor, profile.wall, ["museum", "gallery-wing", "opening-frame"], { [name === "north" ? "south" : name === "south" ? "north" : name === "west" ? "east" : "west"]: { widthCells: 2.5 } }));
+  scene.primitives.push(corridor("museum-courtyard-walk-north", 0, cx - courtyard / 2, cz, cx + courtyard / 2, cz, FLOOR_SLAB_METERS, 1.2, "stone", ["museum", "corridor"]));
+  scene.rooms.push(createRoom("museum-courtyard-room", "Museum courtyard", "circulation", 0, cx, cz, courtyard, courtyard));
+  for (const [name, x, z, w, d] of wings) {
+    const id = `museum-${name}-gallery`;
+    scene.rooms.push(createRoom(id, `${name[0]?.toUpperCase() ?? ""}${name.slice(1)} gallery`, "public", 0, x, z, w - 1, d - 1));
+    connectRooms(scene.rooms, "museum-courtyard-room", id);
+    const displays = 1 + Math.round(density * 3);
+    for (let index = 0; index < displays; index += 1) {
+      const offset = (index - (displays - 1) / 2) * Math.min(2.2, Math.max(1.2, w / (displays + 1)));
+      scene.primitives.push(box(`${id}-display-${index}`, 0, x + (name === "north" || name === "south" ? offset : 0), FLOOR_SLAB_METERS, z + (name === "west" || name === "east" ? offset : 0), Math.max(1.2, w * 0.12), feetToMeters(3 + (index % 2)), Math.max(1.2, d * 0.26), "wood", ["museum", "display", "cover", "evidence"]));
+    }
+  }
+  scene.primitives.push(
+    corridor("museum-walk-north", 0, cx, cz, cx, 2 + (depth - courtyard) * 0.25, FLOOR_SLAB_METERS, 1.4, "stone", ["museum", "corridor"]),
+    corridor("museum-walk-south", 0, cx, cz, cx, 2 + depth - (depth - courtyard) * 0.25, FLOOR_SLAB_METERS, 1.4, "stone", ["museum", "corridor"]),
+    corridor("museum-walk-west", 0, cx, cz, 2 + (width - courtyard) * 0.25, cz, FLOOR_SLAB_METERS, 1.4, "stone", ["museum", "corridor"]),
+    corridor("museum-walk-east", 0, cx, cz, 2 + width - (width - courtyard) * 0.25, cz, FLOOR_SLAB_METERS, 1.4, "stone", ["museum", "corridor"]),
+  );
+  for (let level = 1; level < scene.floors; level += 1) { const y = feetToMeters(heights.slice(0, level).reduce((a, b) => a + b, 0)); scene.primitives.push(...rectangularShell(`museum-upper-${level}`, level, cx, cz, y, width * 0.76, depth * 0.76, feetToMeters(heights[level] ?? 13) - FLOOR_SLAB_METERS, profile.floor, profile.wall, ["museum", "upper-gallery", "opening-frame"], {}, [{ id: `museum-stair-${level}`, centerXCells: cx, centerZCells: 3.5, widthCells: 2.4, depthCells: 2.4 }])); scene.primitives.push(box(`museum-upper-floor-${level}`, level, cx, y, cz, width * 0.72, FLOOR_SLAB_METERS, depth * 0.72, "stone", ["museum", "floor", "corridor"])); const id = `museum-upper-room-${level}`; scene.rooms.push(createRoom(id, level === scene.floors - 1 ? "Restricted archive" : "Upper exhibition loop", level === scene.floors - 1 ? "private" : "public", level, cx, cz, width * 0.7, depth * 0.7, y)); connectRooms(scene.rooms, level === 1 ? "museum-courtyard-room" : `museum-upper-room-${level - 1}`, id); const stair = stairConnection(`museum-stair-${level}`, level - 1, { xCells: cx, zCells: 3.5, yMeters: y - feetToMeters(heights[level - 1] ?? 13) + FLOOR_SLAB_METERS }, { xCells: cx, zCells: 3.5, yMeters: y + FLOOR_SLAB_METERS }, 1.6, "stone", ["museum", "vertical-circulation"]); scene.primitives.push(stair.primitive); scene.routes.push(stairRoute(`museum-vertical-${level}`, stair)); }
+  scene.routes.push(createRoute("museum-public-loop", "primary", [
+    { x: cx, z: 2 + (depth - courtyard) * 0.25, y: FLOOR_SLAB_METERS },
+    { x: 2 + width - (width - courtyard) * 0.25, z: cz, y: FLOOR_SLAB_METERS },
+    { x: cx, z: 2 + depth - (depth - courtyard) * 0.25, y: FLOOR_SLAB_METERS },
+    { x: 2 + (width - courtyard) * 0.25, z: cz, y: FLOOR_SLAB_METERS },
+    { x: cx, z: 2 + (depth - courtyard) * 0.25, y: FLOOR_SLAB_METERS },
+  ]));
+  scene.tactical.push(tacticalFeature("museum-entrance", "entrance", cx, 2, 0, 2, "The entrance frames a courtyard and four visible gallery approaches."), tacticalFeature("museum-courtyard-crossfire", "chokepoint", cx, cz, 0, 3, "The open courtyard is a contested crossing between wings."));
+  addRoof(scene, "museum", scene.floors - 1, cx, feetToMeters(heights.reduce((sum, value) => sum + value, 0)), cz, width, depth, "roof");
+  void rng;
+}
+
 export function generateBuilding(context: GeneratorContext): GeneratedScene {
   if (context.sceneProgram && (
-    context.sceneProgram.coverage.includes("institutional-rooms")
-    || context.sceneProgram.coverage.includes("residential-rooms")
+    (!hasKnownBuildingArchetype(context.request.prompt) && (context.sceneProgram.coverage.includes("institutional-rooms") || context.sceneProgram.coverage.includes("residential-rooms")))
     || context.sceneProgram.domain === "building" && !hasKnownBuildingArchetype(context.request.prompt)
   )) {
     return generateProgramBuilding(context);
@@ -489,6 +639,9 @@ export function generateBuilding(context: GeneratorContext): GeneratedScene {
   else if (archetype === "manor") buildManor(scene, profile, width, depth, floorHeightFeet);
   else if (archetype === "fortress") buildFortress(scene, profile, width, depth, floorHeightFeet, context.rng.fork("fortress"));
   else if (archetype === "mine") buildMine(scene, profile, width, depth, floorHeightFeet, context.rng.fork("mine"));
+  else if (archetype === "hospital") buildHospital(scene, profile, width, depth, floorHeightFeet, context.request.density, context.rng.fork("hospital"));
+  else if (archetype === "planetarium") buildPlanetarium(scene, profile, width, depth, floorHeightFeet, context.request.density, context.rng.fork("planetarium"));
+  else if (archetype === "museum") buildMuseum(scene, profile, width, depth, floorHeightFeet, context.request.density, context.rng.fork("museum"));
   else buildHall(scene, profile, width, depth, floorHeightFeet, context.rng.fork("hall"));
   return scene;
 }

@@ -44,6 +44,7 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
     if (requestedKind === "settlement") return { domain: "settlement", primaryKind: requestedKind };
     if (requestedKind === "wilderness" || requestedKind === "cave") return { domain: "natural", primaryKind: requestedKind };
     if (requestedKind === "sewer") return { domain: "infrastructure", primaryKind: requestedKind };
+    if (requestedKind === "dungeon") return { domain: "building", primaryKind: requestedKind };
     return { domain: "building", primaryKind: requestedKind };
   }
   // A city modifier describes context; an explicit institution still owns the
@@ -51,6 +52,7 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "工厂", "宅邸", "教堂", "建筑", "观测所", "天文馆", "天文台", "研究所", "实验室", "博物馆", "剧院", "车站", "hospital", "hotel", "school", "police", "factory", "manor", "church", "observatory", "planetarium", "laboratory", "museum", "theatre", "station"])) return { domain: "building", primaryKind: "building" };
   if (has(text, ["城市", "城镇", "村庄", "街区", "港区", "深水城", "city", "town", "village", "district", "harbor"])) return { domain: "settlement", primaryKind: "settlement" };
   if (has(text, ["下水道", "排水", "隧道", "地铁", "sewer", "drain", "subway"])) return { domain: "infrastructure", primaryKind: "sewer" };
+  if (has(text, ["地牢", "地下城", "迷宫", "龙巢", "墓穴", "地下神殿", "dungeon", "labyrinth", "crypt", "lair"])) return { domain: "building", primaryKind: "dungeon" };
   const classified = classifyInput(text);
   if (classified.kind !== "adaptive") return inferDomain(text, classified.kind);
   return { domain: "natural", primaryKind: "wilderness" };
@@ -66,6 +68,7 @@ function inferOperators(text: string): { morphology: MorphologyOperator[]; cover
   if (has(text, ["河床", "干涸", "dry river", "wadi"])) morphology.push("dry-channel");
   if (has(text, ["裂谷", "峡谷", "rift", "chasm"])) morphology.push("rift", "ravine");
   if (has(text, ["浮空", "浮岛", "空岛", "floating island", "sky island", "levitating"])) morphology.push("floating-islands");
+  if (has(text, ["地牢", "地下城", "迷宫", "龙巢", "墓穴", "地下神殿", "dungeon", "labyrinth", "crypt", "lair"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["墓地", "埋葬", "墓园", "grave", "burial", "cemetery"])) morphology.push("burial-field", "crypt-sink");
   if (has(text, ["城市", "街区", "深水城", "city", "district"])) morphology.push("urban-blocks");
   if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "建筑", "hospital", "hotel", "school", "police"])) morphology.push("interior-partitions", "vertical-stack");
@@ -173,6 +176,17 @@ function settlementRegions(): SceneProgramRegion[] {
   ];
 }
 
+function dungeonRegions(text: string): SceneProgramRegion[] {
+  const style = has(text, ["矿井", "矿坑", "mine"]) ? "mine" : has(text, ["神殿", "祭坛", "temple"]) ? "temple" : has(text, ["龙巢", "lair"]) ? "lair" : "crypt";
+  return [
+    region("descent", "Descent and guarded entrance", "approach", 0.14, "low", ["gate", "guard-post"], []),
+    region("service", `${style} service and storage level`, "service", 0.2, "level", ["stores", "back-route"], []),
+    region("hazards", "Trap and hazard galleries", "hazard", 0.18, "raised", ["traps", "chokepoints"], ["collapse", "ambush"]),
+    region("secret", "Hidden chamber network", "investigation", 0.18, "vertical", ["false-wall", "secret-stairs"], ["sealed-door"]),
+    region("sanctum", "Deep sanctum and boss arena", "combat", 0.3, "high", ["boss-room", "treasure", "objective"], []),
+  ];
+}
+
 function chainRelations(regions: readonly SceneProgramRegion[]): SceneProgramRelation[] {
   return regions.slice(1).map((current, index) => ({ from: regions[index]?.id ?? regions[0]?.id ?? "entry", to: current.id, type: "connects" as const }));
 }
@@ -183,7 +197,7 @@ export function planSceneProgramLocally(prompt: string, requestedKind: SceneKind
   const era = inferEra(text);
   const { domain, primaryKind } = inferDomain(text, requestedKind);
   const { morphology, coverage } = inferOperators(text);
-  const regions = domain === "settlement" ? settlementRegions() : domain === "building" || domain === "interior" ? buildingRegions(text) : naturalRegions(text, morphology, coverage);
+  const regions = primaryKind === "dungeon" ? dungeonRegions(text) : domain === "settlement" ? settlementRegions() : domain === "building" || domain === "interior" ? buildingRegions(text) : naturalRegions(text, morphology, coverage);
   const landmarks = unique(regions.flatMap((item) => item.features).filter((_, index) => index < 8));
   const hazards = unique(regions.flatMap((item) => item.hazards).filter((_, index) => index < 8));
   const gameplayMode = ruleset === "coc" ? "investigation" : has(text, ["追逐", "chase"]) ? "chase" : ruleset === "dnd" ? "combat" : "mixed";

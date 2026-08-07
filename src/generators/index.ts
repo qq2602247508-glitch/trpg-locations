@@ -3,6 +3,7 @@ import { classifyInput, type AdaptiveFeatures, type InputClassification } from "
 import type { GeneratedScene, GenerationRequest, GeneratorContext, Room, SceneKind } from "../schema";
 import { validateScene } from "../validation/scene";
 import { generateCave } from "./cave";
+import { generateDungeon } from "./dungeon";
 import { generateSewer } from "./sewer";
 import {
   CELL,
@@ -32,6 +33,7 @@ export const generatorRegistry: Readonly<Record<FixedSceneKind, SceneGenerator>>
   tower: generateTower,
   sewer: generateSewer,
   cave: generateCave,
+  dungeon: generateDungeon,
   building: generateBuilding,
   settlement: generateSettlement,
   wilderness: generateWilderness,
@@ -54,7 +56,7 @@ export interface AdaptivePlan {
 }
 
 function isSceneKind(value: SceneKind | string): value is SceneKind {
-  return value === "adaptive" || value === "tavern" || value === "tower" || value === "sewer" || value === "cave" || value === "building" || value === "settlement" || value === "wilderness";
+  return value === "adaptive" || value === "tavern" || value === "tower" || value === "sewer" || value === "cave" || value === "dungeon" || value === "building" || value === "settlement" || value === "wilderness";
 }
 
 function normalizeRequest(request: GenerationRequest): GenerationRequest {
@@ -298,3 +300,4 @@ export { generateTavern } from "./tavern";
 export { generateTower } from "./tower";
 export { generateSewer } from "./sewer";
 export { generateCave } from "./cave";
+export { generateDungeon } from "./dungeon";
