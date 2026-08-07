@@ -94,7 +94,89 @@ function buildRift(scene: GeneratedScene, width: number, depth: number, rng: Gen
   addCover(scene, rng, "rift", left * 0.55, depth * 0.28, 0, 4);
 }
 
-function buildMountain(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+function buildMountainHeightfield(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  const tile = 2;
+  const cols = Math.max(10, Math.floor(width / tile));
+  const rows = Math.max(10, Math.floor(depth / tile));
+  const terraces = rng.int(4, 7);
+  const heights: Array<number | undefined> = [];
+  const at = (column: number, row: number): number | undefined => (
+    column < 0 || row < 0 || column >= cols || row >= rows ? undefined : heights[row * cols + column]
+  );
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < cols; column += 1) {
+      const edge = column === 0 || row === 0 || column === cols - 1 || row === rows - 1;
+      const slope = Math.floor((row / Math.max(1, rows - 1)) * (terraces - 1));
+      const hole = !edge && row > 2 && rng.bool(0.11 + (row / rows) * 0.08);
+      heights.push(hole ? undefined : Math.max(0, Math.min(terraces - 1, slope + rng.int(-1, 1))));
+    }
+  }
+  const routeCells: Array<{ column: number; row: number }> = [];
+  for (let row = 1; row < rows - 1; row += Math.max(1, Math.floor(rows / 6))) {
+    const preferred = Math.floor(cols * (0.42 + rng.float(-0.12, 0.12)));
+    const column = [preferred, preferred - 1, preferred + 1, Math.floor(cols / 2)].find((candidate) => at(candidate, row) !== undefined);
+    if (column !== undefined) routeCells.push({ column, row });
+  }
+  let previousHeight = 0;
+  for (const cell of routeCells) {
+    const index = cell.row * cols + cell.column;
+    const current = Math.max(previousHeight, heights[index] ?? previousHeight);
+    heights[index] = current;
+    previousHeight = current;
+  }
+  if (routeCells.length > 1) {
+    const finalCell = routeCells[routeCells.length - 1];
+    if (finalCell) heights[finalCell.row * cols + finalCell.column] = terraces - 1;
+  }
+  const centerOf = (cell: { column: number; row: number }) => {
+    const heightLevel = at(cell.column, cell.row) ?? 0;
+    return {
+      x: (cell.column + 0.5) * tile,
+      z: (cell.row + 0.5) * tile,
+      y: feetToMeters(heightLevel * 5) + FLOOR_SLAB_METERS,
+    };
+  };
+  const roomIds: string[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < cols; column += 1) {
+      const heightLevel = at(column, row);
+      if (heightLevel === undefined) continue;
+      const x = (column + 0.5) * tile;
+      const z = (row + 0.5) * tile;
+      const heightMeters = feetToMeters(heightLevel * 5) + FLOOR_SLAB_METERS;
+      scene.primitives.push(box(`mountain-heightfield-${column}-${row}`, 0, x, 0, z, tile * 0.94, heightMeters, tile * 0.94, heightLevel >= terraces - 1 ? "moss" : "rock", ["floor", "terrain", "mountain-heightfield", heightLevel >= terraces - 1 ? "summit" : "slope"]));
+      if (heightLevel > (at(column - 1, row) ?? heightLevel)) scene.tactical.push(tacticalFeature(`mountain-cliff-${column}-${row}`, "highGround", x - tile / 2, z, heightMeters, 1, "A stepped vertical face forms a defensible cliff edge."));
+    }
+  }
+  for (let index = 1; index < routeCells.length; index += 1) {
+    const fromCell = routeCells[index - 1];
+    const toCell = routeCells[index];
+    if (!fromCell || !toCell) continue;
+    const from = centerOf(fromCell);
+    const to = centerOf(toCell);
+    if (to.y > from.y + 0.2) {
+      const ramp = stairConnection(`mountain-heightfield-ramp-${index}`, 0, { xCells: from.x, zCells: from.z, yMeters: from.y }, { xCells: to.x, zCells: to.z, yMeters: to.y }, 1.8, "rock", ["natural-ramp", "mountain-pass"]);
+      scene.primitives.push(ramp.primitive);
+      scene.routes.push(stairRoute(`mountain-heightfield-route-${index}`, ramp));
+    }
+  }
+  for (const [index, cell] of routeCells.slice(0, 4).entries()) {
+    const center = centerOf(cell);
+    const id = `mountain-region-${index}`;
+    roomIds.push(id);
+    scene.rooms.push(createRoom(id, index === routeCells.length - 1 ? "Summit combat shelf" : `Mountain region ${index + 1}`, index === routeCells.length - 1 ? "combat" : "natural", 0, center.x, center.z, 5, 5, center.y));
+    const previous = roomIds[index - 1];
+    if (previous) connectRooms(scene.rooms, previous, id);
+  }
+  const routePoints = routeCells.map(centerOf);
+  if (routePoints.length > 1) scene.routes.push(createRoute("mountain-trail", "primary", routePoints));
+  const start = routePoints[0] ?? { x: width / 2, z: 2, y: FLOOR_SLAB_METERS };
+  const summit = routePoints.at(-1) ?? start;
+  scene.tactical.push(tacticalFeature("mountain-entrance", "entrance", start.x, start.z, start.y, 2, "A narrow trail enters the broken heightfield."), tacticalFeature("mountain-summit", "highGround", summit.x, summit.z, summit.y, 3, "The summit dominates the lower fragmented terrain."));
+  addCover(scene, rng, "mountain-heightfield", width * 0.28, depth * 0.54, feetToMeters(5), 8);
+}
+
+function buildMountainLegacy(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
   const terraces = rng.int(4, Math.min(6, Math.max(4, Math.floor(width / 6))));
   const rooms: string[] = [];
   let summitX = width / 2;
@@ -141,6 +223,10 @@ function buildMountain(scene: GeneratedScene, width: number, depth: number, rng:
   }
   scene.routes.push(createRoute("mountain-trail", "primary", [{ x: trailStartX, z: trailStartZ, y: 0 }, { x: width / 2 - 3, z: depth * 0.2, y: feetToMeters(5) }, { x: summitX, z: summitZ, y: summitY }]));
   scene.tactical.push(tacticalFeature("mountain-entrance", "entrance", trailStartX, trailStartZ, 0, 2, "A switchback trail begins on the first fragmented terrace."), tacticalFeature("mountain-summit", "highGround", summitX, summitZ, summitY, 3, "The summit shelf dominates every lower approach."));
+}
+
+function buildMountain(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  buildMountainHeightfield(scene, width, depth, rng);
 }
 
 function buildIce(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
