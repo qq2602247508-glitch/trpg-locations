@@ -34,6 +34,7 @@ interface AppElements {
   floor: HTMLSelectElement;
   time: HTMLSelectElement;
   exportScene: HTMLButtonElement;
+  transparencyToggle: HTMLButtonElement;
   routesToggle: HTMLButtonElement;
   tacticalToggle: HTMLButtonElement;
   metrics: HTMLElement;
@@ -185,6 +186,11 @@ export async function mountApp(root: HTMLElement): Promise<void> {
               <span><strong>导出场景 JSON</strong><small>保存 Seed、图元、房间与路线</small></span>
               <i aria-hidden="true"></i>
             </button>
+            <button class="toggle-button" data-role="transparency-toggle" type="button" aria-pressed="false">
+              <span class="toggle-glyph" aria-hidden="true">◈</span>
+              <span><strong>建筑半透明</strong><small>查看墙体、楼板与内部战斗关系</small></span>
+              <i aria-hidden="true"></i>
+            </button>
           </section>
 
           <section class="inspector-section metrics-section">
@@ -270,6 +276,11 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     anchor.click();
     URL.revokeObjectURL(url);
     setStatus(elements, "已导出", "ok");
+  });
+  elements.transparencyToggle.addEventListener("click", () => {
+    const enabled = elements.transparencyToggle.getAttribute("aria-pressed") !== "true";
+    renderer.setBuildingTransparency(enabled);
+    setToggle(elements.transparencyToggle, enabled);
   });
   elements.routesToggle.addEventListener("click", () => {
     routeDebug = !routeDebug;
@@ -358,6 +369,7 @@ function getElements(root: HTMLElement): AppElements {
     floor: query(root, '[data-role="floor"]'),
     time: query(root, '[data-role="time"]'),
     exportScene: query(root, '[data-role="export-scene"]'),
+    transparencyToggle: query(root, '[data-role="transparency-toggle"]'),
     routesToggle: query(root, '[data-role="routes-toggle"]'),
     tacticalToggle: query(root, '[data-role="tactical-toggle"]'),
     metrics: query(root, '[data-role="metrics"]'),

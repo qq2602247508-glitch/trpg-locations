@@ -167,6 +167,26 @@ function buildUndergroundLake(scene: GeneratedScene, width: number, depth: numbe
   addCover(scene, rng, "lake", width * 0.2, depth * 0.3, 0, 3);
 }
 
+/** Adds a second layer of authored natural structure instead of leaving large
+ * wilderness maps as a few empty slabs. These pieces intentionally remain
+ * generic terrain vocabulary so new biomes can reuse the same composition pass. */
+function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  const obstacleCount = rng.int(10, 16);
+  for (let index = 0; index < obstacleCount; index += 1) {
+    const x = rng.float(2.5, width - 2.5);
+    const z = rng.float(2.5, depth - 2.5);
+    const widthCells = rng.float(0.8, 2.8);
+    const depthCells = rng.float(0.8, 2.8);
+    const height = archetype === "rift" || archetype === "mountain" ? feetToMeters(rng.int(4, 12)) : feetToMeters(rng.int(2, 7));
+    const shape: "box" | "cone" | "sphere" = archetype === "ice" ? "box" : index % 3 === 0 ? "cone" : "sphere";
+    scene.primitives.push(primitive(`natural-detail-${index}`, shape, 0, x, FLOOR_SLAB_METERS, z, widthCells * 1.524, height, depthCells * 1.524, archetype === "ice" ? "rock" : "rock", ["natural-detail", "natural-cover", index % 4 === 0 ? "terrain" : "cover"]));
+    scene.tactical.push(tacticalFeature(`natural-detail-cover-${index}`, "cover", x, z, 0, Math.max(1, Math.ceil(Math.max(widthCells, depthCells) / 1.4)), "Irregular natural structure breaks sight lines and creates a tactical pocket."));
+  }
+  const hazardX = width * rng.float(0.32, 0.68);
+  const hazardZ = depth * rng.float(0.34, 0.66);
+  scene.tactical.push(tacticalFeature("natural-complex-hazard", "hazard", hazardX, hazardZ, archetype === "rift" ? -1 : 0, 2, archetype === "ice" ? "Thin ice or a snow-covered void gives way under pressure." : "Unstable ground, loose rock, or deep growth turns this area into a danger zone."));
+}
+
 export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const archetype = classifyWildernessArchetype(context.request.prompt);
   const profile = bounds(context, archetype);
@@ -178,5 +198,6 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, context.rng.fork("ice"));
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
+  addTerrainComplexity(scene, archetype, profile.width, profile.depth, context.rng.fork("terrain-complexity"));
   return scene;
 }

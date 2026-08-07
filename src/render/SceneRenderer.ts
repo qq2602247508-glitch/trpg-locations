@@ -177,7 +177,7 @@ export class SceneRenderer {
 
   private readonly tacticalRoot = new THREE.Group();
 
-  private readonly materialCache = new Map<MaterialKey, THREE.MeshStandardMaterial>();
+  private readonly materialCache = new Map<string, THREE.MeshStandardMaterial>();
 
   private readonly geometryCache = new Map<ScenePrimitive["shape"], THREE.BufferGeometry>();
 
@@ -202,6 +202,8 @@ export class SceneRenderer {
   private tacticalVisible = false;
 
   private timeOfDay: "day" | "night" = "day";
+
+  private buildingTransparency = false;
 
   private ambientLight?: THREE.AmbientLight;
 
@@ -308,6 +310,17 @@ export class SceneRenderer {
   setTacticalVisibility(visible: boolean): void {
     this.tacticalVisible = visible;
     this.tacticalRoot.visible = visible;
+  }
+
+  setBuildingTransparency(enabled: boolean): void {
+    if (this.buildingTransparency === enabled) return;
+    this.buildingTransparency = enabled;
+    if (!this.currentScene) return;
+    this.modelRoot.clear();
+    this.floorLayers.clear();
+    this.primitiveBatches = 0;
+    this.buildPrimitiveBatches(this.currentScene);
+    this.setFloorView(this.activeFloorView);
   }
 
   setTimeOfDay(time: "day" | "night"): void {
@@ -544,6 +557,30 @@ export class SceneRenderer {
       grid.renderOrder = 2;
       this.gridRoot.add(grid);
     }
+
+    // Wilderness terrain is authored as stepped slabs rather than one abstract
+    // floor. Add local grid patches at each walkable top surface so the 5 ft
+    // tactical cells follow ledges, plateaus, islands, and ice shelves.
+    if (scene.kind === "wilderness") {
+      for (const terrain of scene.primitives.filter((primitive) => primitive.tags?.some((tag) => tag === "terrain" || tag === "ledge" || tag === "platform" || tag === "ice-island") === true)) {
+        const patchMinX = terrain.position.x - terrain.size.x / 2;
+        const patchMaxX = terrain.position.x + terrain.size.x / 2;
+        const patchMinZ = terrain.position.z - terrain.size.z / 2;
+        const patchMaxZ = terrain.position.z + terrain.size.z / 2;
+        const linePositions: number[] = [];
+        const y = terrain.position.y + terrain.size.y + 0.035;
+        for (let x = patchMinX; x <= patchMaxX + 0.001; x += GRID_METERS) linePositions.push(x, y, patchMinZ, x, y, patchMaxZ);
+        for (let z = patchMinZ; z <= patchMaxZ + 0.001; z += GRID_METERS) linePositions.push(patchMinX, y, z, patchMaxX, y, z);
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+        const material = new THREE.LineBasicMaterial({ color: 0x9bb8bd, transparent: true, opacity: 0.72, depthTest: true, depthWrite: false, toneMapped: false });
+        const patch = new THREE.LineSegments(geometry, material);
+        patch.name = `terrain grid · ${terrain.id}`;
+        patch.userData.levels = [0];
+        patch.renderOrder = 2;
+        this.gridRoot.add(patch);
+      }
+    }
   }
 
   private buildPrimitiveBatches(scene: GeneratedScene): void {
@@ -557,10 +594,12 @@ export class SceneRenderer {
 
     for (const primitive of scene.primitives) {
       const isRoof = primitive.material === "roof" || primitive.tags?.includes("roof") === true;
+      const isBuilding = primitive.tags?.some((tag) => tag === "wall" || tag === "settlement-building" || tag === "building-shell" || tag === "curtain-wall" || tag === "keep") === true;
+      const ghost = this.buildingTransparency && isBuilding;
       const layer = this.floorLayers.get(primitive.level) ?? this.createFloorLayer(primitive.level);
       const host = isRoof ? layer.roof : layer.structure;
       const chunk = spatialBatchKey(primitive.position, this.worldBounds);
-      const key = `${primitive.level}|${isRoof ? "roof" : "structure"}|${primitive.shape}|${primitive.material}|${chunk}`;
+      const key = `${primitive.level}|${isRoof ? "roof" : "structure"}|${primitive.shape}|${primitive.material}|${ghost ? "ghost" : "solid"}|${chunk}`;
       const existing = batchMap.get(key);
       if (existing) {
         existing.primitives.push(primitive);
@@ -577,7 +616,7 @@ export class SceneRenderer {
     for (const batch of batchMap.values()) {
       const mesh = new THREE.InstancedMesh(
         this.getGeometry(batch.shape),
-        this.getMaterial(batch.material),
+        this.getMaterial(batch.material, batch.primitives.some((primitive) => primitive.tags?.some((tag) => tag === "wall" || tag === "settlement-building" || tag === "building-shell" || tag === "curtain-wall" || tag === "keep") === true)),
         batch.primitives.length,
       );
       mesh.name = `${batch.material} ${batch.shape} × ${batch.primitives.length}`;
@@ -795,8 +834,9 @@ export class SceneRenderer {
     return geometry;
   }
 
-  private getMaterial(key: MaterialKey): THREE.MeshStandardMaterial {
-    const cached = this.materialCache.get(key);
+  private getMaterial(key: MaterialKey, ghost = false): THREE.MeshStandardMaterial {
+    const cacheKey = `${key}:${ghost ? "ghost" : "solid"}`;
+    const cached = this.materialCache.get(cacheKey);
     if (cached) return cached;
     const style = MATERIAL_STYLE[key];
     const material = new THREE.MeshStandardMaterial({
@@ -805,12 +845,12 @@ export class SceneRenderer {
       metalness: style.metalness ?? 0,
       emissive: style.emissive ?? style.color,
       emissiveIntensity: style.emissiveIntensity ?? 0.26,
-      transparent: style.transparent ?? false,
-      opacity: style.opacity ?? 1,
-      depthWrite: key !== "water",
+      transparent: ghost || style.transparent === true,
+      opacity: ghost ? 0.34 : style.opacity ?? 1,
+      depthWrite: ghost ? false : key !== "water",
       vertexColors: false,
     });
-    this.materialCache.set(key, material);
+    this.materialCache.set(cacheKey, material);
     return material;
   }
 
