@@ -12,13 +12,14 @@ import {
   cylinder,
   feetToMeters,
   primitive,
+  rectangularShell,
   stairConnection,
   stairRoute,
   tacticalFeature,
   water,
 } from "./shared";
 
-export type WildernessArchetype = "river-valley" | "dry-riverbed" | "impact-crater" | "volcanic" | "infernal-waste" | "burial-ground" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp" | "floating-islands";
+export type WildernessArchetype = "river-valley" | "dry-riverbed" | "impact-crater" | "volcanic" | "infernal-waste" | "burial-ground" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp" | "floating-islands" | "industrial-ruin" | "coral-tide";
 
 interface TerrainMorphology {
   channel: boolean;
@@ -50,6 +51,8 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   forest: ["forest", "woodland", "林地", "森林", "树林"],
   swamp: ["swamp", "marsh", "bog", "沼泽", "湿地"],
   "floating-islands": ["floating island", "sky island", "levitating island", "浮空岛", "浮岛", "空岛", "悬浮岛"],
+  "industrial-ruin": ["industrial district", "industrial ruins", "factory district", "废弃工业区", "工业区", "工业遗址", "厂房", "输送桥", "锈蚀管道"],
+  "coral-tide": ["coral courtyard", "coral reef", "tide pool", "潮汐", "潮池", "珊瑚庭院", "珊瑚礁"],
 };
 
 function includesAny(text: string, terms: readonly string[]): boolean {
@@ -80,6 +83,8 @@ function analyzeTerrainMorphology(prompt: string, hints?: SemanticGenerationHint
 export function classifyWildernessArchetype(prompt: string, hints?: SemanticGenerationHints): WildernessArchetype {
   const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const morphology = analyzeTerrainMorphology(prompt, hints);
+  if (WILDERNESS_TERMS["industrial-ruin"].some((term) => normalized.includes(term))) return "industrial-ruin";
+  if (WILDERNESS_TERMS["coral-tide"].some((term) => normalized.includes(term))) return "coral-tide";
   if (morphology.impactCrater) return "impact-crater";
   if (WILDERNESS_TERMS["floating-islands"].some((term) => normalized.includes(term))) return "floating-islands";
   if (morphology.infernal) return "infernal-waste";
@@ -116,7 +121,7 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number; density: number } {
   const { rng, request } = context;
-  const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "dry-riverbed" ? [58, 44, 5] : archetype === "impact-crater" ? [56, 52, 7] : archetype === "volcanic" ? [54, 50, 8] : archetype === "infernal-waste" ? [60, 48, 6] : archetype === "floating-islands" ? [58, 48, 18] : archetype === "burial-ground" ? [46, 38, 4] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
+  const base: readonly [number, number, number] = archetype === "industrial-ruin" ? [58, 46, 6] : archetype === "coral-tide" ? [56, 44, 5] : archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "dry-riverbed" ? [58, 44, 5] : archetype === "impact-crater" ? [56, 52, 7] : archetype === "volcanic" ? [54, 50, 8] : archetype === "infernal-waste" ? [60, 48, 6] : archetype === "floating-islands" ? [58, 48, 18] : archetype === "burial-ground" ? [46, 38, 4] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
   const scale = request.size === "small" ? 0.62 : request.size === "large" ? 1.55 : 1;
   return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2], density: request.density };
 }
@@ -1233,6 +1238,8 @@ function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype
     underdark: { material: "darkStone", label: "cavern shelf", width: 2.4, depth: 2, heightFeet: 5, count: 9 },
     forest: { material: "wood", label: "ancient tree root", width: 2.8, depth: 2.2, heightFeet: 5, count: 10 },
     swamp: { material: "wood", label: "deadwood hummock", width: 2.6, depth: 1.8, heightFeet: 5, count: 8 },
+    "industrial-ruin": { material: "metal", label: "industrial platform", width: 2.8, depth: 2.2, heightFeet: 8, count: 8, yFeet: 0 },
+    "coral-tide": { material: "stone", label: "reef shelf", width: 2.5, depth: 2.1, heightFeet: 6, count: 9 },
   };
   const spec = specs[archetype];
   if (!spec) return;
@@ -1275,6 +1282,49 @@ function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype
   }
 }
 
+function buildIndustrialRuin(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const floorY = 0;
+  const factoryW = width * 0.32;
+  const factoryD = depth * 0.36;
+  const factories = [[width * 0.24, depth * 0.3], [width * 0.7, depth * 0.28], [width * 0.68, depth * 0.72]] as const;
+  scene.primitives.push(box("industrial-yard-floor", 0, width * 0.5, 0, depth * 0.5, width - 4, FLOOR_SLAB_METERS, depth - 4, "earth", ["industrial", "yard", "floor", "terrain"]));
+  factories.forEach(([x, z], index) => {
+    const w = factoryW * rng.float(0.82, 1.15);
+    const d = factoryD * rng.float(0.78, 1.12);
+    const shellOpenings = index === 1 ? { west: { widthCells: 3 }, north: { widthCells: 3 } } : { [index % 2 === 0 ? "south" : "north"]: { widthCells: 3 } };
+    scene.primitives.push(...rectangularShell(`industrial-factory-${index}`, 0, x, z, floorY, w, d, feetToMeters(rng.int(16, 26)), "metal", "darkStone", ["industrial", "factory", index === 2 ? "collapsed" : "warehouse"], shellOpenings));
+    scene.rooms.push(createRoom(`industrial-factory-room-${index}`, index === 0 ? "Boiler hall" : index === 1 ? "Assembly floor" : "Collapsed loading shed", index === 2 ? "combat" : "service", 0, x, z, w - 2, d - 2));
+  });
+  connectRooms(scene.rooms, "industrial-factory-room-0", "industrial-factory-room-1");
+  connectRooms(scene.rooms, "industrial-factory-room-1", "industrial-factory-room-2");
+  const bridgeY = feetToMeters(12);
+  scene.primitives.push(corridor("industrial-conveyor-bridge", 0, width * 0.32, depth * 0.3, width * 0.66, depth * 0.28, bridgeY, 2.2, "metal", ["industrial", "conveyor-bridge", "high-ground", "vertical-route"]));
+  scene.primitives.push(corridor("industrial-pipe-rack", 0, width * 0.14, depth * 0.58, width * 0.84, depth * 0.58, feetToMeters(9), 1.1, "metal", ["industrial", "rust-pipe", "catwalk"]));
+  scene.primitives.push(water("industrial-flooded-pit", 0, width * 0.47, -0.18, depth * 0.56, 7, 0.22, 8, ["industrial", "water", "hazard", "flooded-pit"]));
+  for (let index = 0; index < 3 + Math.round(density * 4); index += 1) scene.primitives.push(cylinder(`industrial-tank-${index}`, 0, width * (0.18 + index * 0.1), FLOOR_SLAB_METERS, depth * 0.78, 2.4, feetToMeters(7 + index % 3 * 3), "metal", ["industrial", "tank", "cover"]));
+  scene.routes.push(createRoute("industrial-primary-route", "primary", [{ x: 4, z: depth * 0.5, y: 0 }, { x: width * 0.5, z: depth * 0.5, y: 0 }, { x: width - 4, z: depth * 0.5, y: 0 }]));
+  scene.tactical.push(tacticalFeature("industrial-entrance", "entrance", 1, depth * 0.5, 0, 2, "A broken service road enters between flooded machinery and the boiler hall."), tacticalFeature("industrial-catwalk-highground", "highGround", width * 0.5, depth * 0.3, bridgeY, 3, "The conveyor bridge crosses the factory floor twelve feet above the yard."));
+}
+
+function buildCoralTide(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  const poolZ = depth * 0.52;
+  scene.primitives.push(box("coral-dry-court", 0, width * 0.5, feetToMeters(5), depth * 0.2, width - 6, FLOOR_SLAB_METERS, depth * 0.26, "earth", ["coral", "dry-reef", "high-ground", "floor", "terrain"]));
+  scene.primitives.push(water("coral-tidal-channel", 0, width * 0.5, -0.25, poolZ, 10, 0.32, width - 6, ["coral", "tidal-water", "water-level-0"]));
+  scene.primitives.push(water("coral-deep-tide-pool", 0, width * 0.22, -0.6, depth * 0.72, 8, 0.6, 9, ["coral", "tide-pool", "water-level-2", "hazard"]));
+  const bridgeY = feetToMeters(10);
+  scene.primitives.push(corridor("coral-high-wood-bridge", 0, width * 0.22, poolZ, width * 0.78, poolZ, bridgeY, 1.6, "wood", ["coral", "wood-bridge", "high-ground", "tidal-route"]));
+  for (let index = 0; index < 12; index += 1) {
+    const x = rng.float(4, width - 4); const z = rng.float(5, depth - 5);
+    if (Math.abs(z - poolZ) < 5) continue;
+    scene.primitives.push(cylinder(`coral-reef-cover-${index}`, 0, x, FLOOR_SLAB_METERS, z, rng.float(1.3, 2.8), feetToMeters(rng.int(3, 8)), "stone", ["coral", "reef-rock", "cover", "standable"]));
+  }
+  scene.rooms.push(createRoom("coral-dry-court-room", "Dry coral courtyard", "natural", 0, width * 0.5, depth * 0.2, width - 8, depth * 0.22), createRoom("coral-tidal-room", "Tidal channel", "combat", 0, width * 0.5, poolZ, width - 8, 8), createRoom("coral-bridge-room", "Raised bridge route", "circulation", 0, width * 0.5, poolZ, width - 8, 2));
+  connectRooms(scene.rooms, "coral-dry-court-room", "coral-bridge-room"); connectRooms(scene.rooms, "coral-tidal-room", "coral-bridge-room");
+  scene.routes.push(createRoute("coral-low-tide-route", "primary", [{ x: 4, z: depth * 0.2, y: feetToMeters(5) }, { x: width * 0.22, z: poolZ, y: bridgeY }, { x: width * 0.78, z: poolZ, y: bridgeY }, { x: width - 4, z: depth * 0.2, y: feetToMeters(5) }]));
+  scene.routes.push(createRoute("coral-high-tide-route", "alternate", [{ x: width * 0.22, z: poolZ, y: bridgeY }, { x: width * 0.78, z: poolZ, y: bridgeY }]));
+  scene.tactical.push(tacticalFeature("coral-entrance", "entrance", 2, depth * 0.2, feetToMeters(5), 2, "The dry reef court is reachable only before the tide rises."), tacticalFeature("coral-bridge-highground", "highGround", width * 0.5, poolZ, bridgeY, 2, "A ten-foot wooden bridge remains passable at high tide."));
+}
+
 export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const archetype = classifyWildernessArchetype(context.request.prompt, context.semanticHints);
   const profile = bounds(context, archetype);
@@ -1294,10 +1344,14 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
     underdark: ["The Fungal Deep", "The Five-Shelf Underdark"],
     forest: ["The Canopy Run", "Mosswood Crossing"],
     swamp: ["The Sinking Fen", "Reedwater Marsh"],
+    "industrial-ruin": ["The Rustworks District", "The Flooded Foundry Quarter"],
+    "coral-tide": ["The Tidal Coral Court", "Reef of the Changing Path"],
   };
   const scene = baseScene("wilderness", choose(context.rng, titlePool[archetype]), `${archetype} terrain with elevation bands, route choices, tactical cover, and explicit hazards.`, context.request.seed, { x: profile.width, z: profile.depth }, 1, [Math.ceil(profile.height + 11)]);
   scene.archetype = archetype;
-  if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, context.rng.fork("river"));
+  if (archetype === "industrial-ruin") buildIndustrialRuin(scene, profile.width, profile.depth, profile.density, context.rng.fork("industrial"));
+  else if (archetype === "coral-tide") buildCoralTide(scene, profile.width, profile.depth, context.rng.fork("coral"));
+  else if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, context.rng.fork("river"));
   else if (archetype === "dry-riverbed") buildDryRiverbed(scene, profile.width, profile.depth, profile.density, context.rng.fork("dry-riverbed"));
   else if (archetype === "impact-crater") buildImpactCrater(scene, profile.width, profile.depth, profile.density, context.rng.fork("impact-crater"));
   else if (archetype === "volcanic") buildVolcanic(scene, profile.width, profile.depth, profile.density, context.rng.fork("volcanic"));

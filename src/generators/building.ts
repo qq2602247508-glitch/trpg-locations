@@ -674,15 +674,25 @@ function buildPoliceStation(scene: GeneratedScene, profile: BuildingProfile, wid
   const cellZ = 2 + depth * 0.72;
   const bases = floorBases(heights);
   scene.primitives.push(...rectangularShell("police-ground-shell", 0, cx, cz, 0, width, depth, feetToMeters(heights[0] ?? 12) - FLOOR_SLAB_METERS, profile.floor, profile.wall, ["police", "opening-frame", "secure-building"], { north: { widthCells: 2.6 }, south: { widthCells: 2.4, offsetCells: width * 0.3 } }));
+  const policeWallHeight = feetToMeters(heights[0] ?? 12) - FLOOR_SLAB_METERS;
+  scene.primitives.push(
+    ...wallWithOpenings("police-public-partition", 0, cx, 2 + depth * 0.29, FLOOR_SLAB_METERS, width - 2, policeWallHeight * 0.82, "x", profile.wall, ["police", "room-partition", "public-secure-boundary"], [{ offsetCells: -width * 0.25, widthCells: 2.2 }, { offsetCells: width * 0.25, widthCells: 2.2 }]),
+    ...wallWithOpenings("police-secure-partition", 0, cx, bookingZ + 3.1, FLOOR_SLAB_METERS, width - 2, policeWallHeight * 0.82, "x", profile.wall, ["police", "room-partition", "secure-boundary"], { widthCells: 2.2 }),
+    ...wallWithOpenings("police-cell-partition", 0, cx, cellZ - depth * 0.17, FLOOR_SLAB_METERS, width * 0.62, policeWallHeight * 0.82, "x", "metal", ["police", "room-partition", "cellblock-boundary"], { widthCells: 2.4 }),
+  );
   scene.rooms.push(
     createRoom("police-public-desk", "Public desk and waiting", "public", 0, cx, 2 + depth * 0.17, width - 3, 5),
     createRoom("police-booking", "Booking and interview suite", "combat", 0, cx, bookingZ, width * 0.55, 6),
     createRoom("police-evidence", "Locked evidence room", "private", 0, 2 + width * 0.18, bookingZ, width * 0.25, 6),
+    createRoom("police-interrogation", "Interrogation room", "private", 0, 2 + width * 0.72, bookingZ, width * 0.22, 5),
+    createRoom("police-archives", "Case archives", "private", 0, 2 + width * 0.2, 2 + depth * 0.3, width * 0.22, 4),
     createRoom("police-cellblock", "Secure cell block", "private", 0, cx, cellZ, width * 0.62, depth * 0.35),
     createRoom("police-garage", "Rear garage and service entry", "service", 0, 2 + width * 0.84, cellZ, width * 0.25, depth * 0.32),
   );
   connectRooms(scene.rooms, "police-public-desk", "police-booking");
   connectRooms(scene.rooms, "police-booking", "police-evidence");
+  connectRooms(scene.rooms, "police-booking", "police-interrogation");
+  connectRooms(scene.rooms, "police-public-desk", "police-archives");
   connectRooms(scene.rooms, "police-booking", "police-cellblock");
   connectRooms(scene.rooms, "police-cellblock", "police-garage");
   const cells = 3 + Math.round(density * 5);
@@ -692,6 +702,11 @@ function buildPoliceStation(scene: GeneratedScene, profile: BuildingProfile, wid
     scene.primitives.push(box(`police-cell-${index}`, 0, x, FLOOR_SLAB_METERS, z, 2.2, feetToMeters(8), 2.8, "metal", ["police", "cell", "bars", "cover"]));
   }
   scene.primitives.push(box("police-evidence-cages", 0, 2 + width * 0.18, FLOOR_SLAB_METERS, bookingZ, width * 0.18, feetToMeters(7), 4.5, "metal", ["police", "evidence", "locked", "investigation"]));
+  scene.primitives.push(
+    box("police-reception-counter", 0, cx, FLOOR_SLAB_METERS, 2 + depth * 0.24, width * 0.28, 1.1, 0.8, "wood", ["police", "reception", "cover"]),
+    box("police-interrogation-table", 0, 2 + width * 0.72, FLOOR_SLAB_METERS, bookingZ, 2.4, 1.1, 1.2, "wood", ["police", "interrogation", "evidence"]),
+    box("police-archive-shelves", 0, 2 + width * 0.2, FLOOR_SLAB_METERS, 2 + depth * 0.3, 1.1, feetToMeters(6), 2.6, "wood", ["police", "archives", "cover"]),
+  );
   for (let level = 1; level < scene.floors; level += 1) {
     const y = bases[level] ?? 0;
     scene.primitives.push(...rectangularShell(`police-upper-${level}`, level, cx, cz - depth * 0.08, y, width * 0.78, depth * 0.65, feetToMeters(heights[level] ?? 12) - FLOOR_SLAB_METERS, profile.floor, profile.wall, ["police", "opening-frame", "detective-floor"], {}, [{ id: `police-stair-${level}`, centerXCells: cx - width * 0.25, centerZCells: cz, widthCells: 2.4, depthCells: 2.8 }]));

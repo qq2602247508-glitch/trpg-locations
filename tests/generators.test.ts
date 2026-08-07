@@ -500,4 +500,35 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid).toBe(true);
     expect(scene).toEqual(generateScene(adaptiveRequest, "adaptive"));
   });
+
+  it("routes composite outdoor prompts into dedicated industrial and tidal grammars", () => {
+    const industrial = generateScene({ ...request("industrial-composite", "medium", 0.7), prompt: "废弃工业区，有高低厂房、输送桥、积水坑、锈蚀管道和可攀爬平台" }, "adaptive");
+    expect(industrial.archetype).toBe("industrial-ruin");
+    expect(industrial.primitives.some((primitive) => primitive.tags?.includes("factory"))).toBe(true);
+    expect(industrial.primitives.some((primitive) => primitive.tags?.includes("conveyor-bridge"))).toBe(true);
+    expect(industrial.diagnostics.valid).toBe(true);
+    const coral = generateScene({ ...request("coral-composite", "medium", 0.7), prompt: "潮汐周期会改变路线的珊瑚庭院，有水位差、潮池、礁石掩体和高架木桥" }, "adaptive");
+    expect(coral.archetype).toBe("coral-tide");
+    expect(coral.primitives.some((primitive) => primitive.tags?.includes("tide-pool"))).toBe(true);
+    expect(coral.primitives.some((primitive) => primitive.tags?.includes("wood-bridge"))).toBe(true);
+    expect(coral.routes.some((route) => route.id === "coral-high-tide-route")).toBe(true);
+    expect(coral.diagnostics.valid).toBe(true);
+  });
+
+  it("turns institutional room names into visible police partitions", () => {
+    const scene = generateScene({ ...request("police-room-geometry"), prompt: "1920年代 CoC 警察局，接待台、拘留区、审讯室、证物室、档案室和后门车库" }, "adaptive");
+    expect(scene.archetype).toBe("police");
+    expect(scene.rooms.some((room) => room.name === "Interrogation room")).toBe(true);
+    expect(scene.rooms.some((room) => room.name === "Case archives")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("room-partition"))).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("keeps an attached family crypt inside a manor instead of hijacking the domain", () => {
+    const scene = generateScene({ ...request("manor-crypt-composite"), prompt: "D&D 庄园宅邸，有中央庭院、主楼、仆从翼、家族墓穴和屋顶伏击点" }, "adaptive");
+    expect(scene.archetype).toBe("manor");
+    expect(scene.rooms.some((room) => room.name === "Inner courtyard")).toBe(true);
+    expect(scene.rooms.some((room) => room.name === "Family apartments")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
 });
