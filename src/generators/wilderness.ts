@@ -18,10 +18,25 @@ import {
   water,
 } from "./shared";
 
-export type WildernessArchetype = "river-valley" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp";
+export type WildernessArchetype = "river-valley" | "dry-riverbed" | "volcanic" | "burial-ground" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp";
+
+interface TerrainMorphology {
+  channel: boolean;
+  dryChannel: boolean;
+  crater: boolean;
+  lava: boolean;
+  burial: boolean;
+  woodland: boolean;
+  fungal: boolean;
+  wetland: boolean;
+  ruin: boolean;
+}
 
 const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>> = {
   "river-valley": ["river", "valley", "riverbank", "河谷", "河流", "河川", "溪谷", "峡谷河"],
+  "dry-riverbed": ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床", "河床"],
+  volcanic: ["volcano", "volcanic", "caldera", "火山", "火山口", "破火山口"],
+  "burial-ground": ["cemetery", "graveyard", "burial ground", "墓地", "墓园", "坟场", "陵园"],
   rift: ["rift", "chasm", "ravine", "裂谷", "裂隙", "深坑", "断崖"],
   mountain: ["mountain", "cliff", "ridge", "山地", "山脊", "高山", "峭壁"],
   ice: ["ice", "glacier", "tundra", "冰原", "冰川", "冻土", "雪原"],
@@ -32,8 +47,38 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   swamp: ["swamp", "marsh", "bog", "沼泽", "湿地"],
 };
 
+function includesAny(text: string, terms: readonly string[]): boolean {
+  return terms.some((term) => text.includes(term));
+}
+
+function analyzeTerrainMorphology(prompt: string, hints?: SemanticGenerationHints): TerrainMorphology {
+  const normalized = [prompt, ...(hints?.anchors ?? []), ...(hints?.hazards ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");
+  const dry = includesAny(normalized, ["dry", "dried", "arid", "desiccated", "干涸", "枯竭", "无水", "旱"]);
+  const riverbed = includesAny(normalized, ["riverbed", "river bed", "wash", "wadi", "河床"]);
+  const channel = includesAny(normalized, WILDERNESS_TERMS["river-valley"]) || riverbed || hints?.water === "major";
+  const lava = includesAny(normalized, ["lava", "magma", "molten", "熔岩", "岩浆", "火山"]);
+  return {
+    channel,
+    dryChannel: riverbed && dry || includesAny(normalized, ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床"]),
+    crater: includesAny(normalized, WILDERNESS_TERMS.volcanic) || lava,
+    lava,
+    burial: includesAny(normalized, WILDERNESS_TERMS["burial-ground"]) || includesAny(normalized, ["grave", "tombstone", "mausoleum", "crypt", "坟墓", "墓碑", "陵墓", "墓穴"]),
+    woodland: includesAny(normalized, WILDERNESS_TERMS.forest) || (hints?.environment === "wilderness" && hints.cover === "dense"),
+    fungal: includesAny(normalized, ["mushroom", "fungus", "fungal", "蘑菇", "菌类", "菌林"]),
+    wetland: includesAny(normalized, WILDERNESS_TERMS.swamp),
+    ruin: includesAny(normalized, WILDERNESS_TERMS.ruin) || hints?.environment === "ruin",
+  };
+}
+
 export function classifyWildernessArchetype(prompt: string, hints?: SemanticGenerationHints): WildernessArchetype {
   const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const morphology = analyzeTerrainMorphology(prompt, hints);
+  if (morphology.crater) return "volcanic";
+  if (morphology.burial) return "burial-ground";
+  if (morphology.dryChannel) return "dry-riverbed";
+  // Water is a topology, woodland is a coverage layer. A mixed prompt must
+  // retain a continuous river rather than becoming a flat forest with props.
+  if (morphology.channel && morphology.woodland) return "river-valley";
   // Named biome/domain beats a secondary landmark in the same prompt. For
   // example “幽暗地域，连续裂谷” is an underdark map with a rift feature,
   // not a generic rift map.
@@ -61,7 +106,7 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number; density: number } {
   const { rng, request } = context;
-  const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
+  const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "dry-riverbed" ? [58, 44, 5] : archetype === "volcanic" ? [54, 50, 8] : archetype === "burial-ground" ? [46, 38, 4] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
   const scale = request.size === "small" ? 0.62 : request.size === "large" ? 1.55 : 1;
   return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2], density: request.density };
 }
@@ -105,10 +150,17 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
   for (let z = 0; z < rows; z += 1) {
     for (let x = 0; x < cols; x += 1) {
       const riverLine = channel + Math.sin(x * 0.16) * 2.8 + Math.sin(x * 0.045) * 3;
-      const inWater = Math.abs(z - riverLine) <= 2.1;
-      const bankBreak = Math.abs(z - riverLine) > 2.1 && Math.abs(z - riverLine) < 4.1 && x > cols * 0.12 && x < cols * 0.88;
-      if (inWater) heights.push(undefined);
-      else heights.push(z < riverLine ? (bankBreak ? 2 : 3) : (bankBreak ? 1 : 2));
+      const distance = Math.abs(z - riverLine);
+      const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+      const inWater = distance <= 2.1;
+      const tributary = x > cols * 0.62 && x < cols * 0.69 && z < riverLine - 3 && Math.abs(z - (rows * 0.12 + (x - cols * 0.62) * 2.2)) < 1.5;
+      const erodedPocket = distance > 7 && Math.sin(x * 0.27 + z * 0.19) > 0.91 && Math.cos(x * 0.08 - z * 0.12) > 0.15;
+      if (edge === 0 || inWater || tributary || erodedPocket) heights.push(undefined);
+      else {
+        const distanceBand = distance < 5 ? 0 : distance < 9 ? 1 : distance < 15 ? 2 : 3;
+        const ridgeLift = z < riverLine && distance > 13 && Math.sin(x * 0.095) + Math.cos(z * 0.12) > 0.65 ? 1 : 0;
+        heights.push(Math.min(4, distanceBand + ridgeLift));
+      }
     }
   }
   const yOf = (level: number) => feetToMeters(level * 10) + FLOOR_SLAB_METERS;
@@ -117,7 +169,7 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
     for (let x = 0; x < cols; x += 1) {
       const level = at(x, z);
       if (level === undefined) continue;
-      scene.primitives.push(box(`river-grid-cell-${x}-${z}`, 0, x + 0.5, 0, z + 0.5, 0.96, yOf(level), 0.96, level >= 3 ? "moss" : "earth", ["floor", "terrain", "semantic-grid", "macro-region", `river-elevation:${level}`]));
+      scene.primitives.push(box(`river-grid-cell-${x}-${z}`, 0, x + 0.5, 0, z + 0.5, 0.96, yOf(level), 0.96, level >= 3 ? "moss" : level === 0 ? "earth" : "rock", ["floor", "terrain", "semantic-grid", "macro-region", `river-elevation:${level}`]));
       for (const [dx, dz] of [[1, 0], [0, 1]] as const) {
         const neighbour = at(x + dx, z + dz);
         if (neighbour !== undefined && Math.abs(neighbour - level) >= 1) {
@@ -127,17 +179,30 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
       }
     }
   }
-  scene.primitives.push(water("river-semantic-channel", 0, cols / 2, feetToMeters(8), channel, cols - 2, 0.34, 4.1, ["river", "watercourse", "terrain"]));
+  const riverLineAt = (x: number) => channel + Math.sin(x * 0.16) * 2.8 + Math.sin(x * 0.045) * 3;
+  const waterSegments = 14;
+  for (let index = 0; index < waterSegments; index += 1) {
+    const fromX = 1 + ((cols - 2) * index) / waterSegments;
+    const toX = 1 + ((cols - 2) * (index + 1)) / waterSegments;
+    const fromZ = riverLineAt(fromX);
+    const toZ = riverLineAt(toX);
+    const dx = toX - fromX;
+    const dz = toZ - fromZ;
+    scene.primitives.push(water(`river-semantic-channel-${index}`, 0, (fromX + toX) / 2, feetToMeters(1), (fromZ + toZ) / 2, 4.1, 0.34, Math.hypot(dx, dz) + 0.8, ["river", "watercourse", "terrain", "meandering-channel"], Math.atan2(dx, dz)));
+  }
   const crossingX = cols * rng.float(0.42, 0.62);
-  scene.primitives.push(corridor("river-semantic-old-bridge", 0, crossingX, channel - 4, crossingX, channel + 4, yOf(2), 2.4, "stone", ["bridge", "semantic-grid", "old-bridge"]));
-  scene.primitives.push(corridor("river-semantic-shallow-ford", 0, 3, channel + 5, cols - 3, channel + 5, yOf(1), 1.6, "earth", ["terrain", "semantic-grid", "shallow-ford"]));
+  const crossingZ = riverLineAt(crossingX);
+  scene.primitives.push(corridor("river-semantic-old-bridge", 0, crossingX, crossingZ - 4, crossingX, crossingZ + 4, yOf(1), 2.4, "stone", ["bridge", "semantic-grid", "old-bridge"]));
+  const fordX = cols * 0.2;
+  const fordZ = riverLineAt(fordX);
+  scene.primitives.push(corridor("river-semantic-shallow-ford", 0, fordX, fordZ - 3.5, fordX, fordZ + 3.5, yOf(0), 2.2, "earth", ["terrain", "semantic-grid", "shallow-ford"]));
   scene.rooms.push(createRoom("river-upper-ridge", "Upper ridge", "natural", 0, cols * 0.5, rows * 0.2, cols - 6, rows * 0.25, yOf(3)), createRoom("river-floodplain", "River floodplain", "natural", 0, cols * 0.5, channel, cols - 6, 8, yOf(1)), createRoom("river-falls-basin", "Waterfall basin", "combat", 0, cols * 0.7, rows * 0.76, cols * 0.3, rows * 0.22, yOf(1)));
   connectRooms(scene.rooms, "river-upper-ridge", "river-floodplain");
   connectRooms(scene.rooms, "river-floodplain", "river-falls-basin");
-  scene.routes.push(createRoute("river-ridge-route", "primary", [{ x: 2, z: rows * 0.18, y: yOf(3) }, { x: cols * 0.32, z: rows * 0.32, y: yOf(3) }, { x: crossingX, z: channel - 4, y: yOf(2) }, { x: cols - 2, z: rows * 0.76, y: yOf(1) }]));
-  scene.routes.push(createRoute("river-shallow-ford", "alternate", [{ x: 3, z: channel + 5, y: yOf(1) }, { x: cols * 0.3, z: channel + 5, y: yOf(1) }, { x: cols * 0.74, z: channel + 5, y: yOf(1) }, { x: cols - 3, z: channel + 5, y: yOf(1) }]));
-  scene.routes.push(createRoute("river-downstream", "waterflow", [{ x: 2, z: channel, y: feetToMeters(8) }, { x: cols * 0.5, z: channel, y: feetToMeters(5) }, { x: cols - 2, z: channel, y: feetToMeters(2) }]));
-  scene.tactical.push(tacticalFeature("river-semantic-entrance", "entrance", 2, rows * 0.18, yOf(3), 2, "The high ridge is the main approach into the valley."), tacticalFeature("river-ford", "chokepoint", cols * 0.5, channel, yOf(1), 2, "A shallow ford is a legal crossing but exposes anyone in the channel."), tacticalFeature("river-falls", "hazard", cols * 0.7, rows * 0.76, yOf(1), 3, "The waterfall basin drops below the floodplain and hides a side route."));
+  scene.routes.push(createRoute("river-ridge-route", "primary", [{ x: 2, z: rows * 0.18, y: yOf(3) }, { x: cols * 0.32, z: rows * 0.32, y: yOf(2) }, { x: crossingX, z: crossingZ - 4, y: yOf(1) }, { x: cols - 2, z: rows * 0.76, y: yOf(2) }]));
+  scene.routes.push(createRoute("river-shallow-ford", "alternate", [{ x: fordX, z: fordZ - 4, y: yOf(1) }, { x: fordX, z: fordZ, y: yOf(0) }, { x: fordX, z: fordZ + 4, y: yOf(1) }]));
+  scene.routes.push(createRoute("river-downstream", "waterflow", Array.from({ length: 7 }, (_, index) => { const x = 2 + ((cols - 4) * index) / 6; return { x, z: riverLineAt(x), y: feetToMeters(1 - index * 0.12) }; })));
+  scene.tactical.push(tacticalFeature("river-semantic-entrance", "entrance", 2, rows * 0.18, yOf(3), 2, "The high ridge is the main approach into the valley."), tacticalFeature("river-ford", "chokepoint", fordX, fordZ, yOf(0), 2, "A shallow ford is a legal crossing but exposes anyone in the channel."), tacticalFeature("river-falls", "hazard", cols * 0.7, rows * 0.76, yOf(1), 3, "The waterfall basin drops below the floodplain and hides a side route."));
   scene.description = `River-valley semantic grid with ${cliffCount} bank cliff segments, continuous high ridge, floodplain, waterfall basin, old bridge, shallow ford, and downhill waterflow.`;
   scene.floorHeightFeet = [Math.ceil((yOf(3) + feetToMeters(12)) / 0.3048)];
 }
@@ -462,6 +527,200 @@ function buildMountainContinuous(scene: GeneratedScene, width: number, depth: nu
   scene.floorHeightFeet = [Math.ceil((yOf(levels - 1) + feetToMeters(12)) / 0.3048)];
 }
 
+interface FieldRenderOptions {
+  prefix: string;
+  cols: number;
+  rows: number;
+  heights: readonly (number | undefined)[];
+  materialFor(level: number, x: number, z: number): MaterialKey;
+  tagsFor?(level: number, x: number, z: number): string[];
+  stepFeet?: number;
+}
+
+/** Shared terrain realization: morphology operators author an elevation field,
+ * while this pass makes all walkable tops and vertical boundaries explicit. */
+function renderMorphologyField(scene: GeneratedScene, options: FieldRenderOptions): { yOf(level: number): number; walkable: number; cliffs: number } {
+  const { prefix, cols, rows, heights } = options;
+  const at = (x: number, z: number) => x < 0 || z < 0 || x >= cols || z >= rows ? undefined : heights[z * cols + x];
+  const yOf = (level: number) => feetToMeters(level * (options.stepFeet ?? 5)) + FLOOR_SLAB_METERS;
+  let walkable = 0;
+  let cliffs = 0;
+  for (let z = 0; z < rows; z += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const level = at(x, z);
+      if (level === undefined) continue;
+      walkable += 1;
+      scene.primitives.push(box(`${prefix}-cell-${x}-${z}`, 0, x + 0.5, 0, z + 0.5, 0.96, yOf(level), 0.96, options.materialFor(level, x, z), ["floor", "terrain", "semantic-grid", "morphology-field", `elevation:${level}`, ...(options.tagsFor?.(level, x, z) ?? [])]));
+      for (const [dx, dz] of [[1, 0], [0, 1]] as const) {
+        const neighbour = at(x + dx, z + dz);
+        if (neighbour === level) continue;
+        const lowY = neighbour === undefined ? FLOOR_SLAB_METERS * 0.2 : yOf(Math.min(level, neighbour));
+        const highY = yOf(neighbour === undefined ? level : Math.max(level, neighbour));
+        if (highY - lowY < 0.3) continue;
+        cliffs += 1;
+        scene.primitives.push(box(`${prefix}-cliff-${x}-${z}-${dx}-${dz}`, 0, x + 0.5 + dx * 0.49, lowY, z + 0.5 + dz * 0.49, dx ? 0.14 : 0.96, highY - lowY, dz ? 0.14 : 0.96, "darkStone", ["cliff-face", "vertical-face", "terrain", `${prefix}-boundary`]));
+      }
+    }
+  }
+  return { yOf, walkable, cliffs };
+}
+
+function buildDryRiverbed(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const cols = Math.max(28, Math.floor(width));
+  const rows = Math.max(24, Math.floor(depth));
+  const phase = rng.float(-Math.PI, Math.PI);
+  const channelAt = (x: number) => rows * 0.52 + Math.sin(x * 0.13 + phase) * rows * 0.1 + Math.sin(x * 0.035) * rows * 0.08;
+  const heights: Array<number | undefined> = [];
+  for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+    const distance = Math.abs(z - channelAt(x));
+    const sideCut = edge === 0 || (edge < 3 && Math.sin(x * 0.51 + z * 0.33) > 0.35);
+    const erodedPocket = distance > 3.4 && distance < 6.5 && Math.sin(x * 0.37 + z * 0.21) > 0.82 - density * 0.12;
+    if (sideCut || erodedPocket) heights.push(undefined);
+    else heights.push(distance < 2.3 ? 0 : distance < 4.8 ? 1 : distance < 8 ? 2 : 3);
+  }
+  const rendered = renderMorphologyField(scene, {
+    prefix: "dry-channel",
+    cols,
+    rows,
+    heights,
+    materialFor: (level) => level === 0 ? "earth" : level >= 3 ? "darkStone" : "rock",
+    tagsFor: (level) => [level === 0 ? "dry-riverbed" : "eroded-bank", level === 1 ? "wash-margin" : "badland-shelf"],
+  });
+  const crossingXs = [cols * 0.24, cols * 0.62, cols * 0.84];
+  for (const [index, x] of crossingXs.entries()) {
+    const z = channelAt(x);
+    scene.primitives.push(corridor(`dry-channel-crossing-${index}`, 0, x, z - 4, x, z + 4, rendered.yOf(1), 1.8, "earth", ["dry-riverbed", "crossing", "semantic-grid"]));
+  }
+  const boulderCount = Math.round(7 + density * 15);
+  for (let index = 0; index < boulderCount; index += 1) {
+    const x = rng.float(3, cols - 3);
+    const z = channelAt(x) + rng.float(-2.1, 2.1);
+    const size = rng.float(0.8, 2.2);
+    scene.primitives.push(primitive(`dry-channel-boulder-${index}`, "sphere", 0, x, rendered.yOf(0), z, size * CELL, feetToMeters(rng.float(2, 7)), size * CELL, "rock", ["dry-riverbed", "scoured-boulder", "cover"]));
+  }
+  scene.rooms.push(createRoom("dry-channel-upper-bank", "Eroded upper bank", "natural", 0, cols * 0.5, rows * 0.2, cols - 6, rows * 0.2, rendered.yOf(3)), createRoom("dry-channel-bed", "Scoured river bed", "combat", 0, cols * 0.5, rows * 0.52, cols - 5, 5, rendered.yOf(0)), createRoom("dry-channel-lower-bank", "Broken lower bank", "natural", 0, cols * 0.5, rows * 0.82, cols - 6, rows * 0.2, rendered.yOf(3)));
+  connectRooms(scene.rooms, "dry-channel-upper-bank", "dry-channel-bed");
+  connectRooms(scene.rooms, "dry-channel-bed", "dry-channel-lower-bank");
+  scene.routes.push(createRoute("dry-channel-long-route", "primary", [{ x: 2, z: channelAt(2), y: rendered.yOf(0) }, { x: cols * 0.35, z: channelAt(cols * 0.35), y: rendered.yOf(0) }, { x: cols * 0.7, z: channelAt(cols * 0.7), y: rendered.yOf(0) }, { x: cols - 2, z: channelAt(cols - 2), y: rendered.yOf(0) }]), createRoute("dry-channel-bank-crossing", "alternate", [{ x: crossingXs[1] ?? cols / 2, z: 2, y: rendered.yOf(3) }, { x: crossingXs[1] ?? cols / 2, z: channelAt(crossingXs[1] ?? cols / 2), y: rendered.yOf(0) }, { x: crossingXs[1] ?? cols / 2, z: rows - 2, y: rendered.yOf(3) }]));
+  scene.tactical.push(tacticalFeature("dry-channel-entrance", "entrance", 2, channelAt(2), rendered.yOf(0), 2, "The dry channel enters through a narrow upstream cut."), tacticalFeature("dry-channel-flash-flood", "hazard", cols * 0.5, channelAt(cols * 0.5), rendered.yOf(0), 3, "The exposed river bed is a fast route but becomes a flash-flood kill zone."), tacticalFeature("dry-channel-overlook", "highGround", cols * 0.62, rows * 0.2, rendered.yOf(3), 3, "An eroded bank overlooks two channel crossings."));
+  scene.description = `Dry-channel morphology with ${rendered.walkable} walkable cells, ${rendered.cliffs} eroded vertical faces, three crossings, scoured boulders, and a continuous low river bed.`;
+}
+
+function buildVolcanic(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const cols = Math.max(30, Math.floor(width));
+  const rows = Math.max(28, Math.floor(depth));
+  const cx = cols * rng.float(0.43, 0.57);
+  const cz = rows * rng.float(0.42, 0.54);
+  const radius = Math.min(cols, rows) * rng.float(0.3, 0.36);
+  const outletAngle = rng.float(-0.45, 0.45);
+  const heights: Array<number | undefined> = [];
+  for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+    const dx = x - cx;
+    const dz = z - cz;
+    const distance = Math.hypot(dx, dz);
+    const angle = Math.atan2(dz, dx);
+    const warped = distance / (radius * (1 + Math.sin(angle * 3 + 0.8) * 0.1 + Math.sin(angle * 5) * 0.05));
+    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+    const outlet = Math.abs(angle - outletAngle) < 0.12 + density * 0.04 && dx > 0 && warped < 1.45;
+    const brokenRim = warped > 0.72 && warped < 1.06 && Math.sin(x * 0.43 + z * 0.29) > 0.94 - density * 0.08;
+    if (edge === 0 || warped < 0.2 || outlet || brokenRim) heights.push(undefined);
+    else if (warped < 0.36) heights.push(1);
+    else if (warped < 0.58) heights.push(6);
+    else if (warped < 0.8) heights.push(5);
+    else if (warped < 1.05) heights.push(4);
+    else heights.push(Math.max(1, 4 - Math.floor((warped - 1) * 4)));
+  }
+  const rendered = renderMorphologyField(scene, {
+    prefix: "volcanic",
+    cols,
+    rows,
+    heights,
+    materialFor: (level, x, z) => Math.hypot(x - cx, z - cz) < radius * 0.38 ? "hazard" : level >= 5 ? "darkStone" : "rock",
+    tagsFor: (level) => [level >= 5 ? "caldera-rim" : level <= 1 ? "crater-floor" : "volcanic-slope"],
+    stepFeet: 5,
+  });
+  scene.primitives.push(
+    primitive("volcanic-crater-lava", "cylinder", 0, cx, -0.35, cz, radius * 0.32 * CELL, 0.45, radius * 0.32 * CELL, "hazard", ["lava", "crater", "hazard", "morphology-operator"]),
+    corridor("volcanic-lava-outlet", 0, cx + radius * 0.15, cz, cols - 1, cz + Math.tan(outletAngle) * (cols - cx), -0.28, 2.8 + density * 2.2, "hazard", ["lava", "lava-flow", "hazard", "morphology-operator"]),
+    corridor("volcanic-basalt-bridge", 0, cx + radius * 0.54, cz - 3.5, cx + radius * 0.54, cz + 3.5, rendered.yOf(5), 1.8, "darkStone", ["bridge", "basalt-bridge", "semantic-grid"]),
+  );
+  const fumaroles = Math.round(5 + density * 12);
+  for (let index = 0; index < fumaroles; index += 1) {
+    const angle = rng.float(0, Math.PI * 2);
+    const distance = radius * rng.float(0.55, 1.18);
+    const x = cx + Math.cos(angle) * distance;
+    const z = cz + Math.sin(angle) * distance;
+    scene.primitives.push(primitive(`volcanic-fumarole-${index}`, "cone", 0, x, rendered.yOf(3), z, feetToMeters(rng.float(1, 2.5)), feetToMeters(rng.float(3, 9)), feetToMeters(rng.float(1, 2.5)), index % 3 === 0 ? "warmLight" : "darkStone", ["fumarole", "volcanic", "cover"]));
+  }
+  scene.rooms.push(createRoom("volcanic-outer-slope", "Ashen outer slope", "natural", 0, cols * 0.2, rows * 0.68, cols * 0.28, rows * 0.3, rendered.yOf(2)), createRoom("volcanic-rim", "Broken caldera rim", "combat", 0, cx, cz, radius * 2, radius * 2, rendered.yOf(5)), createRoom("volcanic-crater", "Lava crater", "natural", 0, cx, cz, radius * 0.5, radius * 0.5, rendered.yOf(1)));
+  connectRooms(scene.rooms, "volcanic-outer-slope", "volcanic-rim");
+  connectRooms(scene.rooms, "volcanic-rim", "volcanic-crater");
+  scene.routes.push(createRoute("volcanic-switchback", "primary", [{ x: 2, z: rows * 0.72, y: rendered.yOf(1) }, { x: cols * 0.28, z: rows * 0.64, y: rendered.yOf(3) }, { x: cx - radius * 0.65, z: cz + radius * 0.35, y: rendered.yOf(5) }, { x: cx + radius * 0.54, z: cz, y: rendered.yOf(5) }]), createRoute("volcanic-rim-escape", "alternate", [{ x: cx - radius * 0.65, z: cz + radius * 0.35, y: rendered.yOf(5) }, { x: cx, z: cz - radius * 0.7, y: rendered.yOf(6) }, { x: cx + radius * 0.62, z: cz - radius * 0.2, y: rendered.yOf(5) }]));
+  scene.tactical.push(tacticalFeature("volcanic-entrance", "entrance", 2, rows * 0.72, rendered.yOf(1), 2, "An ash-choked switchback climbs toward the caldera."), tacticalFeature("volcanic-crater-hazard", "hazard", cx, cz, -0.2, Math.ceil(radius * 0.25), "The crater and its lava outlet divide the battlefield."), tacticalFeature("volcanic-rim-highground", "highGround", cx - radius * 0.55, cz, rendered.yOf(6), 4, "The irregular caldera rim dominates the crater floor and basalt crossing."));
+  scene.description = `Volcanic morphology with an irregular caldera, ${rendered.cliffs} exposed basalt faces, crater lava, a downhill outlet, fumarole cover, and a rim combat route.`;
+  scene.floorHeightFeet = [48];
+}
+
+function buildBurialGround(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const cols = Math.max(26, Math.floor(width));
+  const rows = Math.max(24, Math.floor(depth));
+  const pathX = cols * rng.float(0.42, 0.58);
+  const cryptX = cols * rng.float(0.65, 0.78);
+  const cryptZ = rows * rng.float(0.58, 0.74);
+  const moundCenters = Array.from({ length: Math.round(6 + density * 7) }, () => ({
+    x: rng.float(4, cols - 4),
+    z: rng.float(4, rows - 4),
+    rx: rng.float(2.4, 5.8),
+    rz: rng.float(2, 4.6),
+  }));
+  const heights: Array<number | undefined> = [];
+  for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+    const onPath = Math.abs(x - (pathX + Math.sin(z * 0.18) * 1.4)) < 1.7 || Math.abs(z - rows * 0.42) < 1.4;
+    const cryptSink = Math.hypot((x - cryptX) / 4.2, (z - cryptZ) / 3.4);
+    const brokenBoundary = edge === 0 && Math.sin(x * 0.5 + z * 0.4) > 0.15;
+    const moundDistance = Math.min(...moundCenters.map((mound) => Math.hypot((x - mound.x) / mound.rx, (z - mound.z) / mound.rz)));
+    if (brokenBoundary || cryptSink < 0.48) heights.push(undefined);
+    else if (onPath) heights.push(0);
+    else heights.push(moundDistance < 0.38 ? 2 : moundDistance < 0.92 ? 1 : 0);
+  }
+  const rendered = renderMorphologyField(scene, {
+    prefix: "burial",
+    cols,
+    rows,
+    heights,
+    materialFor: () => "earth",
+    tagsFor: (level) => [level >= 1 ? "burial-mound" : "cemetery-ground"],
+  });
+  scene.primitives.push(corridor("burial-processional-path", 0, pathX, 1, pathX, rows - 2, rendered.yOf(0), 2.4, "stone", ["cemetery-path", "semantic-grid"]), corridor("burial-cross-path", 0, 2, rows * 0.42, cols - 2, rows * 0.42, rendered.yOf(0), 1.8, "stone", ["cemetery-path", "semantic-grid"]));
+  const graveCount = Math.round(18 + density * 58);
+  const burialLevelAt = (x: number, z: number) => heights[Math.max(0, Math.min(rows - 1, Math.round(z))) * cols + Math.max(0, Math.min(cols - 1, Math.round(x)))] ?? 0;
+  for (let index = 0; index < graveCount; index += 1) {
+    const quadrant = index % 4;
+    const left = quadrant % 2 === 0;
+    const upper = quadrant < 2;
+    const x = rng.float(left ? 3 : pathX + 3, left ? pathX - 3 : cols - 3);
+    const z = rng.float(upper ? 3 : rows * 0.47, upper ? rows * 0.37 : rows - 3);
+    const y = rendered.yOf(burialLevelAt(x, z));
+    scene.primitives.push(box(`burial-grave-${index}`, 0, x, y, z, rng.float(0.45, 0.8), feetToMeters(rng.float(2.2, 4.5)), rng.float(0.18, 0.35), "stone", ["grave", "tombstone", "burial-cluster", index % 6 === 0 ? "cover" : "detail"]));
+  }
+  const mausoleumY = rendered.yOf(1);
+  scene.primitives.push(box("burial-mausoleum", 0, cols * 0.22, mausoleumY, rows * 0.2, 7, feetToMeters(11), 6, "stone", ["mausoleum", "landmark", "cover", "blocks-sight"]), box("burial-crypt-bridge", 0, cryptX, rendered.yOf(0), cryptZ - 2.8, 2.2, FLOOR_SLAB_METERS, 5.5, "stone", ["crypt-entry", "bridge", "semantic-grid"]));
+  const deadTrees = Math.round(3 + density * 7);
+  for (let index = 0; index < deadTrees; index += 1) {
+    const x = rng.float(3, cols - 3);
+    const z = rng.float(3, rows - 3);
+    scene.primitives.push(cylinder(`burial-dead-tree-${index}`, 0, x, rendered.yOf(0), z, rng.float(0.35, 0.7), feetToMeters(rng.int(9, 20)), "wood", ["dead-tree", "cover", "blocks-sight"]));
+  }
+  scene.rooms.push(createRoom("burial-gate", "Broken cemetery gate", "natural", 0, pathX, 3, 8, 6, rendered.yOf(0)), createRoom("burial-mausoleum-room", "Mausoleum court", "combat", 0, cols * 0.22, rows * 0.2, 12, 10, mausoleumY), createRoom("burial-crypt-room", "Sunken crypt", "natural", 0, cryptX, cryptZ, 8, 7, 0));
+  connectRooms(scene.rooms, "burial-gate", "burial-mausoleum-room");
+  connectRooms(scene.rooms, "burial-mausoleum-room", "burial-crypt-room");
+  scene.routes.push(createRoute("burial-processional-route", "primary", [{ x: pathX, z: 1, y: rendered.yOf(0) }, { x: pathX, z: rows * 0.42, y: rendered.yOf(0) }, { x: cryptX, z: cryptZ - 2.8, y: rendered.yOf(0) }]), createRoute("burial-mound-route", "alternate", [{ x: 2, z: rows * 0.42, y: rendered.yOf(0) }, { x: cols * 0.22, z: rows * 0.2, y: mausoleumY }, { x: cols - 2, z: rows * 0.42, y: rendered.yOf(0) }]));
+  scene.tactical.push(tacticalFeature("burial-entrance", "entrance", pathX, 1, rendered.yOf(0), 2, "A broken gate opens onto the processional path."), tacticalFeature("burial-crypt-hazard", "hazard", cryptX, cryptZ, -0.5, 3, "A collapsed crypt creates a sunken fighting pocket and hidden approach."), tacticalFeature("burial-mausoleum-cover", "cover", cols * 0.22, rows * 0.2, mausoleumY, 3, "The mausoleum blocks sight and anchors the cemetery's upper flank."));
+  scene.description = `Burial-field morphology with rolling grave mounds, branching paths, ${graveCount} grouped graves, a mausoleum, a sunken crypt, and broken perimeter gaps.`;
+}
+
 function buildIce(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
   scene.primitives.push(box("ice-field", 0, width / 2, 0, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "earth", ["floor", "terrain", "ice"]), water("ice-frozen-lake", 0, width / 2, -0.02, depth * 0.56, width * 0.68, 0.08, depth * 0.34, ["ice", "hazard"]));
   const islands = 4;
@@ -607,6 +866,64 @@ function addSemanticThemeStructure(scene: GeneratedScene, archetype: WildernessA
   }
 }
 
+/** Biome coverage composes over structural terrain. In particular, woodland
+ * never replaces a requested river/channel; it grows in coherent bank groves. */
+function addWoodlandCoverage(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"], riverBanks: boolean): void {
+  const groveCount = Math.round(5 + density * 6);
+  const treesPerGrove = Math.round(7 + density * 12);
+  const channelZ = depth * 0.52;
+  const riverSurfaceY = (x: number, z: number) => {
+    if (!riverBanks) return FLOOR_SLAB_METERS;
+    const riverLine = channelZ + Math.sin(x * 0.16) * 2.8 + Math.sin(x * 0.045) * 3;
+    const distance = Math.abs(z - riverLine);
+    const level = distance < 5 ? 0 : distance < 9 ? 1 : distance < 15 ? 2 : 3;
+    return feetToMeters(level * 10) + FLOOR_SLAB_METERS;
+  };
+  for (let grove = 0; grove < groveCount; grove += 1) {
+    const north = grove % 2 === 0;
+    const centerX = width * rng.float(0.12, 0.88);
+    const centerZ = riverBanks
+      ? north ? depth * rng.float(0.12, 0.34) : depth * rng.float(0.7, 0.9)
+      : depth * rng.float(0.12, 0.88);
+    for (let index = 0; index < treesPerGrove; index += 1) {
+      const x = Math.max(2, Math.min(width - 2, centerX + rng.float(-5, 5)));
+      const z = Math.max(2, Math.min(depth - 2, centerZ + rng.float(-4, 4)));
+      if (riverBanks && Math.abs(z - (channelZ + Math.sin(x * 0.16) * 2.8 + Math.sin(x * 0.045) * 3)) < 5.2) continue;
+      const trunkRadius = rng.float(0.34, 0.74);
+      const height = feetToMeters(rng.int(16, 34));
+      const baseY = riverSurfaceY(x, z);
+      scene.primitives.push(
+        cylinder(`woodland-grove-${grove}-tree-${index}`, 0, x, baseY, z, trunkRadius, height, "wood", ["woodland-cover", "tree", "cover", "blocks-sight", `grove:${grove}`]),
+        primitive(`woodland-grove-${grove}-canopy-${index}`, "cone", 0, x, baseY + height * 0.76, z, feetToMeters(rng.float(7, 13)), height * 0.42, feetToMeters(rng.float(7, 13)), "moss", ["woodland-cover", "canopy", `grove:${grove}`]),
+      );
+      if (index === 0) scene.tactical.push(tacticalFeature(`woodland-grove-cover-${grove}`, "cover", x, z, 0, 3, "A coherent tree grove blocks sight and creates a flanking pocket beside open terrain."));
+    }
+  }
+  const logCount = Math.round(2 + density * 5);
+  for (let index = 0; index < logCount; index += 1) {
+    const x = rng.float(4, width - 4);
+    const z = riverBanks
+      ? index % 2 === 0 ? rng.float(4, depth * 0.34) : rng.float(depth * 0.7, depth - 4)
+      : rng.float(4, depth - 4);
+    scene.primitives.push(box(`woodland-fallen-log-${index}`, 0, x, FLOOR_SLAB_METERS, z, rng.float(3.5, 7), feetToMeters(3), rng.float(0.8, 1.4), "wood", ["fallen-log", "woodland-cover", "cover", "jumpable:5ft"]));
+  }
+  const ancientCount = Math.round(2 + density * 3);
+  for (let index = 0; index < ancientCount; index += 1) {
+    const north = index % 2 === 0;
+    const x = width * rng.float(0.16, 0.84);
+    const z = riverBanks ? north ? depth * rng.float(0.14, 0.3) : depth * rng.float(0.74, 0.88) : depth * rng.float(0.18, 0.82);
+    const height = feetToMeters(rng.int(28, 48));
+    const crown = rng.float(4.5, 7.5);
+    const baseY = riverSurfaceY(x, z);
+    scene.primitives.push(
+      cylinder(`woodland-ancient-tree-${index}`, 0, x, baseY, z, rng.float(1.2, 1.8), height, "wood", ["ancient-tree", "woodland-cover", "cover", "blocks-sight", "landmark"]),
+      primitive(`woodland-ancient-crown-${index}`, "sphere", 0, x, baseY + height * 0.72, z, crown * CELL, height * 0.42, crown * CELL, "moss", ["ancient-tree", "canopy", "landmark"]),
+      box(`woodland-ancient-platform-${index}`, 0, x, baseY + feetToMeters(15), z, 3.2, FLOOR_SLAB_METERS, 3.2, "wood", ["floor", "terrain", "standable", "ancient-tree-platform", "high-ground"]),
+    );
+    scene.tactical.push(tacticalFeature(`woodland-ancient-highground-${index}`, "highGround", x, z, baseY + feetToMeters(15), 2, "A broad ancient-tree fork forms a standable 15-ft tactical platform."));
+  }
+}
+
 /** Composable prompt traits. These modify the selected terrain grammar instead
  * of selecting a one-off prebuilt scene, so "冰原 + 龙骨" and "裂谷 + 龙骨"
  * share a skeletal vocabulary while retaining different terrain topology. */
@@ -714,6 +1031,9 @@ interface StandablePropSpec {
 function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const specs: Partial<Record<WildernessArchetype, StandablePropSpec>> = {
     "river-valley": { material: "rock", label: "river boulder", width: 2.6, depth: 2.2, heightFeet: 5, count: 8 },
+    "dry-riverbed": { material: "rock", label: "scoured boulder", width: 2.5, depth: 2.1, heightFeet: 5, count: 8 },
+    volcanic: { material: "darkStone", label: "basalt block", width: 2.5, depth: 2.2, heightFeet: 7, count: 9 },
+    "burial-ground": { material: "stone", label: "broken grave slab", width: 2.3, depth: 1.5, heightFeet: 5, count: 5 },
     rift: { material: "rock", label: "rift pillar", width: 1.8, depth: 1.8, heightFeet: 10, count: 7 },
     mountain: { material: "rock", label: "summit boulder", width: 2.4, depth: 2.1, heightFeet: 5, count: 10 },
     ice: { material: "rock", label: "ice block", width: 2.5, depth: 2.2, heightFeet: 5, count: 7 },
@@ -769,6 +1089,9 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const profile = bounds(context, archetype);
   const titlePool: Record<WildernessArchetype, readonly string[]> = {
     "river-valley": ["Silverfall Valley", "The Two-Bank Reach"],
+    "dry-riverbed": ["The Thirsting Wash", "Deadwater Channel"],
+    volcanic: ["The Cinder Caldera", "Ashmouth Crater"],
+    "burial-ground": ["The Crooked Rest", "Graves of the Old Road"],
     rift: ["Dragonbone Rift", "The Split Earth"],
     mountain: ["The Broken Heights", "Ridge of Seven Shelves"],
     ice: ["Whiteglass Expanse", "The Blue Fracture"],
@@ -781,6 +1104,9 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const scene = baseScene("wilderness", choose(context.rng, titlePool[archetype]), `${archetype} terrain with elevation bands, route choices, tactical cover, and explicit hazards.`, context.request.seed, { x: profile.width, z: profile.depth }, 1, [Math.ceil(profile.height + 11)]);
   scene.archetype = archetype;
   if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, context.rng.fork("river"));
+  else if (archetype === "dry-riverbed") buildDryRiverbed(scene, profile.width, profile.depth, profile.density, context.rng.fork("dry-riverbed"));
+  else if (archetype === "volcanic") buildVolcanic(scene, profile.width, profile.depth, profile.density, context.rng.fork("volcanic"));
+  else if (archetype === "burial-ground") buildBurialGround(scene, profile.width, profile.depth, profile.density, context.rng.fork("burial-ground"));
   else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, context.rng.fork("rift"));
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, context.rng.fork("ice"));
@@ -789,6 +1115,10 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, context.rng.fork("swamp"));
   else if (archetype === "underdark") buildUnderdark(scene, profile.width, profile.depth, profile.density, context.rng.fork("underdark"));
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
+  const morphology = analyzeTerrainMorphology(context.request.prompt, context.semanticHints);
+  if (morphology.woodland && archetype !== "forest") {
+    addWoodlandCoverage(scene, profile.width, profile.depth, profile.density, context.rng.fork("woodland-coverage"), archetype === "river-valley");
+  }
   addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"));
   addPromptDrivenTheme(scene, context.request.prompt, profile.width, profile.depth, context.rng.fork("prompt-theme"));
   addSemanticAnchorLandmarks(scene, context.semanticHints, profile.width, profile.depth, context.rng.fork("semantic-anchors"));

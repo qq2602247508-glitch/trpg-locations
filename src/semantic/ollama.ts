@@ -41,6 +41,8 @@ export interface OllamaSemanticOptions {
   model?: string;
   timeoutMs?: number;
   fetcher?: typeof fetch;
+  /** Re-evaluate known broad wilderness prompts so mixed biomes compose. */
+  force?: boolean;
 }
 
 const RESPONSE_SCHEMA = {
@@ -130,7 +132,7 @@ export function mergeOllamaHints(local: InputClassification, hints: OllamaSemant
 /** Uses Ollama only for locally ambiguous prompts and returns undefined on any failure. */
 export async function classifyWithOllama(prompt: string, options: OllamaSemanticOptions = {}): Promise<InputClassification | undefined> {
   const local = classifyInput(prompt);
-  if (local.source !== "adaptive") return undefined;
+  if (local.source !== "adaptive" && options.force !== true) return undefined;
   const endpoint = (options.endpoint ?? DEFAULT_OLLAMA_ENDPOINT).replace(/\/$/, "");
   const model = options.model ?? DEFAULT_OLLAMA_MODEL;
   const controller = new AbortController();

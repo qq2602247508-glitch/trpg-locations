@@ -279,6 +279,49 @@ describe("scene generators", () => {
     }
   });
 
+  it("composes woodland coverage over a continuous river topology", () => {
+    const scene = generateScene({ ...request("forest-river-composition", "large", 0.82), prompt: "茂密森林和弯曲河流，有浅滩与古树" }, "wilderness");
+    expect(scene.archetype).toBe("river-valley");
+    expect(hasTag(scene, "watercourse")).toBe(true);
+    expect(hasTag(scene, "woodland-cover")).toBe(true);
+    expect(hasTag(scene, "old-bridge")).toBe(true);
+    expect(scene.routes.some((route) => route.kind === "waterflow")).toBe(true);
+  });
+
+  it("uses a caldera and lava-flow topology for volcanic prompts without moss summits", () => {
+    const scene = generateScene({ ...request("volcanic-morphology", "large", 0.76), prompt: "活火山，破碎火山口与向山脚流动的熔岩" }, "wilderness");
+    expect(scene.archetype).toBe("volcanic");
+    expect(hasTag(scene, "caldera-rim")).toBe(true);
+    expect(hasTag(scene, "lava-flow")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("summit") && primitive.material === "moss")).toBe(false);
+    expect(scene.tactical.some((feature) => feature.id === "volcanic-crater-hazard")).toBe(true);
+  });
+
+  it("builds cemetery morphology from paths, grave groups, mounds, and a sunken crypt", () => {
+    const scene = generateScene({ ...request("burial-morphology", "medium", 0.7), prompt: "阴森墓地，墓丘、墓碑、陵墓和下沉墓穴" }, "wilderness");
+    expect(scene.archetype).toBe("burial-ground");
+    expect(hasTag(scene, "burial-mound")).toBe(true);
+    expect(hasTag(scene, "tombstone")).toBe(true);
+    expect(hasTag(scene, "mausoleum")).toBe(true);
+    expect(hasTag(scene, "crypt-entry")).toBe(true);
+  });
+
+  it("cuts a continuous dry riverbed instead of falling back to mountain shelves", () => {
+    const scene = generateScene({ ...request("dry-channel-morphology", "medium", 0.64), prompt: "干涸河床，冲刷巨石、沙洲和多处渡口" }, "wilderness");
+    expect(scene.archetype).toBe("dry-riverbed");
+    expect(hasTag(scene, "dry-riverbed")).toBe(true);
+    expect(hasTag(scene, "eroded-bank")).toBe(true);
+    expect(hasTag(scene, "scoured-boulder")).toBe(true);
+    expect(hasTag(scene, "watercourse")).toBe(false);
+  });
+
+  it("keeps giant fungi as standable tactical platforms", () => {
+    const scene = generateScene({ ...request("fungal-platform-contract", "medium", 0.78), prompt: "幽暗蘑菇地，遍布超大蘑菇" }, "wilderness");
+    expect(hasTag(scene, "giant-fungus")).toBe(true);
+    expect(hasTag(scene, "fungus-cap-platform")).toBe(true);
+    expect(scene.routes.some((route) => route.id.includes("giant-fungus-access"))).toBe(true);
+  });
+
   it("builds a multi-level tower with an explicit silhouette and platforms", () => {
     const scene = generateScene(request("tower-contract", "medium", 0.58), "tower");
     expect(scene.floors).toBeGreaterThanOrEqual(3);

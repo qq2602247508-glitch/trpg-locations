@@ -21,14 +21,31 @@ interface WorkerScope {
 
 // Keep the main tsconfig on DOM types; Vite evaluates this module in a worker.
 const scope = globalThis as unknown as WorkerScope;
+const wildernessSemanticCache = new Map<string, NonNullable<Awaited<ReturnType<typeof classifyWithOllama>>>>();
+
+async function classifyWilderness(prompt: string): Promise<Awaited<ReturnType<typeof classifyWithOllama>>> {
+  const key = prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US");
+  const cached = wildernessSemanticCache.get(key);
+  if (cached) return cached;
+  const classification = await classifyWithOllama(prompt, { force: true });
+  if (classification) {
+    wildernessSemanticCache.set(key, classification);
+    if (wildernessSemanticCache.size > 32) wildernessSemanticCache.delete(wildernessSemanticCache.keys().next().value ?? key);
+  }
+  return classification;
+}
 
 scope.addEventListener("message", async (event: MessageEvent<GenerationWorkerRequest>) => {
   const { id, request, kind } = event.data;
   try {
-    // Fixed wilderness mode still needs semantic help for novel biomes such as
-    // 河川、蘑菇地 or user-coined fantasy regions. Known local prompts bypass
-    // Ollama inside classifyWithOllama, so only ambiguous prompts pay latency.
-    const classification = kind === "adaptive" || kind === "wilderness" ? await classifyWithOllama(request.prompt) : undefined;
+    // Fixed wilderness mode re-evaluates broad and mixed prompts so biome
+    // coverage can compose with topology. Successful results are cached in the
+    // worker; repeat generations remain deterministic without another model call.
+    const classification = kind === "wilderness"
+      ? await classifyWilderness(request.prompt)
+      : kind === "adaptive"
+        ? await classifyWithOllama(request.prompt)
+        : undefined;
     const scene = generateScene(request, kind, classification);
     scope.postMessage({ id, scene } satisfies GenerationWorkerResponse);
   } catch (error) {

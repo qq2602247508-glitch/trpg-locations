@@ -41,6 +41,17 @@ describe("Ollama semantic boundary", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("can force semantic decomposition for a known wilderness prompt", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      message: { content: JSON.stringify({ ...validHints, suggestedKind: "wilderness", environment: "wilderness", water: "major", cover: "dense", anchors: ["河岸古树"] }) },
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const classification = await classifyWithOllama("森林和河流", { fetcher, timeoutMs: 100, force: true });
+    expect(classification?.source).toBe("ollama");
+    expect(classification?.traits.water).toBe("major");
+    expect(classification?.traits.anchors).toContain("河岸古树");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("falls back when the service returns valid JSON with the wrong contract", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
       message: { content: JSON.stringify({ location_name: "观测所", arbitrary_dimensions: [99, 99] }) },
