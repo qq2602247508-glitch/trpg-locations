@@ -532,31 +532,34 @@ export class SceneRenderer {
     ground.receiveShadow = true;
     this.gridRoot.add(ground);
 
-    for (let level = 0; level < Math.max(1, scene.floors); level += 1) {
+    const surfaceTags = new Set(["floor", "platform", "ledge", "terrain", "bridge", "boardwalk", "ice-island", "road", "plaza", "quay", "clearing"]);
+    const addSurfaceGrid = (surface: ScenePrimitive): void => {
+      if (surface.shape !== "box" || !surface.tags?.some((tag) => surfaceTags.has(tag))) return;
+      const cosine = Math.cos(surface.rotationY ?? 0);
+      const sine = Math.sin(surface.rotationY ?? 0);
+      const toWorld = (localX: number, localZ: number): [number, number, number] => [
+        surface.position.x + localX * cosine + localZ * sine,
+        surface.position.y + surface.size.y + 0.035,
+        surface.position.z - localX * sine + localZ * cosine,
+      ];
       const linePositions: number[] = [];
-      const y = floorBaseY(scene, level) + FLOOR_OVERLAY_Y;
-      const pushLine = (x1: number, z1: number, x2: number, z2: number) => {
-        linePositions.push(x1, y, z1, x2, y, z2);
-      };
-      for (let x = minX; x <= maxX + 0.001; x += GRID_METERS) pushLine(x, minZ, x, maxZ);
-      for (let z = minZ; z <= maxZ + 0.001; z += GRID_METERS) pushLine(minX, z, maxX, z);
-      const gridGeometry = new THREE.BufferGeometry();
-      gridGeometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
-      const gridMaterial = new THREE.LineBasicMaterial({
-        color: 0x94e2ba,
-        // Respect terrain and walls. Drawing the ground grid through every
-        // elevated surface flattened mountains, bridges, and multi-storey rooms
-        // into one unreadable plane.
-        depthTest: true,
-        depthWrite: false,
-        toneMapped: false,
-      });
-      const grid = new THREE.LineSegments(gridGeometry, gridMaterial);
-      grid.name = `5 ft / 1.524 m grid · level ${level + 1}`;
-      grid.userData.levels = [level];
+      const push = (a: [number, number, number], b: [number, number, number]) => linePositions.push(...a, ...b);
+      const minLocalX = -surface.size.x / 2;
+      const maxLocalX = surface.size.x / 2;
+      const minLocalZ = -surface.size.z / 2;
+      const maxLocalZ = surface.size.z / 2;
+      for (let x = minLocalX; x <= maxLocalX + 0.001; x += GRID_METERS) push(toWorld(x, minLocalZ), toWorld(x, maxLocalZ));
+      for (let z = minLocalZ; z <= maxLocalZ + 0.001; z += GRID_METERS) push(toWorld(minLocalX, z), toWorld(maxLocalX, z));
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+      const material = new THREE.LineBasicMaterial({ color: 0x9bb8bd, transparent: true, opacity: 0.78, depthTest: true, depthWrite: false, toneMapped: false });
+      const grid = new THREE.LineSegments(geometry, material);
+      grid.name = `surface grid · ${surface.id}`;
+      grid.userData.levels = [surface.level];
       grid.renderOrder = 2;
       this.gridRoot.add(grid);
-    }
+    };
+    for (const surface of scene.primitives) addSurfaceGrid(surface);
 
     // Stair treads are walkable faces too. Draw a small grid on every tread,
     // transformed with the authored stair rotation, instead of leaving stairs
@@ -590,29 +593,6 @@ export class SceneRenderer {
       this.gridRoot.add(grid);
     }
 
-    // Wilderness terrain is authored as stepped slabs rather than one abstract
-    // floor. Add local grid patches at each walkable top surface so the 5 ft
-    // tactical cells follow ledges, plateaus, islands, and ice shelves.
-    if (scene.kind === "wilderness") {
-      for (const terrain of scene.primitives.filter((primitive) => primitive.tags?.some((tag) => tag === "terrain" || tag === "ledge" || tag === "platform" || tag === "ice-island") === true)) {
-        const patchMinX = terrain.position.x - terrain.size.x / 2;
-        const patchMaxX = terrain.position.x + terrain.size.x / 2;
-        const patchMinZ = terrain.position.z - terrain.size.z / 2;
-        const patchMaxZ = terrain.position.z + terrain.size.z / 2;
-        const linePositions: number[] = [];
-        const y = terrain.position.y + terrain.size.y + 0.035;
-        for (let x = patchMinX; x <= patchMaxX + 0.001; x += GRID_METERS) linePositions.push(x, y, patchMinZ, x, y, patchMaxZ);
-        for (let z = patchMinZ; z <= patchMaxZ + 0.001; z += GRID_METERS) linePositions.push(patchMinX, y, z, patchMaxX, y, z);
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
-        const material = new THREE.LineBasicMaterial({ color: 0x9bb8bd, transparent: true, opacity: 0.72, depthTest: true, depthWrite: false, toneMapped: false });
-        const patch = new THREE.LineSegments(geometry, material);
-        patch.name = `terrain grid · ${terrain.id}`;
-        patch.userData.levels = [0];
-        patch.renderOrder = 2;
-        this.gridRoot.add(patch);
-      }
-    }
   }
 
   private buildPrimitiveBatches(scene: GeneratedScene): void {
