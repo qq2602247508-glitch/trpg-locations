@@ -543,7 +543,7 @@ export function createRoute(
   id: string,
   kind: Route["kind"],
   points: Array<{ x: number; z: number; y?: number }>,
-  metadata: Pick<Route, "purpose" | "traffic"> = {},
+  metadata: Pick<Route, "purpose" | "traffic" | "schedule"> = {},
 ): Route {
   return {
     id,

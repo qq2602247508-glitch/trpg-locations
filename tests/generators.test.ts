@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { generateScene, generatorRegistry } from "../src/generators";
-import { rectangularShell } from "../src/generators/shared";
-import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind } from "../src/schema";
-import { fogDensityForSpan, levelForY, overlayTouchesFloor, spatialBatchKey } from "../src/render/SceneRenderer";
+import { SeededRandom } from "../src/core/random";
+import { instantiateBuildingModule } from "../src/generators/buildingModule";
+import { baseScene, rectangularShell } from "../src/generators/shared";
+import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
+import { fogDensityForSpan, levelForY, overlayTouchesFloor, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
   prompt: "A tactical location with routes, cover, height, and a meaningful encounter objective.",
@@ -46,6 +48,13 @@ describe("scene generators", () => {
     expect(spatialBatchKey({ x: 2, z: 2 }, smallBounds)).toBe("whole-scene");
     const cityBounds = { minX: 0, maxX: 160, minZ: 0, maxZ: 120 };
     expect(spatialBatchKey({ x: 5, z: 5 }, cityBounds)).not.toBe(spatialBatchKey({ x: 150, z: 110 }, cityBounds));
+  });
+
+  it("filters scheduled route layers without hiding all-day routes", () => {
+    expect(routeMatchesTime("day", "day")).toBe(true);
+    expect(routeMatchesTime("day", "night")).toBe(false);
+    expect(routeMatchesTime("night", "night")).toBe(true);
+    expect(routeMatchesTime("all", "night")).toBe(true);
   });
 
   it("registers each fixed topology", () => {
@@ -158,6 +167,39 @@ describe("scene generators", () => {
     expect(harbor.primitives.filter((primitive) => primitive.tags?.includes("road")).length).toBeGreaterThanOrEqual(8);
     expect(harbor.routes.some((route) => route.purpose === "crowd" && (route.traffic ?? 0) > 0.8)).toBe(true);
     expect(harbor.routes.some((route) => route.purpose === "service")).toBe(true);
+    expect(harbor.buildingInstances?.length).toBe(harbor.rooms.filter((room) => room.id.startsWith("settlement-building-")).length);
+    expect(harbor.buildingInstances?.every((building) => building.detailLevel === "exterior-proxy" && building.seed.length > 0)).toBe(true);
+  });
+
+  it("separates daytime crowds from night watch routes in walled settlements", () => {
+    const city = generateScene({ ...request("settlement-time-layers", "large", 0.8), prompt: "有城墙、市场和巡逻的大型城市" }, "settlement");
+    expect(city.routes.some((route) => route.schedule === "day" && route.purpose === "crowd")).toBe(true);
+    expect(city.routes.some((route) => route.schedule === "night" && route.id.includes("night-watch"))).toBe(true);
+    expect(city.routes.some((route) => route.schedule === "all")).toBe(true);
+  });
+
+  it("gives each settlement building archetype an independent seeded exterior grammar", () => {
+    const kinds: readonly SettlementBuildingKind[] = ["home", "tavern", "shrine", "warehouse", "tower", "manor"];
+    const signatures = new Set<string>();
+    for (const [index, kind] of kinds.entries()) {
+      const scene = baseScene("settlement", "Module test", "Independent module", `module-${kind}`, { x: 20, z: 20 }, 1, [10]);
+      const instance = instantiateBuildingModule(scene, {
+        id: `module-${kind}`,
+        kind,
+        x: 10,
+        z: 10,
+        width: kind === "warehouse" || kind === "manor" ? 9 : 6,
+        depth: kind === "manor" ? 8 : 6,
+        rotation: index * 0.11,
+        district: "test",
+        seed: `module-seed-${kind}`,
+      }, new SeededRandom(`module-seed-${kind}`));
+      expect(instance.archetype).toBe(kind);
+      expect(instance.floorHeightFeet).toHaveLength(instance.floors);
+      expect(scene.primitives.every((primitive) => primitive.tags?.includes("independent-building-module"))).toBe(true);
+      signatures.add(scene.primitives.map((primitive) => primitive.tags?.find((tag) => tag.startsWith("module-part:")) ?? primitive.shape).join("|"));
+    }
+    expect(signatures.size).toBe(kinds.length);
   });
 
   it("prefers a specific harbor grammar inside a named city", () => {

@@ -32,6 +32,7 @@ interface AppElements {
   stageDescription: HTMLElement;
   seedBadge: HTMLElement;
   floor: HTMLSelectElement;
+  time: HTMLSelectElement;
   routesToggle: HTMLButtonElement;
   tacticalToggle: HTMLButtonElement;
   metrics: HTMLElement;
@@ -80,6 +81,13 @@ export async function mountApp(root: HTMLElement): Promise<void> {
                 <option value="building">专用建筑语法</option>
                 <option value="settlement">城镇与街区</option>
                 <option value="wilderness">自然与特殊战术空间</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>城市时段</span>
+              <select data-role="time" aria-label="城市时段">
+                <option value="day">白昼 · 市场与通勤</option>
+                <option value="night">夜间 · 巡逻与暗路</option>
               </select>
             </label>
 
@@ -240,6 +248,9 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     const raw = elements.floor.value;
     renderer.setFloorView(raw === "cut" || raw === "roof" ? raw : Number(raw));
   });
+  elements.time.addEventListener("change", () => {
+    renderer.setTimeOfDay(elements.time.value === "night" ? "night" : "day");
+  });
   elements.routesToggle.addEventListener("click", () => {
     routeDebug = !routeDebug;
     renderer.setRouteVisibility(routeDebug);
@@ -325,6 +336,7 @@ function getElements(root: HTMLElement): AppElements {
     stageDescription: query(root, '[data-role="stage-description"]'),
     seedBadge: query(root, '[data-role="seed-badge"]'),
     floor: query(root, '[data-role="floor"]'),
+    time: query(root, '[data-role="time"]'),
     routesToggle: query(root, '[data-role="routes-toggle"]'),
     tacticalToggle: query(root, '[data-role="tactical-toggle"]'),
     metrics: query(root, '[data-role="metrics"]'),

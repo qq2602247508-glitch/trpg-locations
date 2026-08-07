@@ -1,6 +1,7 @@
 import {
   GRID_FEET,
   GRID_METERS,
+  type BuildingInstance,
   type GeneratedScene,
   type MaterialKey,
   type PrimitiveShape,
@@ -10,6 +11,7 @@ import {
   type SceneKind,
   type ScenePrimitive,
   type TacticalFeature,
+  type SettlementBuildingKind,
   type Vec2,
   type Vec3,
 } from "../schema";
@@ -49,7 +51,10 @@ const MATERIAL_KEYS = ["stone", "darkStone", "wood", "plaster", "roof", "metal",
 const ROOM_ROLES = ["public", "private", "service", "circulation", "combat", "natural"] as const satisfies readonly Room["role"][];
 const ROUTE_KINDS = ["primary", "alternate", "vertical", "waterflow"] as const satisfies readonly Route["kind"][];
 const ROUTE_PURPOSES = ["movement", "crowd", "service", "escape", "water"] as const satisfies readonly NonNullable<Route["purpose"]>[];
+const ROUTE_SCHEDULES = ["day", "night", "all"] as const satisfies readonly NonNullable<Route["schedule"]>[];
 const TACTICAL_KINDS = ["cover", "highGround", "hazard", "chokepoint", "entrance", "secret"] as const satisfies readonly TacticalFeature["kind"][];
+const SETTLEMENT_BUILDING_KINDS = ["home", "tavern", "shrine", "warehouse", "tower", "manor"] as const satisfies readonly SettlementBuildingKind[];
+const BUILDING_DETAIL_LEVELS = ["exterior-proxy", "full-interior"] as const satisfies readonly BuildingInstance["detailLevel"][];
 
 const GEOMETRY_EPSILON = 0.000_1;
 const ROUTE_BOUNDS_MARGIN_METERS = GRID_METERS * 2.5;
@@ -581,6 +586,9 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
   const rawTactical = Array.isArray((output as unknown as UnknownRecord).tactical)
     ? ((output as unknown as UnknownRecord).tactical as unknown[])
     : [];
+  const rawBuildingInstances = Array.isArray((output as unknown as UnknownRecord).buildingInstances)
+    ? ((output as unknown as UnknownRecord).buildingInstances as unknown[])
+    : [];
 
   if (!Array.isArray((output as unknown as UnknownRecord).primitives)) repairable("primitives was not an array; using an empty list.");
   if (!Array.isArray((output as unknown as UnknownRecord).rooms)) repairable("rooms was not an array; using an empty list.");
@@ -781,12 +789,14 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
     }
     const purpose = raw.purpose === undefined ? undefined : enumValue(raw.purpose, ROUTE_PURPOSES, "movement", `routes[${index}].purpose`);
     const traffic = raw.traffic === undefined ? undefined : Math.min(1, Math.max(0, finiteValue(raw.traffic, 0.5, `routes[${index}].traffic`)));
+    const schedule = raw.schedule === undefined ? undefined : enumValue(raw.schedule, ROUTE_SCHEDULES, "all", `routes[${index}].schedule`);
     routes.push({
       id: uniqueId(raw.id, "route", index, routeIds),
       kind: enumValue(raw.kind, ROUTE_KINDS, "primary", `routes[${index}].kind`),
       points,
       ...(purpose === undefined ? {} : { purpose }),
       ...(traffic === undefined ? {} : { traffic }),
+      ...(schedule === undefined ? {} : { schedule }),
     });
   }
 
@@ -828,6 +838,50 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
       radiusCells: positiveValue(raw.radiusCells, 1, `tactical[${index}].radiusCells`),
       note: stringValue(raw.note, "Tactical feature", `tactical[${index}].note`),
     });
+  }
+
+  const buildingInstanceIds = new Set<string>();
+  const buildingInstances: BuildingInstance[] = [];
+  if ((output as unknown as UnknownRecord).buildingInstances !== undefined && !Array.isArray((output as unknown as UnknownRecord).buildingInstances)) {
+    repairable("buildingInstances was not an array; removing invalid building manifests.");
+  }
+  for (let index = 0; index < rawBuildingInstances.length; index += 1) {
+    const raw = rawBuildingInstances[index];
+    if (!isRecord(raw)) {
+      repairable(`buildingInstances[${index}] was not an object and was removed.`);
+      continue;
+    }
+    const id = uniqueId(raw.id, "building-instance", index, buildingInstanceIds);
+    const archetype = enumValue(raw.archetype, SETTLEMENT_BUILDING_KINDS, "home", `buildingInstances[${index}].archetype`);
+    const manifestFloors = positiveInteger(raw.floors, 1, `buildingInstances[${index}].floors`);
+    const rawManifestHeights = Array.isArray(raw.floorHeightFeet) ? raw.floorHeightFeet : [];
+    if (rawManifestHeights.length !== manifestFloors) repairable(`buildingInstances[${index}].floorHeightFeet did not match its floor count; normalizing it.`);
+    const manifestHeights: number[] = [];
+    for (let floorIndex = 0; floorIndex < manifestFloors; floorIndex += 1) {
+      manifestHeights.push(positiveValue(rawManifestHeights[floorIndex], manifestHeights[floorIndex - 1] ?? 10, `buildingInstances[${index}].floorHeightFeet[${floorIndex}]`));
+    }
+    const positionRecord = isRecord(raw.positionCells) ? raw.positionCells : {};
+    if (!isRecord(raw.positionCells)) repairable(`buildingInstances[${index}].positionCells was invalid; using the origin.`);
+    const detailLevel = enumValue(raw.detailLevel, BUILDING_DETAIL_LEVELS, "exterior-proxy", `buildingInstances[${index}].detailLevel`);
+    const instance: BuildingInstance = {
+      id,
+      archetype,
+      seed: stringValue(raw.seed, `${seed}/building/${index + 1}`, `buildingInstances[${index}].seed`),
+      district: stringValue(raw.district, "mixed", `buildingInstances[${index}].district`),
+      positionCells: {
+        x: finiteValue(positionRecord.x, 0, `buildingInstances[${index}].positionCells.x`),
+        z: finiteValue(positionRecord.z, 0, `buildingInstances[${index}].positionCells.z`),
+      },
+      footprintCells: sizeVec2(raw.footprintCells, { x: 4, z: 4 }, `buildingInstances[${index}].footprintCells`),
+      rotationY: finiteValue(raw.rotationY, 0, `buildingInstances[${index}].rotationY`),
+      floors: manifestFloors,
+      floorHeightFeet: manifestHeights,
+      detailLevel,
+    };
+    if (detailLevel === "exterior-proxy" && !primitives.some((primitive) => primitive.id.startsWith(`${id}-`) && hasTag(primitive, "independent-building-module"))) {
+      fatal(`Building instance ${id} has no independently generated exterior primitive evidence.`);
+    }
+    buildingInstances.push(instance);
   }
   if (rooms.length > 0 && !tactical.some((feature) => feature.kind === "entrance")) {
     repairable("Scene had no entrance feature; adding one at the primary route start.");
@@ -877,6 +931,7 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
     routeCount: routes.length,
     primaryRouteCount,
     tacticalCount: tactical.length,
+    buildingInstanceCount: buildingInstances.length,
     entranceCount,
     tacticalVariety,
     floors,
@@ -915,6 +970,7 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
     output.rooms = rooms;
     output.routes = routes;
     output.tactical = tactical;
+    if ((output as unknown as UnknownRecord).buildingInstances !== undefined) output.buildingInstances = buildingInstances;
     output.generationMs = generationMs;
   }
   output.diagnostics = diagnostics;

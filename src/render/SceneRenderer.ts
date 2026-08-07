@@ -78,6 +78,10 @@ export function overlayTouchesFloor(levels: readonly number[], view: FloorView):
   return typeof view !== "number" || levels.includes(view);
 }
 
+export function routeMatchesTime(schedule: GeneratedScene["routes"][number]["schedule"], time: "day" | "night"): boolean {
+  return schedule === undefined || schedule === "all" || schedule === time;
+}
+
 const MATERIAL_STYLE: Record<
   MaterialKey,
   {
@@ -192,6 +196,12 @@ export class SceneRenderer {
 
   private tacticalVisible = false;
 
+  private timeOfDay: "day" | "night" = "day";
+
+  private ambientLight?: THREE.AmbientLight;
+
+  private hemisphereLight?: THREE.HemisphereLight;
+
   private keyLight?: THREE.DirectionalLight;
 
   private rimLight?: THREE.DirectionalLight;
@@ -280,7 +290,7 @@ export class SceneRenderer {
         layer.roof.visible = false;
       }
     }
-    this.applyOverlayFloorFilter(this.routeRoot, view);
+    this.applyRouteFilters();
     this.applyOverlayFloorFilter(this.tacticalRoot, view);
   }
 
@@ -292,6 +302,18 @@ export class SceneRenderer {
   setTacticalVisibility(visible: boolean): void {
     this.tacticalVisible = visible;
     this.tacticalRoot.visible = visible;
+  }
+
+  setTimeOfDay(time: "day" | "night"): void {
+    this.timeOfDay = time;
+    this.scene.background = new THREE.Color(time === "night" ? 0x071315 : 0x10201f);
+    if (this.scene.fog) this.scene.fog.color.set(time === "night" ? 0x071315 : 0x10201f);
+    if (this.ambientLight) this.ambientLight.intensity = time === "night" ? 0.46 : 0.85;
+    if (this.hemisphereLight) this.hemisphereLight.intensity = time === "night" ? 0.82 : 2.05;
+    if (this.keyLight) this.keyLight.intensity = time === "night" ? 1.25 : 3.35;
+    if (this.rimLight) this.rimLight.intensity = time === "night" ? 2.1 : 1.5;
+    if (this.warmFill) this.warmFill.intensity = time === "night" ? 52 : 27;
+    this.applyRouteFilters();
   }
 
   getStats(): RenderStats {
@@ -371,10 +393,12 @@ export class SceneRenderer {
     const ambient = new THREE.AmbientLight(0xd2e7d6, 0.85);
     ambient.name = "Readable ambient fill";
     this.scene.add(ambient);
+    this.ambientLight = ambient;
 
     const hemisphere = new THREE.HemisphereLight(0xafd3d8, 0x243d30, 2.05);
     hemisphere.name = "Cool sky fill";
     this.scene.add(hemisphere);
+    this.hemisphereLight = hemisphere;
 
     const key = new THREE.DirectionalLight(0xffe3ba, 3.35);
     key.name = "Warm key light";
@@ -628,10 +652,11 @@ export class SceneRenderer {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = `Route: ${route.kind}`;
       mesh.userData.levels = [...new Set(route.points.map((point) => levelForY(scene, point.y)))];
+      mesh.userData.schedule = route.schedule ?? "all";
       mesh.renderOrder = 3;
       this.routeRoot.add(mesh);
     }
-    this.routeRoot.visible = this.routesVisible;
+    this.applyRouteFilters();
   }
 
   private buildTacticalMarkers(scene: GeneratedScene): void {
@@ -677,6 +702,18 @@ export class SceneRenderer {
         : [];
       object.visible = levels.length === 0 || overlayTouchesFloor(levels, view);
     }
+  }
+
+  private applyRouteFilters(): void {
+    for (const object of this.routeRoot.children) {
+      const levels = Array.isArray(object.userData.levels)
+        ? object.userData.levels.filter((level): level is number => typeof level === "number")
+        : [];
+      const schedule = object.userData.schedule;
+      object.visible = (levels.length === 0 || overlayTouchesFloor(levels, this.activeFloorView))
+        && routeMatchesTime(schedule, this.timeOfDay);
+    }
+    this.routeRoot.visible = this.routesVisible;
   }
 
   private positionCamera(): void {

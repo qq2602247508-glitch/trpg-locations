@@ -55,6 +55,8 @@ export interface Route {
   purpose?: "movement" | "crowd" | "service" | "escape" | "water";
   /** Relative activity or tactical importance, normalized to 0..1. */
   traffic?: number;
+  /** Time layer used by settlement crowds, patrols, and service traffic. */
+  schedule?: "day" | "night" | "all";
 }
 
 export interface TacticalFeature {
@@ -73,6 +75,26 @@ export interface SceneDiagnostics {
   metrics: Record<string, number>;
 }
 
+export type SettlementBuildingKind = "home" | "tavern" | "shrine" | "warehouse" | "tower" | "manor";
+
+/**
+ * Persistent identity for an independently generated building placed by a
+ * settlement planner. Exterior proxies render immediately; the same seed can
+ * later generate a full tactical interior on demand.
+ */
+export interface BuildingInstance {
+  id: string;
+  archetype: SettlementBuildingKind;
+  seed: string;
+  district: string;
+  positionCells: Vec2;
+  footprintCells: Vec2;
+  rotationY: number;
+  floors: number;
+  floorHeightFeet: number[];
+  detailLevel: "exterior-proxy" | "full-interior";
+}
+
 export interface GeneratedScene {
   version: 1;
   kind: SceneKind;
@@ -89,6 +111,7 @@ export interface GeneratedScene {
   rooms: Room[];
   routes: Route[];
   tactical: TacticalFeature[];
+  buildingInstances?: BuildingInstance[];
   diagnostics: SceneDiagnostics;
   generationMs: number;
   semantic?: {
