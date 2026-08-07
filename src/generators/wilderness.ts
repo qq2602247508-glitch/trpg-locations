@@ -100,21 +100,34 @@ function buildMountain(scene: GeneratedScene, width: number, depth: number, rng:
   let summitX = width / 2;
   let summitZ = depth - 3;
   let summitY = feetToMeters(15);
+  let trailStartX = width / 2;
+  let trailStartZ = 4;
   for (let index = 0; index < terraces; index += 1) {
     const levelY = feetToMeters(index * 5);
-    const terraceW = Math.max(6, width - index * 4.5);
+    const terraceW = Math.max(8, width - index * 4.5);
     const terraceD = Math.max(6, depth / terraces + 3);
     const x = width / 2 + rng.float(-2, 2);
     const z = 3 + terraceD / 2 + index * (depth / terraces - 1);
+    const coreW = Math.max(5, terraceW * rng.float(0.46, 0.64));
     if (index === terraces - 1) {
       summitX = x;
       summitZ = z;
       summitY = levelY;
     }
+    if (index === 0) {
+      trailStartX = x;
+      trailStartZ = z;
+    }
     const id = `mountain-terrace-${index}`;
     rooms.push(id);
-    scene.primitives.push(box(`${id}-floor`, 0, x, levelY, z, terraceW, FLOOR_SLAB_METERS, terraceD, index === terraces - 1 ? "moss" : "rock", ["floor", "terrain", "ledge", "platform"]));
-    scene.rooms.push(createRoom(id, index === terraces - 1 ? "Summit shelf" : `Mountain terrace ${index + 1}`, index === terraces - 1 ? "combat" : "natural", 0, x, z, terraceW, terraceD, levelY));
+    scene.primitives.push(box(`${id}-core`, 0, x, levelY, z, coreW, FLOOR_SLAB_METERS, terraceD, index === terraces - 1 ? "moss" : "rock", ["floor", "terrain", "ledge", "platform", "mountain-core"]));
+    const sideWidth = Math.max(2.2, (terraceW - coreW) * 0.44);
+    for (const side of [-1, 1] as const) {
+      const sideX = x + side * (coreW / 2 + sideWidth * 0.82 + rng.float(-1.4, 1.4));
+      const sideZ = z + rng.float(-terraceD * 0.16, terraceD * 0.16);
+      scene.primitives.push(box(`${id}-ledge-${side === -1 ? "west" : "east"}`, 0, sideX, levelY, sideZ, sideWidth, FLOOR_SLAB_METERS, terraceD * rng.float(0.52, 0.82), "rock", ["floor", "terrain", "ledge", "platform", "fragmented-plateau"]));
+    }
+    scene.rooms.push(createRoom(id, index === terraces - 1 ? "Summit shelf" : `Mountain terrace ${index + 1}`, index === terraces - 1 ? "combat" : "natural", 0, x, z, coreW, terraceD, levelY));
     if (index > 0) {
       const previousY = feetToMeters((index - 1) * 5) + FLOOR_SLAB_METERS;
       const bottom = { xCells: x - 3, zCells: z - depth / terraces * 0.5, yMeters: previousY };
@@ -126,8 +139,8 @@ function buildMountain(scene: GeneratedScene, width: number, depth: number, rng:
     }
     addCover(scene, rng, id, x + terraceW * 0.25, z, levelY, 2);
   }
-  scene.routes.push(createRoute("mountain-trail", "primary", [{ x: 1, z: 2, y: 0 }, { x: width / 2 - 3, z: depth * 0.2, y: feetToMeters(5) }, { x: summitX, z: summitZ, y: summitY }]));
-  scene.tactical.push(tacticalFeature("mountain-entrance", "entrance", 1, 2, 0, 2, "A switchback trail begins below the first terrace."), tacticalFeature("mountain-summit", "highGround", summitX, summitZ, summitY, 3, "The summit shelf dominates every lower approach."));
+  scene.routes.push(createRoute("mountain-trail", "primary", [{ x: trailStartX, z: trailStartZ, y: 0 }, { x: width / 2 - 3, z: depth * 0.2, y: feetToMeters(5) }, { x: summitX, z: summitZ, y: summitY }]));
+  scene.tactical.push(tacticalFeature("mountain-entrance", "entrance", trailStartX, trailStartZ, 0, 2, "A switchback trail begins on the first fragmented terrace."), tacticalFeature("mountain-summit", "highGround", summitX, summitZ, summitY, 3, "The summit shelf dominates every lower approach."));
 }
 
 function buildIce(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
