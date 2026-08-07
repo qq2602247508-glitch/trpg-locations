@@ -59,7 +59,7 @@ describe("SceneProgram v1", () => {
     const first = planSceneProgramLocally("星辰观测所与镜面水池", "adaptive");
     const second = planSceneProgramLocally("星辰观测所与镜面水池", "adaptive");
     expect(first).toEqual(second);
-    expect(first.morphology).toEqual(["plain"]);
+    expect(first.morphology).toEqual(["interior-partitions", "vertical-stack"]);
     expect(first.constraints.gridFeet).toBe(5);
     expect(first.regions.length).toBeGreaterThanOrEqual(2);
   });
@@ -74,6 +74,34 @@ describe("SceneProgram v1", () => {
     expect(hasTag(scene, tag)).toBe(true);
     expect(scene.sceneProgram?.version).toBe(1);
     expect(scene.diagnostics.warnings).toEqual([]);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("realizes mixed fungal magma terrain instead of dropping the secondary theme", () => {
+    const scene = generateScene({ prompt: "幽暗地域蘑菇岩浆地，有超大蘑菇和熔岩喷口", seed: "fungal-magma", size: "large", density: 0.78 }, "adaptive");
+    expect(scene.archetype).toBe("underdark");
+    expect(hasTag(scene, "giant-fungus")).toBe(true);
+    expect(hasTag(scene, "lava-vent")).toBe(true);
+    expect(hasTag(scene, "lava")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("keeps the richer local observatory program and realizes named fixtures", () => {
+    const scene = generateScene({ prompt: "星辰观测所，有黄铜天仪、镜面水池、旋转高台和地下档案室", seed: "observatory-features", size: "medium", density: 0.68 }, "adaptive");
+    expect(scene.sceneProgram?.source).toBe("local");
+    expect(scene.sceneProgram?.regionCount).toBe(6);
+    expect(hasTag(scene, "mirror-pool")).toBe(true);
+    expect(hasTag(scene, "telescope")).toBe(true);
+    expect(hasTag(scene, "archive")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("realizes three actual floating island levels with vertical routes", () => {
+    const scene = generateScene({ prompt: "阿弗纳斯地狱荒原，三层浮空岛屿、铁制战争道路和熔岩裂缝", seed: "three-islands", size: "large", density: 0.8 }, "adaptive");
+    expect(scene.archetype).toBe("floating-islands");
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("floating-island")).length).toBeGreaterThan(100);
+    expect(scene.routes.filter((route) => route.kind === "vertical").length).toBeGreaterThanOrEqual(2);
+    expect(new Set(scene.rooms.map((room) => room.center.y)).size).toBe(3);
     expect(scene.diagnostics.valid).toBe(true);
   });
 

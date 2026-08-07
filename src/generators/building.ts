@@ -1,4 +1,5 @@
 import type { GeneratedScene, GeneratorContext, MaterialKey } from "../schema";
+import type { SceneProgramRegion } from "../scene-program/schema";
 import {
   FLOOR_SLAB_METERS,
   baseScene,
@@ -20,6 +21,33 @@ import {
 } from "./shared";
 
 export type BuildingArchetype = "church" | "temple" | "manor" | "barracks" | "library" | "workshop" | "warehouse" | "fortress" | "mine";
+
+function addProgramRegionFixtures(scene: GeneratedScene, region: SceneProgramRegion, level: number, x: number, z: number, baseY: number, width: number, depth: number): void {
+  const features = new Set(region.features);
+  const y = baseY + FLOOR_SLAB_METERS;
+  const addRows = (prefix: string, count: number, material: MaterialKey, tags: string[]) => {
+    for (let index = 0; index < count; index += 1) {
+      const lane = index % 2 === 0 ? -1 : 1;
+      const row = Math.floor(index / 2);
+      scene.primitives.push(box(`${region.id}-${prefix}-${index}`, level, x + lane * width * 0.22, y, z - depth * 0.24 + row * Math.max(1.15, depth * 0.18), Math.max(1.2, width * 0.22), feetToMeters(prefix === "cabinet" ? 6 : 2.4), prefix === "bed" ? 2.1 : 0.7, material, ["program-building", `program-region:${region.id}`, ...tags]));
+    }
+  };
+  if (features.has("beds") || features.has("rooms")) addRows("bed", Math.max(4, Math.min(8, Math.round(depth / 2))), "wood", ["bed", "medical", "cover"]);
+  if (features.has("operating-room")) {
+    scene.primitives.push(box(`${region.id}-operating-table`, level, x, y, z, 1.3, feetToMeters(3), 2.5, "metal", ["operating-table", "medical", "investigation"]), cylinder(`${region.id}-surgical-lamp`, level, x, y + feetToMeters(6), z, 0.45, feetToMeters(2), "warmLight", ["surgical-lamp", "landmark"]));
+  }
+  if (features.has("archives") || features.has("star-charts")) addRows("cabinet", 6, "wood", ["archive", "evidence", "blocks-sight"]);
+  if (features.has("boiler") || features.has("gear-train")) {
+    for (let index = 0; index < 3; index += 1) scene.primitives.push(cylinder(`${region.id}-machine-${index}`, level, x - width * 0.22 + index * width * 0.22, y, z, 0.85, feetToMeters(7), "metal", ["machinery", "industrial-equipment", "cover", index === 1 ? "hazard" : "service"]));
+  }
+  if (features.has("cold-room") || features.has("autopsy")) {
+    scene.primitives.push(box(`${region.id}-autopsy-table`, level, x, y, z, 1.3, feetToMeters(3), 2.7, "metal", ["autopsy", "evidence", "morgue"]));
+    addRows("cabinet", 4, "metal", ["cold-storage", "morgue", "blocks-sight"]);
+  }
+  if (features.has("reception") || features.has("desk")) scene.primitives.push(box(`${region.id}-reception-desk`, level, x, y, z - depth * 0.18, Math.max(3, width * 0.52), feetToMeters(3.5), 1.1, "wood", ["reception", "public-control", "cover"]));
+  if (features.has("mirror-pool")) scene.primitives.push(primitive(`${region.id}-mirror-pool`, "water", level, x, y + 0.02, z, Math.max(3, width * 0.55) * 1.524, 0.18, Math.max(3, depth * 0.48) * 1.524, "water", ["mirror-pool", "hazard", "landmark"]));
+  if (features.has("telescope")) scene.primitives.push(primitive(`${region.id}-telescope`, "cylinder", level, x, y + feetToMeters(2), z, feetToMeters(5), feetToMeters(14), feetToMeters(5), "metal", ["telescope", "brass-instrument", "landmark"], Math.PI * 0.18));
+}
 
 interface BuildingProfile {
   archetype: BuildingArchetype;
@@ -388,26 +416,29 @@ function generateProgramBuilding(context: GeneratorContext): GeneratedScene {
     scene.primitives.push(stair.primitive);
     scene.routes.push(stairRoute(`program-building-vertical-route-${level}`, stair));
   }
-  const perSide = Math.ceil(program.regions.length / 2);
-  const segmentDepth = (depth - 6) / Math.max(1, perSide);
-  const roomWidth = width / 2 - 2.2;
+  const totalScale = program.regions.reduce((sum, item) => sum + Math.max(0.05, item.scale), 0);
+  let depthCursor = 0;
   for (const [index, region] of program.regions.entries()) {
+    const band = Math.max(0.08, region.scale) / totalScale;
     const side = index % 2 === 0 ? -1 : 1;
-    const row = Math.floor(index / 2);
+    const segmentDepth = Math.max(4.5, (depth - 6) * band * 1.18);
+    const roomWidth = Math.max(5, width * (0.22 + Math.min(0.2, region.scale * 0.2)));
     const level = region.elevation === "sunken" || region.elevation === "low"
       ? 0
       : needsUpper && (region.elevation === "raised" || region.elevation === "high" || region.elevation === "vertical")
         ? upperLevel
         : groundLevel;
     const baseY = baseYs[level] ?? 0;
-    const x = centerX + side * (width * 0.25 + 0.5);
-    const z = 4 + segmentDepth * (row + 0.5);
+    const x = centerX + side * (width * (0.22 + (index % 3) * 0.035)) + (index % 2 === 0 ? -1.2 : 1.1);
+    const z = 4 + (depth - 6) * (depthCursor + band * 0.5);
     const role = region.function === "public" || region.function === "commercial" || region.function === "civic" ? "public" : region.function === "service" || region.function === "industrial" ? "service" : region.function === "combat" || region.function === "hazard" ? "combat" : "private";
     scene.rooms.push(createRoom(`program-room-${region.id}`, region.label, role, level, x, z, roomWidth, Math.max(4, segmentDepth - 0.6), baseY));
     scene.primitives.push(
       ...wallWithOpenings(`program-room-${region.id}-front`, level, x, z - segmentDepth / 2, baseY + FLOOR_SLAB_METERS, roomWidth, feetToMeters(floorHeightFeet[level] ?? 11) - FLOOR_SLAB_METERS, "x", "plaster", ["program-building", `program-region:${region.id}`], { widthCells: 1.25 }),
       box(`program-room-${region.id}-fixture`, level, x + side * roomWidth * 0.2, baseY + FLOOR_SLAB_METERS, z, Math.max(0.8, roomWidth * 0.16), feetToMeters(region.function === "service" ? 4 : 3), Math.max(1.2, segmentDepth * 0.28), region.function === "hazard" ? "hazard" : "wood", ["program-building", `program-region:${region.id}`, "functional-fixture", region.function === "investigation" ? "evidence" : "cover"]),
     );
+    addProgramRegionFixtures(scene, region, level, x, z, baseY, roomWidth, segmentDepth);
+    depthCursor += band;
   }
   for (const relation of program.relations) {
     const from = `program-room-${relation.from}`;

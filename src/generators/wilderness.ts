@@ -18,7 +18,7 @@ import {
   water,
 } from "./shared";
 
-export type WildernessArchetype = "river-valley" | "dry-riverbed" | "impact-crater" | "volcanic" | "infernal-waste" | "burial-ground" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp";
+export type WildernessArchetype = "river-valley" | "dry-riverbed" | "impact-crater" | "volcanic" | "infernal-waste" | "burial-ground" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp" | "floating-islands";
 
 interface TerrainMorphology {
   channel: boolean;
@@ -49,6 +49,7 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   underdark: ["underdark", "幽暗地域", "地底世界", "地下洞窟", "菌林", "发光水晶", "mushroom", "fungal", "蘑菇", "菌类"],
   forest: ["forest", "woodland", "林地", "森林", "树林"],
   swamp: ["swamp", "marsh", "bog", "沼泽", "湿地"],
+  "floating-islands": ["floating island", "sky island", "levitating island", "浮空岛", "浮岛", "空岛", "悬浮岛"],
 };
 
 function includesAny(text: string, terms: readonly string[]): boolean {
@@ -80,6 +81,7 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const morphology = analyzeTerrainMorphology(prompt, hints);
   if (morphology.impactCrater) return "impact-crater";
+  if (WILDERNESS_TERMS["floating-islands"].some((term) => normalized.includes(term))) return "floating-islands";
   if (morphology.infernal) return "infernal-waste";
   if (morphology.crater) return "volcanic";
   if (morphology.burial) return "burial-ground";
@@ -114,7 +116,7 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number; density: number } {
   const { rng, request } = context;
-  const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "dry-riverbed" ? [58, 44, 5] : archetype === "impact-crater" ? [56, 52, 7] : archetype === "volcanic" ? [54, 50, 8] : archetype === "infernal-waste" ? [60, 48, 6] : archetype === "burial-ground" ? [46, 38, 4] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
+  const base: readonly [number, number, number] = archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "dry-riverbed" ? [58, 44, 5] : archetype === "impact-crater" ? [56, 52, 7] : archetype === "volcanic" ? [54, 50, 8] : archetype === "infernal-waste" ? [60, 48, 6] : archetype === "floating-islands" ? [58, 48, 18] : archetype === "burial-ground" ? [46, 38, 4] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
   const scale = request.size === "small" ? 0.62 : request.size === "large" ? 1.55 : 1;
   return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2], density: request.density };
 }
@@ -762,6 +764,60 @@ function buildInfernalWaste(scene: GeneratedScene, width: number, depth: number,
   scene.description = `Infernal-waste composition with eroded ash terrain, an elevated war road, lava fissure, ${wreckCount} war-machine wrecks, crossings, and flanking channels.`;
 }
 
+function buildFloatingIslands(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const islands = [
+    { id: "lower", x: width * 0.25, z: depth * 0.68, y: 0, w: width * 0.36, d: depth * 0.3 },
+    { id: "middle", x: width * 0.58, z: depth * 0.48, y: feetToMeters(20), w: width * 0.34, d: depth * 0.28 },
+    { id: "upper", x: width * 0.38, z: depth * 0.2, y: feetToMeters(40), w: width * 0.3, d: depth * 0.24 },
+  ];
+  for (const [level, island] of islands.entries()) {
+    const cols = Math.max(8, Math.floor(island.w));
+    const rows = Math.max(7, Math.floor(island.d));
+    for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+      const nx = (x - cols / 2) / (cols / 2);
+      const nz = (z - rows / 2) / (rows / 2);
+      const present = Math.hypot(nx, nz * 1.08) < 0.92 + Math.sin(x * 0.8 + z * 0.31 + level) * 0.08 && !(Math.sin(x * 1.7 + z * 0.43 + level * 2) > 0.88 && (x + z) % 3 === 0);
+      if (!present) continue;
+      const px = island.x + x - cols / 2;
+      const pz = island.z + z - rows / 2;
+      const thickness = feetToMeters(rng.int(7, 13));
+      scene.primitives.push(box(`floating-${island.id}-surface-${x}-${z}`, level, px, island.y, pz, 1.02, FLOOR_SLAB_METERS, 1.02, level === 0 ? "rock" : "darkStone", ["floor", "terrain", "floating-island", `island:${island.id}`]));
+      if ((x + z) % 4 === 0) scene.primitives.push(box(`floating-${island.id}-cliff-${x}-${z}`, level, px, island.y - thickness / 2, pz, 1.03, thickness, 1.03, "rock", ["vertical-face", "floating-island", "cliff"]));
+    }
+    scene.rooms.push(createRoom(`floating-${island.id}-room`, `${level + 1}F ${island.id} island`, "combat", level, island.x, island.z, island.w * 0.62, island.d * 0.62, island.y));
+    scene.tactical.push(tacticalFeature(`floating-${island.id}-highground`, "highGround", island.x, island.z, island.y, Math.ceil(Math.max(island.w, island.d) * 0.25), `${level + 1}层浮空岛屿是有真实垂直边界的战术高地。`));
+  }
+  for (let index = 0; index < islands.length - 1; index += 1) {
+    const lower = islands[index];
+    const upper = islands[index + 1];
+    if (!lower || !upper) continue;
+    const stair = stairConnection(`floating-vertical-${index}`, index, { xCells: lower.x, zCells: lower.z, yMeters: lower.y + FLOOR_SLAB_METERS }, { xCells: upper.x, zCells: upper.z, yMeters: upper.y + FLOOR_SLAB_METERS }, 1.4, "metal", ["vertical-route", "vertical-opening", "floating-island", "rope-bridge"]);
+    scene.primitives.push(stair.primitive);
+    scene.routes.push(stairRoute(`floating-vertical-route-${index}`, stair));
+  }
+  connectRooms(scene.rooms, "floating-lower-room", "floating-middle-room");
+  connectRooms(scene.rooms, "floating-middle-room", "floating-upper-room");
+  scene.routes.push(createRoute("floating-crosswind-route", "primary", islands.map((island) => ({ x: island.x, z: island.z, y: island.y }))));
+  const lower = islands[0];
+  const middle = islands[1];
+  if (lower && middle) {
+    scene.primitives.push(
+      corridor("floating-war-road", 0, lower.x - lower.w * 0.25, lower.z, lower.x + lower.w * 0.25, lower.z + 1.5, lower.y + 0.04, 2.2, "metal", ["infernal-war-road", "floating-island", "combat-route"]),
+      corridor("floating-lava-fissure", 1, middle.x - middle.w * 0.28, middle.z - 2, middle.x + middle.w * 0.28, middle.z + 2, middle.y + 0.03, 1.8, "hazard", ["lava", "lava-flow", "floating-island", "hazard"]),
+    );
+    for (let index = 0; index < Math.round(5 + density * 5); index += 1) {
+      const x = lower.x + rng.float(-lower.w * 0.28, lower.w * 0.28);
+      const z = lower.z + rng.float(-lower.d * 0.24, lower.d * 0.24);
+      scene.primitives.push(box(`floating-war-wreck-${index}`, 0, x, lower.y + FLOOR_SLAB_METERS, z, rng.float(1.2, 2.4), feetToMeters(rng.int(3, 7)), rng.float(1, 2.2), "metal", ["wreck-field", "war-machine", "cover", "floating-island"]));
+    }
+  }
+  scene.tactical.push(tacticalFeature("floating-entry", "entrance", islands[0]?.x ?? 1, islands[0]?.z ?? depth - 2, islands[0]?.y ?? 0, 2, "A chained landing reaches the lowest island."));
+  scene.tactical.push(tacticalFeature("floating-void-hazard", "hazard", width * 0.5, depth * 0.5, feetToMeters(8), 6, "岛屿之间是可见的垂直深渊；失足会坠落。"));
+  scene.description = `Three-tier floating-island battlefield with broken footprints, exposed vertical undersides, void gaps, and two vertical routes.`;
+  scene.floors = 3;
+  scene.floorHeightFeet = [20, 20, 20];
+}
+
 function buildBurialGround(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const cols = Math.max(26, Math.floor(width));
   const rows = Math.max(24, Math.floor(depth));
@@ -1033,6 +1089,7 @@ function addPromptDrivenTheme(scene: GeneratedScene, prompt: string, width: numb
   const hasFalls = ["waterfall", "cascade", "瀑布", "银瀑"].some((term) => normalized.includes(term));
   const hasCrystal = ["crystal", "晶体", "水晶", "晶簇"].some((term) => normalized.includes(term));
   const hasLava = ["lava", "magma", "熔岩", "岩浆"].some((term) => normalized.includes(term));
+  const hasFungal = ["mushroom", "fungus", "fungal", "蘑菇", "菌类", "菌林"].some((term) => normalized.includes(term));
   if (hasBone) {
     const spineZ = depth * rng.float(0.42, 0.58);
     scene.primitives.push(corridor("prompt-bone-spine", 0, width * 0.18, spineZ, width * 0.82, spineZ + rng.float(-3, 3), feetToMeters(8), 2.4, "stone", ["bridge", "dragon-spine", "prompt-trait", "combat-route"]));
@@ -1060,6 +1117,15 @@ function addPromptDrivenTheme(scene: GeneratedScene, prompt: string, width: numb
     const z = depth * rng.float(0.42, 0.62);
     scene.primitives.push(corridor("prompt-lava-channel", 0, 2, z, width - 2, z + rng.float(-4, 4), -0.3, 3.2, "hazard", ["lava", "hazard", "prompt-trait"]));
     scene.tactical.push(tacticalFeature("prompt-lava-hazard", "hazard", width * 0.5, z, -0.3, 3, "A lava channel cuts across the terrain grammar and forces a crossing decision."));
+    if (hasFungal) {
+      for (let index = 0; index < 4; index += 1) {
+        const px = width * (0.18 + index * 0.2) + rng.float(-2, 2);
+        const pz = z + rng.float(-8, 8);
+        scene.primitives.push(primitive(`prompt-magma-vent-${index}`, "cylinder", 0, px, feetToMeters(0.4), pz, feetToMeters(rng.float(2.5, 4.5)), feetToMeters(rng.float(1, 3)), feetToMeters(rng.float(2.5, 4.5)), "warmLight", ["lava-vent", "magma", "hazard", "landmark"]));
+        scene.tactical.push(tacticalFeature(`prompt-magma-vent-feature-${index}`, "hazard", px, pz, 0, 2, "熔岩喷口在菌林之间形成持续危险区。"));
+      }
+      scene.primitives.push(corridor("prompt-basalt-crossing", 0, width * 0.5, feetToMeters(0.28), z - 5, width * 0.5, feetToMeters(0.28), 1.2, "darkStone", ["bridge", "basalt", "combat-route"]));
+    }
   }
 }
 
@@ -1135,6 +1201,7 @@ function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype
     "impact-crater": { material: "rock", label: "ejecta block", width: 2.7, depth: 2.3, heightFeet: 7, count: 9 },
     volcanic: { material: "darkStone", label: "basalt block", width: 2.5, depth: 2.2, heightFeet: 7, count: 9 },
     "infernal-waste": { material: "metal", label: "war wreck", width: 2.8, depth: 2.1, heightFeet: 6, count: 9 },
+    "floating-islands": { material: "rock", label: "floating basalt shelf", width: 2.4, depth: 2.1, heightFeet: 7, count: 7 },
     "burial-ground": { material: "stone", label: "broken grave slab", width: 2.3, depth: 1.5, heightFeet: 5, count: 5 },
     rift: { material: "rock", label: "rift pillar", width: 1.8, depth: 1.8, heightFeet: 10, count: 7 },
     mountain: { material: "rock", label: "summit boulder", width: 2.4, depth: 2.1, heightFeet: 5, count: 10 },
@@ -1195,6 +1262,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
     "impact-crater": ["The Fallen Star", "Glass-Rim Impact"],
     volcanic: ["The Cinder Caldera", "Ashmouth Crater"],
     "infernal-waste": ["The Iron Wastes", "War Road of Ash"],
+    "floating-islands": ["The Three Falling Isles", "Ashwind Skybreak"],
     "burial-ground": ["The Crooked Rest", "Graves of the Old Road"],
     rift: ["Dragonbone Rift", "The Split Earth"],
     mountain: ["The Broken Heights", "Ridge of Seven Shelves"],
@@ -1212,6 +1280,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "impact-crater") buildImpactCrater(scene, profile.width, profile.depth, profile.density, context.rng.fork("impact-crater"));
   else if (archetype === "volcanic") buildVolcanic(scene, profile.width, profile.depth, profile.density, context.rng.fork("volcanic"));
   else if (archetype === "infernal-waste") buildInfernalWaste(scene, profile.width, profile.depth, profile.density, context.rng.fork("infernal-waste"));
+  else if (archetype === "floating-islands") buildFloatingIslands(scene, profile.width, profile.depth, profile.density, context.rng.fork("floating-islands"));
   else if (archetype === "burial-ground") buildBurialGround(scene, profile.width, profile.depth, profile.density, context.rng.fork("burial-ground"));
   else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, context.rng.fork("rift"));
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
@@ -1232,7 +1301,9 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   if (["mushroom", "fungus", "fungal", "蘑菇", "菌类", "菌林"].some((term) => fungalText.includes(term))) {
     addGiantFungalLandmarks(scene, profile.width, profile.depth, profile.density, context.rng.fork("giant-fungi"));
   }
-  addStandableProps(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("standable-props"));
-  addTerrainComplexity(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("terrain-complexity"));
+  if (archetype !== "floating-islands") {
+    addStandableProps(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("standable-props"));
+    addTerrainComplexity(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("terrain-complexity"));
+  }
   return scene;
 }

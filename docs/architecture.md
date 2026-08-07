@@ -34,6 +34,8 @@ GenerationRequest
 - Fixed generators retain their established named RNG streams. Adding semantic compilation therefore does not reshuffle already-valid maps.
 - The compiler annotates domain output and may place non-blocking evidence, but it cannot invent routes across room centres. Only a domain generator with knowledge of real surfaces and openings may author movement geometry.
 - D&D plans favour combat routes and control points. CoC plans favour real functions, evidence, restricted spaces and escape routes.
+- 功能建筑按区域特征实例化床位、手术台、档案柜、锅炉、停尸设施、镜面水池和观测仪器；区域比例会改变房间尺寸与位置，不再等分同一条走廊。
+- `floating-islands` 是真实三层几何拓扑：破碎岛面、垂直岩壁、虚空、楼层标签和跨层路线共同生成；它不是叠在普通荒原上的装饰。
 
 Current cross-domain realizations include impact craters, radial fractures, infernal wastes, dragon-bone coverage, functional institutions, three-level basement/ground/upper circulation, and settlement networks. Unknown constructed locations use the functional building compiler instead of hashing into a manor, fortress or other unrelated fantasy archetype.
 

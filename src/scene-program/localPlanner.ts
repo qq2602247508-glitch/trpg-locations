@@ -65,14 +65,17 @@ function inferOperators(text: string): { morphology: MorphologyOperator[]; cover
   if (has(text, ["河流", "河谷", "溪流", "river", "stream"])) morphology.push("channel-cut");
   if (has(text, ["河床", "干涸", "dry river", "wadi"])) morphology.push("dry-channel");
   if (has(text, ["裂谷", "峡谷", "rift", "chasm"])) morphology.push("rift", "ravine");
+  if (has(text, ["浮空", "浮岛", "空岛", "floating island", "sky island", "levitating"])) morphology.push("floating-islands");
   if (has(text, ["墓地", "埋葬", "墓园", "grave", "burial", "cemetery"])) morphology.push("burial-field", "crypt-sink");
   if (has(text, ["城市", "街区", "深水城", "city", "district"])) morphology.push("urban-blocks");
   if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "建筑", "hospital", "hotel", "school", "police"])) morphology.push("interior-partitions", "vertical-stack");
+  if (has(text, ["观测所", "天文台", "observatory"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["森林", "树林", "forest", "woodland"])) coverage.push("woodland", "dense");
   if (has(text, ["蘑菇", "菌林", "fungal", "mushroom"])) coverage.push("fungal");
   if (has(text, ["墓碑", "墓地", "tombstone", "cemetery"])) coverage.push("grave-markers");
   if (has(text, ["龙骨", "巨龙遗骸", "dragonbone", "dragon bones"])) coverage.push("dragon-bones");
   if (has(text, ["残骸", "战车", "wreck", "battlefield", "阿弗纳斯"])) coverage.push("wreck-field");
+  if (has(text, ["浮空", "浮岛", "空岛", "floating island", "sky island", "levitating"])) coverage.push("floating-islands");
   if (has(text, ["灰烬", "焦土", "ash", "地狱", "阿弗纳斯"])) coverage.push("ash");
   if (has(text, ["遗迹", "废墟", "瓦砾", "ruin", "rubble"])) coverage.push("rubble");
   if (has(text, ["医院", "学校", "警局", "hospital", "school", "police"])) coverage.push("institutional-rooms");
@@ -99,6 +102,14 @@ function buildingRegions(text: string): SceneProgramRegion[] {
     region("service", "Kitchen, laundry and plant", "service", 0.15, "low", ["service-corridor", "boiler"], ["machinery"]),
     region("morgue", "Basement morgue", "hazard", 0.13, "sunken", ["cold-room", "autopsy"], ["restricted-access"]),
   ];
+  if (has(text, ["观测所", "天文台", "observatory"])) return [
+    region("arrival", "Instrument court and public entry", "approach", 0.14, "level", ["brass-instruments", "visitor-control"], []),
+    region("dome", "Rotating observatory dome", "combat", 0.22, "high", ["telescope", "open-sky-dome"], ["exposed-edge"]),
+    region("archive", "Restricted astronomical archive", "investigation", 0.16, "sunken", ["star-charts", "sealed-drawers"], ["forbidden-records"]),
+    region("water", "Mirror-water calibration room", "hazard", 0.16, "low", ["mirror-pool", "refraction"], ["deep-water"]),
+    region("mechanism", "Clockwork drive and service gantry", "service", 0.17, "vertical", ["gear-train", "catwalk"], ["moving-machinery"]),
+    region("roof", "Open rooftop platform", "landmark", 0.15, "raised", ["sky-platform", "signal-beacon"], []),
+  ];
   if (has(text, ["旅馆", "酒店", "hotel"])) return [
     region("lobby", "Lobby and reception", "public", 0.2, "level", ["desk", "lounge"], []),
     region("guest-wing", "Guest rooms", "private", 0.34, "raised", ["rooms", "corridor"], []),
@@ -121,6 +132,13 @@ function naturalRegions(text: string, morphology: readonly MorphologyOperator[],
     region("basin", "Crater basin", "hazard", 0.28, "sunken", ["impact-glass"], ["exposure"]),
     region("core", "Impact core", "landmark", 0.12, "low", ["meteor-fragment"], ["radiation"]),
     region("fractures", "Radial fracture field", "circulation", 0.18, "low", ["fracture-routes"], ["collapse"]),
+  ];
+  if (morphology.includes("floating-islands")) return [
+    region("lower-debris", "Falling-debris approach", "approach", 0.16, "low", ["debris-field", "anchor-chain"], ["void-fall"]),
+    region("ash-island", "Lower broken island", "combat", 0.24, "raised", ["lava-veins", "broken-edge"], ["collapse"]),
+    region("middle-island", "Middle floating island", "circulation", 0.28, "high", ["suspended-bridge", "wind-gap"], ["shear-wind"]),
+    region("upper-island", "Upper command island", "landmark", 0.22, "vertical", ["sky-fort", "anchor-spire"], ["exposed-edge"]),
+    region("underside", "Hanging underside and chains", "hazard", 0.1, "sunken", ["chain-route", "cavernous-rock"], ["falling-rock"]),
   ];
   if (coverage.includes("dragon-bones")) return [
     region("approach", "Burial approach", "approach", 0.16, "level", ["grave-markers"], []),
