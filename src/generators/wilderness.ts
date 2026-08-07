@@ -33,10 +33,24 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
 
 export function classifyWildernessArchetype(prompt: string): WildernessArchetype {
   const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  // Named biome/domain beats a secondary landmark in the same prompt. For
+  // example “幽暗地域，连续裂谷” is an underdark map with a rift feature,
+  // not a generic rift map.
+  if (WILDERNESS_TERMS["underground-lake"].some((term) => normalized.includes(term))) return "underground-lake";
+  if (WILDERNESS_TERMS.underdark.some((term) => normalized.includes(term))) return "underdark";
+  let selected: WildernessArchetype = "mountain";
+  let firstIndex = Number.POSITIVE_INFINITY;
   for (const archetype of Object.keys(WILDERNESS_TERMS) as WildernessArchetype[]) {
-    if (WILDERNESS_TERMS[archetype].some((term) => normalized.includes(term))) return archetype;
+    if (archetype === "underdark") continue;
+    for (const term of WILDERNESS_TERMS[archetype]) {
+      const index = normalized.indexOf(term);
+      if (index >= 0 && index < firstIndex) {
+        firstIndex = index;
+        selected = archetype;
+      }
+    }
   }
-  return "mountain";
+  return selected;
 }
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number } {
