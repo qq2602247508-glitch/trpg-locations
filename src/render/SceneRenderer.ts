@@ -33,6 +33,17 @@ interface WorldBounds {
   maxY: number;
 }
 
+const SPATIAL_BATCH_THRESHOLD_METERS = GRID_METERS * 60;
+const SPATIAL_BATCH_SIZE_METERS = GRID_METERS * 28;
+
+export function spatialBatchKey(position: Pick<THREE.Vector3, "x" | "z">, bounds: Pick<WorldBounds, "minX" | "maxX" | "minZ" | "maxZ">): string {
+  const span = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ);
+  if (span < SPATIAL_BATCH_THRESHOLD_METERS) return "whole-scene";
+  const chunkX = Math.floor((position.x - bounds.minX) / SPATIAL_BATCH_SIZE_METERS);
+  const chunkZ = Math.floor((position.z - bounds.minZ) / SPATIAL_BATCH_SIZE_METERS);
+  return `chunk:${chunkX}:${chunkZ}`;
+}
+
 interface PrimitiveBatch {
   host: THREE.Group;
   shape: ScenePrimitive["shape"];
@@ -520,7 +531,8 @@ export class SceneRenderer {
       const isRoof = primitive.material === "roof" || primitive.tags?.includes("roof") === true;
       const layer = this.floorLayers.get(primitive.level) ?? this.createFloorLayer(primitive.level);
       const host = isRoof ? layer.roof : layer.structure;
-      const key = `${primitive.level}|${isRoof ? "roof" : "structure"}|${primitive.shape}|${primitive.material}`;
+      const chunk = spatialBatchKey(primitive.position, this.worldBounds);
+      const key = `${primitive.level}|${isRoof ? "roof" : "structure"}|${primitive.shape}|${primitive.material}|${chunk}`;
       const existing = batchMap.get(key);
       if (existing) {
         existing.primitives.push(primitive);
@@ -564,6 +576,7 @@ export class SceneRenderer {
         mesh.setColorAt(index, this.tintedMaterialColor(batch.material, primitive.id));
       }
       mesh.instanceMatrix.needsUpdate = true;
+      mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.computeBoundingSphere();
       batch.host.add(mesh);

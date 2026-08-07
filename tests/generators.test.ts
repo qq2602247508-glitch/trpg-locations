@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generateScene, generatorRegistry } from "../src/generators";
 import { rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind } from "../src/schema";
-import { fogDensityForSpan, levelForY, overlayTouchesFloor } from "../src/render/SceneRenderer";
+import { fogDensityForSpan, levelForY, overlayTouchesFloor, spatialBatchKey } from "../src/render/SceneRenderer";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
   prompt: "A tactical location with routes, cover, height, and a meaningful encounter objective.",
@@ -39,6 +39,13 @@ describe("scene generators", () => {
     expect(fogDensityForSpan(25)).toBe(0.009);
     expect(fogDensityForSpan(160)).toBeLessThan(0.003);
     expect(fogDensityForSpan(160)).toBeGreaterThanOrEqual(0.0014);
+  });
+
+  it("keeps small maps in one render batch region and partitions large districts", () => {
+    const smallBounds = { minX: 0, maxX: 30, minZ: 0, maxZ: 30 };
+    expect(spatialBatchKey({ x: 2, z: 2 }, smallBounds)).toBe("whole-scene");
+    const cityBounds = { minX: 0, maxX: 160, minZ: 0, maxZ: 120 };
+    expect(spatialBatchKey({ x: 5, z: 5 }, cityBounds)).not.toBe(spatialBatchKey({ x: 150, z: 110 }, cityBounds));
   });
 
   it("registers each fixed topology", () => {
