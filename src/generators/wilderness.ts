@@ -1,5 +1,6 @@
 import type { GeneratedScene, GeneratorContext, MaterialKey } from "../schema";
 import {
+  CELL,
   FLOOR_SLAB_METERS,
   baseScene,
   box,
@@ -622,6 +623,71 @@ function addPromptDrivenTheme(scene: GeneratedScene, prompt: string, width: numb
   }
 }
 
+interface StandablePropSpec {
+  material: MaterialKey;
+  label: string;
+  width: number;
+  depth: number;
+  heightFeet: number;
+  count: number;
+  yFeet?: number;
+}
+
+/** Adds a natural object as a real tactical surface instead of a decorative
+ * mesh. The top cap receives the same 5-ft surface grid as terrain, and tags
+ * expose stand/jump/cover semantics to future pathfinding and AI. */
+function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  const specs: Partial<Record<WildernessArchetype, StandablePropSpec>> = {
+    "river-valley": { material: "rock", label: "river boulder", width: 2.6, depth: 2.2, heightFeet: 5, count: 8 },
+    rift: { material: "rock", label: "rift pillar", width: 1.8, depth: 1.8, heightFeet: 10, count: 7 },
+    mountain: { material: "rock", label: "summit boulder", width: 2.4, depth: 2.1, heightFeet: 5, count: 10 },
+    ice: { material: "rock", label: "ice block", width: 2.5, depth: 2.2, heightFeet: 5, count: 7 },
+    ruin: { material: "stone", label: "fallen masonry", width: 2.8, depth: 1.6, heightFeet: 5, count: 6 },
+    "underground-lake": { material: "rock", label: "lake rock", width: 2.2, depth: 2, heightFeet: 5, count: 8 },
+    underdark: { material: "darkStone", label: "cavern shelf", width: 2.4, depth: 2, heightFeet: 5, count: 9 },
+    forest: { material: "wood", label: "ancient tree root", width: 2.8, depth: 2.2, heightFeet: 5, count: 10 },
+    swamp: { material: "wood", label: "deadwood hummock", width: 2.6, depth: 1.8, heightFeet: 5, count: 8 },
+  };
+  const spec = specs[archetype];
+  if (!spec) return;
+  const distanceToSegment = (x: number, z: number, ax: number, az: number, bx: number, bz: number): number => {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const lengthSq = dx * dx + dz * dz;
+    const t = lengthSq > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / lengthSq)) : 0;
+    return Math.hypot(x - (ax + t * dx), z - (az + t * dz));
+  };
+  const nearAuthoredRoute = (x: number, z: number): boolean => scene.routes.some((route) => route.points.some((point, pointIndex) => {
+    const next = route.points[pointIndex + 1];
+    const pointX = point.x / CELL;
+    const pointZ = point.z / CELL;
+    const nextX = next ? next.x / CELL : pointX;
+    const nextZ = next ? next.z / CELL : pointZ;
+    return distanceToSegment(x, z, pointX, pointZ, nextX, nextZ) < 3.4;
+  }));
+  for (let index = 0; index < spec.count; index += 1) {
+    let x = rng.float(3, width - 3);
+    let z = rng.float(3, depth - 3);
+    // Keep standable props out of authored route portals and switchbacks. A
+    // boulder can block a route visually, but it must not make a vertical
+    // connection fail validation or become an accidental floor collision.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (!nearAuthoredRoute(x, z)) break;
+      x = rng.float(3, width - 3);
+      z = rng.float(3, depth - 3);
+    }
+    const baseY = feetToMeters(spec.yFeet ?? 0);
+    const height = feetToMeters(spec.heightFeet + rng.int(-1, 2));
+    const w = spec.width * rng.float(0.78, 1.3);
+    const d = spec.depth * rng.float(0.78, 1.25);
+    scene.primitives.push(
+      box(`standable-prop-body-${archetype}-${index}`, 0, x, baseY, z, w, height, d, spec.material, ["natural-prop", "cover", "blocks-sight", spec.label.replaceAll(" ", "-")]),
+      box(`standable-prop-top-${archetype}-${index}`, 0, x, baseY + height, z, w * 0.72, FLOOR_SLAB_METERS, d * 0.72, spec.material, ["floor", "terrain", "standable", "jumpable:5ft", "high-ground", "natural-prop"]),
+    );
+    scene.tactical.push(tacticalFeature(`standable-prop-feature-${archetype}-${index}`, "highGround", x, z, baseY + height, Math.max(1, Math.ceil(Math.max(w, d) / 2)), `${spec.label} can be occupied as a 5-ft jumpable high point and provides hard cover.`));
+  }
+}
+
 export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const archetype = classifyWildernessArchetype(context.request.prompt);
   const profile = bounds(context, archetype);
@@ -649,6 +715,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
   addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"));
   addPromptDrivenTheme(scene, context.request.prompt, profile.width, profile.depth, context.rng.fork("prompt-theme"));
+  addStandableProps(scene, archetype, profile.width, profile.depth, context.rng.fork("standable-props"));
   addTerrainComplexity(scene, archetype, profile.width, profile.depth, context.rng.fork("terrain-complexity"));
   return scene;
 }
