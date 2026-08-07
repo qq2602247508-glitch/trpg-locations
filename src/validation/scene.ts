@@ -409,7 +409,11 @@ function validateGeometryInvariants(
           && pointNearPrimitiveSurface(crossing, primitive, ROUTE_SURFACE_MARGIN_METERS, ROUTE_SURFACE_MARGIN_METERS)
           && rangesOverlap(primitiveVerticalSpan(primitive), { min: crossing.y, max: crossing.y }, ROUTE_SURFACE_MARGIN_METERS)
         ));
-        const isOutdoorEdge = kind === "wilderness" && hasAnyTag(floor, ["terrain", "ledge", "platform", "bridge"]);
+        // Adaptive composition intentionally changes `scene.kind`, so domain
+        // identity cannot be inferred from that discriminator here. Explicit
+        // terrain + edge tags are stronger evidence and remain valid after a
+        // wilderness scene becomes an adaptive composition.
+        const isOutdoorEdge = hasTag(floor, "terrain") && hasAnyTag(floor, ["ledge", "platform", "bridge"]);
         if (!hasCrossingSupport) {
           geometryError(`Vertical route ${route.id} crosses solid floor slab ${floor.id} without local stair or shaft opening evidence.`);
         } else if (!hasCrossingOpening && !isOutdoorEdge) {

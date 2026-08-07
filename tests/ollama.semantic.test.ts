@@ -40,4 +40,11 @@ describe("Ollama semantic boundary", () => {
     expect(await classifyWithOllama("一座有角塔和城墙的堡垒", { fetcher })).toBeUndefined();
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("falls back when the service returns valid JSON with the wrong contract", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      message: { content: JSON.stringify({ location_name: "观测所", arbitrary_dimensions: [99, 99] }) },
+    }), { status: 200 }));
+    expect(await classifyWithOllama("星辰观测所", { fetcher, timeoutMs: 100 })).toBeUndefined();
+  });
 });
