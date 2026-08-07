@@ -31,6 +31,8 @@ npm run build
 
 生成器输出房间、路线、战术特征、几何模块与诊断报告。Three.js 只负责表现这些结果，因此规则层可以批量测试而无需启动浏览器。
 
+浏览器中的规划与几何校验在 Web Worker 执行；Three.js 渲染核心延迟加载。当 Worker 不可用时，会按需加载同一确定性生成器作为回退。
+
 架构和扩展约束见 [docs/architecture.md](docs/architecture.md)。
 
 完整的阶段路线、尺寸策略和自动/人工验收清单见 [docs/execution-plan.md](docs/execution-plan.md)。

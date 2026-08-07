@@ -1,8 +1,7 @@
-import { generateScene } from "../generators";
 import { GRID_FEET, GRID_METERS } from "../schema";
 import type { GeneratedScene, GenerationRequest, SceneKind } from "../schema";
-import { SceneRenderer } from "../render/SceneRenderer";
 import type { RenderStats } from "../render/SceneRenderer";
+import { GenerationClient } from "../workers/GenerationClient";
 
 const KIND_LABELS: Record<SceneKind, string> = {
   adaptive: "自适应题材",
@@ -41,7 +40,7 @@ interface AppElements {
   viewport: HTMLElement;
 }
 
-export function mountApp(root: HTMLElement): void {
+export async function mountApp(root: HTMLElement): Promise<void> {
   root.innerHTML = `
     <main class="app-shell">
       <header class="topbar">
@@ -203,7 +202,10 @@ export function mountApp(root: HTMLElement): void {
   `;
 
   const elements = getElements(root);
+  setStatus(elements, "加载渲染核心", "working");
+  const [{ SceneRenderer }] = await Promise.all([import("../render/SceneRenderer")]);
   const renderer = new SceneRenderer(elements.viewport);
+  const generationClient = new GenerationClient();
   let activeScene: GeneratedScene | undefined;
   let routeDebug = false;
   let tacticalDebug = false;
@@ -248,7 +250,10 @@ export function mountApp(root: HTMLElement): void {
     renderer.setTacticalVisibility(tacticalDebug);
     setToggle(elements.tacticalToggle, tacticalDebug);
   });
-  window.addEventListener("beforeunload", () => renderer.dispose(), { once: true });
+  window.addEventListener("beforeunload", () => {
+    generationClient.dispose();
+    renderer.dispose();
+  }, { once: true });
 
   async function generate(): Promise<void> {
     const prompt = elements.prompt.value.trim();
@@ -273,7 +278,7 @@ export function mountApp(root: HTMLElement): void {
 
     try {
       const generationStartedAt = performance.now();
-      const generated = await Promise.resolve(generateScene(request, kind));
+      const generated = await generationClient.generate(request, kind);
       // Generation stays deterministic in the rule layer; elapsed time is a UI-only readout.
       const scene: GeneratedScene = {
         ...generated,

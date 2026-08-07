@@ -53,4 +53,6 @@ GenerationRequest
 - 重复几何优先实例化。
 - 静态几何按材质与楼层组织。
 - 调试线框、路线和战术标记可独立关闭。
+- 规划与校验由 `generation.worker.ts` 移出渲染主线程；不支持 Worker 的环境使用按需加载的确定性回退。
+- Three.js/`SceneRenderer` 是独立延迟块；当前首屏 JS 约 18 KB，规划 worker 约 96 KB，渲染块约 552 KB（压缩前）。
 - 大型聚落后续按区块生成，建筑内部按需加载。
