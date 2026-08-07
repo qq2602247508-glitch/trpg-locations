@@ -4,7 +4,7 @@ import { SeededRandom } from "../src/core/random";
 import { instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
-import { fogDensityForSpan, levelForY, overlayTouchesFloor, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
+import { floorBaseY, fogDensityForSpan, levelForY, overlayTouchesFloor, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
   prompt: "A tactical location with routes, cover, height, and a meaningful encounter objective.",
@@ -35,6 +35,16 @@ describe("scene generators", () => {
     expect(overlayTouchesFloor([0, 1], 2)).toBe(false);
     expect(overlayTouchesFloor([2], "cut")).toBe(true);
     expect(overlayTouchesFloor([2], "roof")).toBe(true);
+  });
+
+  it("keeps the tactical grid aligned with every authored floor base", () => {
+    const scene = generateScene(request("grid-floor-contract"), "tower");
+    expect(scene.floors).toBeGreaterThanOrEqual(2);
+    for (let level = 0; level < scene.floors; level += 1) {
+      const baseY = floorBaseY(scene, level);
+      expect(levelForY(scene, baseY)).toBe(level);
+      expect(baseY).toBeCloseTo((level === 0 ? 0 : scene.floorHeightFeet.slice(0, level).reduce((sum, feet) => sum + feet, 0) * 0.3048));
+    }
   });
 
   it("reduces fog density as generated maps grow", () => {

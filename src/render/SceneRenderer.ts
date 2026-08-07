@@ -56,11 +56,7 @@ const FEET_TO_METERS = 0.3048;
 /** Resolve a world-space Y coordinate to the authored logical floor. */
 export function levelForY(scene: GeneratedScene, y: number): number {
   if (scene.floors <= 1) return 0;
-  const floorBases = [0];
-  for (let level = 1; level < scene.floors; level += 1) {
-    const previousHeightFeet = scene.floorHeightFeet[level - 1] ?? scene.floorHeightFeet.at(-1) ?? 10;
-    floorBases.push((floorBases[level - 1] ?? 0) + previousHeightFeet * FEET_TO_METERS);
-  }
+  const floorBases = Array.from({ length: scene.floors }, (_, level) => floorBaseY(scene, level));
 
   let closestLevel = 0;
   let closestDistance = Number.POSITIVE_INFINITY;
@@ -72,6 +68,15 @@ export function levelForY(scene: GeneratedScene, y: number): number {
     }
   }
   return closestLevel;
+}
+
+/** World-space base height for a logical floor, shared by geometry and overlays. */
+export function floorBaseY(scene: GeneratedScene, level: number): number {
+  let baseY = 0;
+  for (let index = 0; index < level; index += 1) {
+    baseY += (scene.floorHeightFeet[index] ?? scene.floorHeightFeet.at(-1) ?? 10) * FEET_TO_METERS;
+  }
+  return baseY;
 }
 
 export function overlayTouchesFloor(levels: readonly number[], view: FloorView): boolean {
@@ -291,6 +296,7 @@ export class SceneRenderer {
       }
     }
     this.applyRouteFilters();
+    this.applyOverlayFloorFilter(this.gridRoot, view);
     this.applyOverlayFloorFilter(this.tacticalRoot, view);
   }
 
@@ -513,33 +519,31 @@ export class SceneRenderer {
     ground.receiveShadow = true;
     this.gridRoot.add(ground);
 
-    const linePositions: number[] = [];
-    const y = FLOOR_OVERLAY_Y;
-    const pushLine = (x1: number, z1: number, x2: number, z2: number) => {
-      linePositions.push(x1, y, z1, x2, y, z2);
-    };
-
-    for (let x = minX; x <= maxX + 0.001; x += GRID_METERS) {
-      pushLine(x, minZ, x, maxZ);
+    for (let level = 0; level < Math.max(1, scene.floors); level += 1) {
+      const linePositions: number[] = [];
+      const y = floorBaseY(scene, level) + FLOOR_OVERLAY_Y;
+      const pushLine = (x1: number, z1: number, x2: number, z2: number) => {
+        linePositions.push(x1, y, z1, x2, y, z2);
+      };
+      for (let x = minX; x <= maxX + 0.001; x += GRID_METERS) pushLine(x, minZ, x, maxZ);
+      for (let z = minZ; z <= maxZ + 0.001; z += GRID_METERS) pushLine(minX, z, maxX, z);
+      const gridGeometry = new THREE.BufferGeometry();
+      gridGeometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+      const gridMaterial = new THREE.LineBasicMaterial({
+        color: 0x94e2ba,
+        // Respect terrain and walls. Drawing the ground grid through every
+        // elevated surface flattened mountains, bridges, and multi-storey rooms
+        // into one unreadable plane.
+        depthTest: true,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const grid = new THREE.LineSegments(gridGeometry, gridMaterial);
+      grid.name = `5 ft / 1.524 m grid · level ${level + 1}`;
+      grid.userData.levels = [level];
+      grid.renderOrder = 2;
+      this.gridRoot.add(grid);
     }
-    for (let z = minZ; z <= maxZ + 0.001; z += GRID_METERS) {
-      pushLine(minX, z, maxX, z);
-    }
-    const gridGeometry = new THREE.BufferGeometry();
-    gridGeometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
-    const gridMaterial = new THREE.LineBasicMaterial({
-      color: 0x94e2ba,
-      // Respect terrain and walls. Drawing the ground grid through every
-      // elevated surface flattened mountains, bridges, and multi-storey rooms
-      // into one unreadable plane.
-      depthTest: true,
-      depthWrite: false,
-      toneMapped: false,
-    });
-    const grid = new THREE.LineSegments(gridGeometry, gridMaterial);
-    grid.name = "5 ft / 1.524 m grid";
-    grid.renderOrder = 2;
-    this.gridRoot.add(grid);
   }
 
   private buildPrimitiveBatches(scene: GeneratedScene): void {
