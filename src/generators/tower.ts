@@ -71,6 +71,8 @@ function roundTowerWalls(
 /** A vertically navigable tower whose silhouette and floor use are independently varied. */
 export function generateTower(context: GeneratorContext): GeneratedScene {
   const { request, rng } = context;
+  const promptText = request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const wizardTower = ["法师塔", "魔法塔", "巫师塔", "wizard tower", "mage tower"].some((term) => promptText.includes(term));
   const profile = towerProfile(context);
   const isRound = rng.bool();
   const floorHeightFeet = Array.from({ length: profile.floors }, () => rng.int(13, 15));
@@ -98,7 +100,9 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
   const platformOffset = Math.max(1.7, profile.footprint * 0.2);
   const entranceX = center - profile.footprint / 2 + 0.7;
   const roomRoles: Array<"private" | "service" | "combat"> = ["combat", "service", "private"];
-  const roomNames = ["Guard chamber", "Store and winch room", "Map room", "Signal chamber", "Observatory", "Ward room", "Bell floor"];
+  const roomNames = wizardTower
+    ? ["Arcane entry", "Alchemy laboratory", "Restricted library", "Spell observatory", "Summoning chamber", "Roof duel platform"]
+    : ["Guard chamber", "Store and winch room", "Map room", "Signal chamber", "Observatory", "Ward room", "Bell floor"];
   const stairBottomPortal = (level: number, yMeters: number) => ({
     xCells: center + (level % 2 === 0 ? -stairRun / 2 : stairRun / 2),
     zCells: center,
@@ -125,6 +129,13 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
       createRoom(roomId, roomName, roomRole, level, center, center, profile.footprint - 1.2, profile.footprint - 1.2, baseY),
       createRoom(stairsId, level === 0 ? "Lower landing" : "Stair landing", "circulation", level, landingPortal.xCells, landingPortal.zCells, 3, 3, baseY),
     );
+    if (wizardTower) {
+      const featureTag = level === 1 ? "alchemy" : level === 2 ? "library" : level === 3 ? "observatory" : level === profile.floors - 1 ? "roof-duel" : "arcane-core";
+      scene.primitives.push(
+        box(`wizard-${featureTag}-${level}`, level, center, baseY + FLOOR_SLAB_METERS, center, Math.max(2.2, profile.footprint * 0.34), level === profile.floors - 1 ? 2.4 : 1.6, Math.max(2.2, profile.footprint * 0.28), featureTag === "alchemy" ? "hazard" : featureTag === "library" ? "wood" : "darkStone", ["wizard-tower", featureTag, "cover"]),
+      );
+      scene.tactical.push(tacticalFeature(`wizard-${featureTag}-tactical-${level}`, featureTag === "roof-duel" ? "highGround" : featureTag === "alchemy" ? "hazard" : "cover", center, center, baseY, 2, `The ${featureTag} floor gives the wizard tower a distinct tactical purpose.`));
+    }
     connectRooms(scene.rooms, roomId, stairsId);
     if (level > 0) connectRooms(scene.rooms, `tower-landing-${level - 1}`, stairsId);
 
