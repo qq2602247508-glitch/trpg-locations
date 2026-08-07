@@ -149,12 +149,23 @@ describe("scene generators", () => {
     expect(harbor.routes.some((route) => route.kind === "primary")).toBe(true);
     expect(harbor.rooms.filter((room) => room.id.startsWith("settlement-building-")).length).toBeGreaterThanOrEqual(4);
     expect(harbor.primitives.filter((primitive) => primitive.tags?.includes("road")).length).toBeGreaterThanOrEqual(8);
+    expect(harbor.routes.some((route) => route.purpose === "crowd" && (route.traffic ?? 0) > 0.8)).toBe(true);
+    expect(harbor.routes.some((route) => route.purpose === "service")).toBe(true);
   });
 
   it("prefers a specific harbor grammar inside a named city", () => {
     const harborDistrict = generateScene({ ...request("settlement-deepwater-harbor"), prompt: "深水城港区的仓库、市场和码头", size: "large" }, "settlement");
     expect(harborDistrict.archetype).toBe("harbor");
     expect(hasTag(harborDistrict, "harbor-edge")).toBe(true);
+  });
+
+  it("propagates requested density into settlement building count and adds city defenses", () => {
+    const sparse = generateScene({ ...request("settlement-density", "large", 0), prompt: "大型城市街区" }, "settlement");
+    const dense = generateScene({ ...request("settlement-density", "large", 1), prompt: "大型城市街区" }, "settlement");
+    const buildingCount = (scene: GeneratedScene) => scene.rooms.filter((room) => room.id.startsWith("settlement-building-")).length;
+    expect(buildingCount(dense)).toBeGreaterThan(buildingCount(sparse));
+    expect(hasTag(dense, "city-wall")).toBe(true);
+    expect(hasTag(dense, "corner-tower")).toBe(true);
   });
 
   it.each([

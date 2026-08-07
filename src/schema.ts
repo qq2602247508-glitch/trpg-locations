@@ -51,6 +51,10 @@ export interface Route {
   id: string;
   kind: "primary" | "alternate" | "vertical" | "waterflow";
   points: Vec3[];
+  /** Semantic use stays independent from the rendering/debug route kind. */
+  purpose?: "movement" | "crowd" | "service" | "escape" | "water";
+  /** Relative activity or tactical importance, normalized to 0..1. */
+  traffic?: number;
 }
 
 export interface TacticalFeature {

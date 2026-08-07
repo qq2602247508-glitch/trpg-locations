@@ -543,11 +543,13 @@ export function createRoute(
   id: string,
   kind: Route["kind"],
   points: Array<{ x: number; z: number; y?: number }>,
+  metadata: Pick<Route, "purpose" | "traffic"> = {},
 ): Route {
   return {
     id,
     kind,
     points: points.map((point) => cellPoint(point.x, point.z, point.y ?? 0)),
+    ...metadata,
   };
 }
 

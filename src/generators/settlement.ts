@@ -60,11 +60,78 @@ function settlementBounds(context: GeneratorContext, archetype: SettlementArchet
   const { rng, request } = context;
   const base: readonly [number, number, number] = archetype === "village" ? [32, 28, 6] : archetype === "harbor" ? [62, 46, 12] : archetype === "city" ? [80, 66, 18] : [52, 42, 10];
   const scale = request.size === "small" ? 0.8 : request.size === "large" ? 1.25 : 1;
+  const densityFactor = 0.72 + request.density * 0.58;
   return {
     width: Math.round(base[0] * scale) + rng.int(-3, 4),
     depth: Math.round(base[1] * scale) + rng.int(-3, 4),
-    buildings: Math.max(4, Math.round(base[2] * scale) + rng.int(-1, 2)),
+    buildings: Math.max(4, Math.round(base[2] * scale * densityFactor) + rng.int(-1, 2)),
   };
+}
+
+function addPerimeterDefenses(
+  scene: GeneratedScene,
+  archetype: SettlementArchetype,
+  width: number,
+  landDepth: number,
+  gates: { westZ: number; eastZ: number; northX: number; southX: number },
+  roadWidth: number,
+): void {
+  if (archetype !== "city" && archetype !== "town") return;
+  const gap = roadWidth + 1.6;
+  const wallHeight = feetToMeters(archetype === "city" ? 18 : 12);
+  const segments: Array<{ id: string; x: number; z: number; width: number; depth: number }> = [];
+  const splitVertical = (id: string, x: number, gateZ: number) => {
+    const before = gateZ - gap / 2;
+    const after = gateZ + gap / 2;
+    if (before > 1) segments.push({ id: `${id}-north`, x, z: before / 2, width: 0.75, depth: before });
+    if (landDepth - after > 1) segments.push({ id: `${id}-south`, x, z: (after + landDepth) / 2, width: 0.75, depth: landDepth - after });
+  };
+  const splitHorizontal = (id: string, z: number, gateX: number) => {
+    const before = gateX - gap / 2;
+    const after = gateX + gap / 2;
+    if (before > 1) segments.push({ id: `${id}-west`, x: before / 2, z, width: before, depth: 0.75 });
+    if (width - after > 1) segments.push({ id: `${id}-east`, x: (after + width) / 2, z, width: width - after, depth: 0.75 });
+  };
+  splitVertical("settlement-west-wall", 0.4, gates.westZ);
+  splitVertical("settlement-east-wall", width - 0.4, gates.eastZ);
+  splitHorizontal("settlement-north-wall", 0.4, gates.northX);
+  splitHorizontal("settlement-south-wall", landDepth - 0.4, gates.southX);
+  for (const segment of segments) {
+    scene.primitives.push(box(segment.id, 0, segment.x, FLOOR_SLAB_METERS, segment.z, segment.width, wallHeight, segment.depth, "darkStone", ["fortification", "city-wall", "cover"]));
+  }
+  if (archetype === "city") {
+    for (const [index, corner] of [[0.8, 0.8], [width - 0.8, 0.8], [0.8, landDepth - 0.8], [width - 0.8, landDepth - 0.8]].entries()) {
+      scene.primitives.push(cylinder(`settlement-wall-tower-${index + 1}`, 0, corner[0] ?? 0.8, FLOOR_SLAB_METERS, corner[1] ?? 0.8, 2.4, wallHeight * 1.35, "darkStone", ["fortification", "corner-tower", "high-ground"]));
+    }
+  }
+}
+
+function connectDistrictGraph(scene: GeneratedScene, plazaId: string): void {
+  const districtRooms = new Map<string, typeof scene.rooms>();
+  for (const room of scene.rooms.filter((candidate) => candidate.id.startsWith("settlement-building-"))) {
+    const district = room.name.split(" at ").at(-1) ?? "mixed";
+    const group = districtRooms.get(district) ?? [];
+    group.push(room);
+    districtRooms.set(district, group);
+  }
+  const hubs: string[] = [];
+  for (const group of districtRooms.values()) {
+    const first = group[0];
+    if (!first) continue;
+    hubs.push(first.id);
+    for (let index = 1; index < group.length; index += 1) {
+      const previous = group[index - 1];
+      const current = group[index];
+      if (previous && current) connectRooms(scene.rooms, previous.id, current.id);
+    }
+  }
+  if (hubs[0]) connectRooms(scene.rooms, plazaId, hubs[0]);
+  for (let index = 1; index < hubs.length; index += 1) {
+    const previous = hubs[index - 1];
+    const current = hubs[index];
+    if (previous && current) connectRooms(scene.rooms, previous, current);
+  }
+  if (hubs.length > 2 && hubs.at(-1)) connectRooms(scene.rooms, hubs.at(-1) as string, plazaId);
 }
 
 function addBuildingModule(scene: GeneratedScene, building: SettlementBuilding, rng: GeneratorContext["rng"]): void {
@@ -180,6 +247,7 @@ export function generateSettlement(context: GeneratorContext): GeneratedScene {
     scene.routes.push(createRoute("settlement-waterfront-route", "waterflow", [{ x: 2, z: waterZ, y: -0.08 }, { x: width - 2, z: waterZ, y: -0.08 }]));
     scene.tactical.push(tacticalFeature("settlement-quay-hazard", "hazard", centreX, waterZ, -0.08, 3, "The water edge is a dangerous fallback and a source of boats."));
   }
+  addPerimeterDefenses(scene, archetype, width, landDepth, { westZ, eastZ, northX, southX }, roadWidth);
 
   const modules = distributeBuildings(context, width, depth, buildingCount, archetype, roads);
   for (const module of modules) {
@@ -187,16 +255,22 @@ export function generateSettlement(context: GeneratorContext): GeneratedScene {
   }
   const plazaRoom = createRoom("settlement-plaza-room", "Central plaza", "circulation", 0, centreX, centreZ, archetype === "city" ? 9 : 7, archetype === "city" ? 9 : 7);
   scene.rooms.push(plazaRoom);
-  for (const room of scene.rooms.filter((candidate) => candidate.id.endsWith("-room") && candidate.id !== plazaRoom.id)) connectRooms(scene.rooms, plazaRoom.id, room.id);
+  connectDistrictGraph(scene, plazaRoom.id);
 
   scene.routes.push(
-    createRoute("settlement-primary-route", "primary", [{ x: 0, z: westZ }, { x: westBend.x, z: westBend.z }, { x: centreX, z: centreZ }, { x: eastBend.x, z: eastBend.z }, { x: width, z: eastZ }]),
-    createRoute("settlement-alternate-route", "alternate", [{ x: northX, z: 0 }, { x: northBend.x, z: northBend.z }, { x: centreX, z: centreZ }, { x: southBend.x, z: southBend.z }, { x: southX, z: depth }]),
+    createRoute("settlement-primary-route", "primary", [{ x: 0, z: westZ }, { x: westBend.x, z: westBend.z }, { x: centreX, z: centreZ }, { x: eastBend.x, z: eastBend.z }, { x: width, z: eastZ }], { purpose: "crowd", traffic: 0.95 }),
+    createRoute("settlement-alternate-route", "alternate", [{ x: northX, z: 0 }, { x: northBend.x, z: northBend.z }, { x: centreX, z: centreZ }, { x: southBend.x, z: southBend.z }, { x: southX, z: archetype === "harbor" ? landDepth : depth }], { purpose: "crowd", traffic: 0.72 }),
+    createRoute("settlement-market-circulation", "alternate", [{ x: westBend.x, z: westBend.z }, { x: centreX - 3, z: centreZ - 3 }, { x: centreX + 3, z: centreZ - 3 }, { x: eastBend.x, z: eastBend.z }], { purpose: "crowd", traffic: 0.84 }),
+    createRoute("settlement-service-flow", "alternate", [{ x: width * 0.18, z: depth * 0.78 }, { x: westBend.x, z: westBend.z }, { x: centreX, z: centreZ }], { purpose: "service", traffic: 0.5 }),
   );
   scene.tactical.push(
     tacticalFeature("settlement-main-gate", "entrance", 1, westZ, 0, 2, "A major gate feeds the busiest route through the settlement."),
     tacticalFeature("settlement-plaza-choke", "chokepoint", centreX, centreZ, 0, 3, "The plaza is a natural meeting point and an exposed combat arena."),
   );
+  if (archetype === "harbor") {
+    scene.routes.push(createRoute("settlement-cargo-flow", "alternate", [{ x: 2, z: depth - 5.6 }, { x: southX, z: landDepth - 0.5 }, { x: southBend.x, z: southBend.z }, { x: centreX, z: centreZ }], { purpose: "service", traffic: 0.88 }));
+    scene.tactical.push(tacticalFeature("settlement-customs-choke", "chokepoint", southX, landDepth - 0.5, 0, 2, "Cargo handlers, customs officers, and carts create a predictable waterfront bottleneck."));
+  }
   if (archetype === "city" || archetype === "town") scene.tactical.push(tacticalFeature("settlement-landmark", "highGround", centreX + 4, centreZ - 3, 0, 2, "A civic landmark provides orientation and a defensible gathering point."));
   return scene;
 }

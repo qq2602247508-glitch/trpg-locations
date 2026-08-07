@@ -602,7 +602,7 @@ export class SceneRenderer {
       const geometry = new THREE.TubeGeometry(
         curve,
         Math.min(96, Math.max(12, points.length * 12)),
-        0.07,
+        0.055 + (route.traffic ?? 0.35) * 0.055,
         6,
         false,
       );

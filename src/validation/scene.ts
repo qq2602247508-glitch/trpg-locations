@@ -48,6 +48,7 @@ const PRIMITIVE_SHAPES = ["box", "cylinder", "cone", "sphere", "stairs", "water"
 const MATERIAL_KEYS = ["stone", "darkStone", "wood", "plaster", "roof", "metal", "water", "earth", "rock", "moss", "hazard", "warmLight"] as const satisfies readonly MaterialKey[];
 const ROOM_ROLES = ["public", "private", "service", "circulation", "combat", "natural"] as const satisfies readonly Room["role"][];
 const ROUTE_KINDS = ["primary", "alternate", "vertical", "waterflow"] as const satisfies readonly Route["kind"][];
+const ROUTE_PURPOSES = ["movement", "crowd", "service", "escape", "water"] as const satisfies readonly NonNullable<Route["purpose"]>[];
 const TACTICAL_KINDS = ["cover", "highGround", "hazard", "chokepoint", "entrance", "secret"] as const satisfies readonly TacticalFeature["kind"][];
 
 const GEOMETRY_EPSILON = 0.000_1;
@@ -774,10 +775,14 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
       const start = points[0] as Vec3;
       points.push({ x: start.x + GRID_METERS, y: start.y, z: start.z });
     }
+    const purpose = raw.purpose === undefined ? undefined : enumValue(raw.purpose, ROUTE_PURPOSES, "movement", `routes[${index}].purpose`);
+    const traffic = raw.traffic === undefined ? undefined : Math.min(1, Math.max(0, finiteValue(raw.traffic, 0.5, `routes[${index}].traffic`)));
     routes.push({
       id: uniqueId(raw.id, "route", index, routeIds),
       kind: enumValue(raw.kind, ROUTE_KINDS, "primary", `routes[${index}].kind`),
       points,
+      ...(purpose === undefined ? {} : { purpose }),
+      ...(traffic === undefined ? {} : { traffic }),
     });
   }
 
