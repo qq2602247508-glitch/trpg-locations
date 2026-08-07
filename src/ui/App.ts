@@ -33,6 +33,7 @@ interface AppElements {
   seedBadge: HTMLElement;
   floor: HTMLSelectElement;
   time: HTMLSelectElement;
+  exportScene: HTMLButtonElement;
   routesToggle: HTMLButtonElement;
   tacticalToggle: HTMLButtonElement;
   metrics: HTMLElement;
@@ -179,6 +180,11 @@ export async function mountApp(root: HTMLElement): Promise<void> {
                 <i aria-hidden="true"></i>
               </button>
             </div>
+            <button class="toggle-button export-button" data-role="export-scene" type="button">
+              <span class="toggle-glyph export-glyph" aria-hidden="true">↓</span>
+              <span><strong>导出场景 JSON</strong><small>保存 Seed、图元、房间与路线</small></span>
+              <i aria-hidden="true"></i>
+            </button>
           </section>
 
           <section class="inspector-section metrics-section">
@@ -250,6 +256,20 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   });
   elements.time.addEventListener("change", () => {
     renderer.setTimeOfDay(elements.time.value === "night" ? "night" : "day");
+  });
+  elements.exportScene.addEventListener("click", () => {
+    if (!activeScene) {
+      setStatus(elements, "暂无场景", "warn");
+      return;
+    }
+    const payload = JSON.stringify(activeScene, null, 2);
+    const url = URL.createObjectURL(new Blob([payload], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `trpg-location-${activeScene.kind}-${activeScene.seed.replace(/[^a-z0-9_-]+/gi, "-")}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setStatus(elements, "已导出", "ok");
   });
   elements.routesToggle.addEventListener("click", () => {
     routeDebug = !routeDebug;
@@ -337,6 +357,7 @@ function getElements(root: HTMLElement): AppElements {
     seedBadge: query(root, '[data-role="seed-badge"]'),
     floor: query(root, '[data-role="floor"]'),
     time: query(root, '[data-role="time"]'),
+    exportScene: query(root, '[data-role="export-scene"]'),
     routesToggle: query(root, '[data-role="routes-toggle"]'),
     tacticalToggle: query(root, '[data-role="tactical-toggle"]'),
     metrics: query(root, '[data-role="metrics"]'),
