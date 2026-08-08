@@ -276,7 +276,7 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   const programText = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const explicitBuildingNouns = ["精神病院", "医院", "警察局", "警局", "博物馆", "酒店", "旅店", "教堂", "神殿", "庄园", "宅邸", "堡垒", "要塞", "发电站", "修道院", "学院", "火车站", "hospital", "sanatorium", "police station", "museum", "hotel", "church", "temple", "manor", "fortress", "power station", "monastery", "academy", "railway station"];
   const hasExplicitBuilding = explicitBuildingNouns.some((term) => programText.includes(term));
-  const strongSettlementNouns = ["城镇", "村庄", "村落", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇", "town", "village", "market village", "district", "harbor", "port town", "water city", "canal city", "tower city", "megastructure city", "settlement"];
+  const strongSettlementNouns = ["城镇", "村庄", "村落", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "营地", "采矿营地", "矿业营地", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇", "town", "village", "market village", "district", "harbor", "port town", "camp", "mining camp", "water city", "canal city", "tower city", "megastructure city", "settlement"];
   const wildernessBuildingOwnsSite = ["木屋", "小屋", "猎人屋", "cabin", "lodge", "hut", "cottage", "outpost"].some((term) => programText.includes(term))
     && ["森林", "树林", "林间", "巨树", "树根", "山地", "河谷", "沼泽", "海岸", "forest", "woodland", "tree", "mountain", "valley", "swamp", "coast"].some((term) => programText.includes(term));
   const industrialDistrictOwnsSite = programText.includes("工业区") && !["废弃工业区", "工业遗址", "industrial ruin"].some((term) => programText.includes(term));

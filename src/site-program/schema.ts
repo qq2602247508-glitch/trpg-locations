@@ -4,6 +4,26 @@ export type SiteType = "harbor-district" | "city-district" | "town" | "village" 
 export type DistrictRole = "civic" | "commercial" | "residential" | "industrial" | "sacred" | "harbor" | "agricultural" | "service";
 export type RoadHierarchy = "arterial" | "street" | "lane" | "trail" | "quay" | "bridge" | "rail" | "elevated" | "maintenance";
 export type BuildingLod = "full-interior" | "facade" | "mass";
+export type BuildingFunctionalModuleKind =
+  | "laboratory"
+  | "distillation"
+  | "archive"
+  | "greenhouse"
+  | "submerged-room"
+  | "observation"
+  | "workshop";
+
+export interface BuildingFunctionalModuleProgram {
+  id: string;
+  kind: BuildingFunctionalModuleKind;
+  label: string;
+  levelRole: "ground" | "upper" | "basement" | "roof" | "exterior";
+  requiresWater?: boolean;
+  requiresExteriorAccess?: boolean;
+  requiresVerticalLandmark?: boolean;
+  minimumFootprintCells: number;
+  tags: string[];
+}
 
 export interface SettlementMorphologyProgram {
   era: "ancient" | "medieval" | "1920s" | "modern" | "future" | "timeless";
@@ -108,6 +128,7 @@ export interface ParcelProgram {
   boundary?: SitePoint[];
   shapeSignature?: string;
   buildingProgram?: BuildingProgramSummary;
+  functionalModules?: BuildingFunctionalModuleProgram[];
 }
 
 export interface OpenSpaceProgram {

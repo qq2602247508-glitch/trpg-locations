@@ -579,6 +579,51 @@ describe("scene generators", () => {
     expect(salt.diagnostics.valid).toBe(true);
   });
 
+  it("assigns unfamiliar specialist functions to explicit reusable building modules", () => {
+    const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、盐雾蒸馏塔、半淹档案库和水下温室";
+    const program = planSettlementSite({ request: { ...request("functional-module-program", "medium", 0.7), prompt }, archetype: "village" }, new SeededRandom("functional-module-program"));
+    const modules = program.parcels.flatMap((parcel) => parcel.functionalModules ?? []);
+    expect(new Set(modules.map((module) => module.kind))).toEqual(new Set(["laboratory", "distillation", "archive", "greenhouse"]));
+    expect(modules.find((module) => module.kind === "laboratory")?.levelRole).toBe("upper");
+    expect(modules.find((module) => module.kind === "archive")?.requiresWater).toBe(true);
+    expect(modules.find((module) => module.kind === "greenhouse")?.requiresWater).toBe(true);
+    expect(program.parcels.filter((parcel) => (parcel.functionalModules?.length ?? 0) > 0).every((parcel) => parcel.lod === "full-interior" || parcel.lod === "facade")).toBe(true);
+  });
+
+  it("realizes specialist settlement functions as geometry, rooms, routes, and tactical space", () => {
+    const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、盐雾蒸馏塔、半淹档案库和水下温室";
+    const first = generateScene({ ...request("functional-module-scene-a", "medium", 0.72), prompt }, "adaptive");
+    const replay = generateScene({ ...request("functional-module-scene-a", "medium", 0.72), prompt }, "adaptive");
+    const second = generateScene({ ...request("functional-module-scene-b", "medium", 0.72), prompt }, "adaptive");
+    for (const tag of ["function:laboratory", "function:distillation", "function:archive", "function:greenhouse"]) {
+      expect(hasTag(first, tag)).toBe(true);
+    }
+    expect(first.rooms.some((room) => room.name === "Elevated research laboratory" && room.level === 1)).toBe(true);
+    expect(first.rooms.some((room) => room.name === "Half-flooded secured archive")).toBe(true);
+    expect(first.rooms.some((room) => room.name === "Submerged cultivation greenhouse")).toBe(true);
+    expect(first.routes.some((route) => route.id.includes("distillation-route"))).toBe(true);
+    expect(first.routes.some((route) => route.id.includes("laboratory-route"))).toBe(true);
+    expect(first.tactical.some((feature) => feature.id.includes("greenhouse-cover"))).toBe(true);
+    expect(first.diagnostics.valid).toBe(true);
+    expect(first).toEqual(replay);
+    expect(first.primitives.filter((primitive) => primitive.tags?.includes("functional-module")).map((primitive) => primitive.position))
+      .not.toEqual(second.primitives.filter((primitive) => primitive.tags?.includes("functional-module")).map((primitive) => primitive.position));
+  });
+
+  it("keeps an unfamiliar mining camp as the parent site instead of collapsing into one laboratory", () => {
+    const prompt = "火山灰峡谷里的炼金采矿营地，有试金实验室、矿物档案库、冷凝塔、地下菌类温室和熔岩上方维护桥";
+    const scene = generateScene({ ...request("unfamiliar-volcanic-alchemy-camp", "medium", 0.68), prompt }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.siteProgram?.siteType).toBe("mining-settlement");
+    expect(scene.terrainProgram?.kind).toBe("caldera");
+    expect(scene.buildingInstances?.length ?? 0).toBeGreaterThanOrEqual(5);
+    for (const tag of ["function:laboratory", "function:archive", "function:distillation", "function:greenhouse", "function:workshop"]) {
+      expect(hasTag(scene, tag)).toBe(true);
+    }
+    expect(hasTag(scene, "lava")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
   it("propagates requested density into settlement building count and adds city defenses", () => {
     const sparse = generateScene({ ...request("settlement-density", "large", 0), prompt: "大型城市街区" }, "settlement");
     const dense = generateScene({ ...request("settlement-density", "large", 1), prompt: "大型城市街区" }, "settlement");

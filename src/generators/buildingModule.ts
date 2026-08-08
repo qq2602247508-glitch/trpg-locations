@@ -6,6 +6,7 @@ import type {
   SettlementBuildingKind,
   SettlementBuildingProgram,
 } from "../schema";
+import { GRID_METERS } from "../schema";
 import {
   FLOOR_SLAB_METERS,
   box,
@@ -20,6 +21,7 @@ import {
   tacticalFeature,
 } from "./shared";
 import { planBuildingEnvelope, type BuildingEnvelopeProgram } from "./buildingEnvelope";
+import type { BuildingFunctionalModuleProgram } from "../site-program/schema";
 
 export interface BuildingLot {
   id: string;
@@ -37,6 +39,7 @@ export interface BuildingLot {
   entrance?: { x: number; z: number };
   baseY?: number;
   state?: "active" | "abandoned" | "flooded" | "temporary";
+  functionalModules?: readonly BuildingFunctionalModuleProgram[];
 }
 
 function localPoint(lot: BuildingLot, localX: number, localZ: number): { x: number; z: number } {
@@ -89,16 +92,45 @@ function planSettlementBuildingProgram(lot: BuildingLot, generated: ReturnType<t
   const representedFloors = Math.min(generated.floors, 3);
   for (let level = 1; level < representedFloors; level += 1) rooms.push({ id: `upper-${level}`, name: `${labels.upperName} ${level}`, level, role: lot.kind === "tower" ? "combat" : "private", centerLocalCells: { x: (primary?.offset.x ?? 0) + level * 0.08, z: (primary?.offset.z ?? 0) - level * 0.06 }, sizeCells: { x: Math.max(3, (primary?.size.x ?? lot.width) * (0.82 - level * 0.08)), z: Math.max(3, (primary?.size.z ?? lot.depth) * (0.78 - level * 0.07)) } });
   rooms.push({ id: "basement", name: labels.basementName, level: 3, role: "service", centerLocalCells: { x: (primary?.offset.x ?? 0) - lot.width * 0.08, z: (primary?.offset.z ?? 0) + lot.depth * 0.08 }, sizeCells: { x: Math.max(3, (primary?.size.x ?? lot.width) * 0.62), z: Math.max(3, (primary?.size.z ?? lot.depth) * 0.55) } });
+  for (const [index, module] of (lot.functionalModules ?? []).entries()) {
+    const level = module.levelRole === "basement" ? 3 : module.levelRole === "roof" || module.levelRole === "upper" ? 1 : 0;
+    const role = module.kind === "observation" ? "combat" : module.kind === "archive" ? "private" : "service";
+    rooms.push({
+      id: `function-${module.kind}-${index + 1}`,
+      name: module.label,
+      level,
+      role,
+      centerLocalCells: {
+        x: (index % 2 === 0 ? 1 : -1) * lot.width * (module.levelRole === "exterior" ? 0.42 : 0.16),
+        z: lot.depth * (-0.18 + index * 0.12),
+      },
+      sizeCells: {
+        x: Math.max(3, Math.min(lot.width * 0.48, Math.sqrt(module.minimumFootprintCells) * 1.15)),
+        z: Math.max(3, Math.min(lot.depth * 0.48, Math.sqrt(module.minimumFootprintCells) * 1.05)),
+      },
+    });
+  }
   const connections: SettlementBuildingProgram["connections"] = [];
   for (const room of rooms.filter((candidate) => candidate.level === 0 && candidate.id !== "ground-public")) connections.push({ from: "ground-public", to: room.id, kind: "door" });
   const uppers = rooms.filter((candidate) => candidate.id.startsWith("upper-"));
   for (const [index, room] of uppers.entries()) connections.push({ from: index === 0 ? "ground-public" : uppers[index - 1]?.id ?? "ground-public", to: room.id, kind: "stair" });
   connections.push({ from: rooms.find((room) => room.id.startsWith("ground-service"))?.id ?? "ground-public", to: "basement", kind: "cellar-stair" });
+  for (const room of rooms.filter((candidate) => candidate.id.startsWith("function-"))) {
+    connections.push({
+      from: room.level === 3 ? "basement" : room.level > 0 ? (uppers[0]?.id ?? "ground-public") : "ground-public",
+      to: room.id,
+      kind: room.level === 0 ? "door" : "stair",
+    });
+  }
   const verticalCores: SettlementBuildingProgram["verticalCores"] = [
     ...uppers.map((room, index) => ({ id: `main-stair-${index + 1}`, fromLevel: index, toLevel: index + 1, positionLocalCells: { x: lot.width * 0.26, z: lot.depth * 0.16 }, kind: "stair" as const })),
     { id: "cellar-stair", fromLevel: 3, toLevel: 0, positionLocalCells: { x: -lot.width * 0.26, z: lot.depth * 0.12 }, kind: "stair" as const },
   ];
   return { version: 1, archetype: lot.kind, envelopeVariant: envelope.variant, rooms, connections, verticalCores };
+}
+
+function functionalTags(lot: BuildingLot): string[] {
+  return (lot.functionalModules ?? []).flatMap((module) => [module.kind, ...module.tags]);
 }
 
 function summarizeBuildingProgram(program: SettlementBuildingProgram, tags: string[]): NonNullable<BuildingInstance["buildingProgram"]> {
@@ -112,6 +144,136 @@ function summarizeBuildingProgram(program: SettlementBuildingProgram, tags: stri
   };
 }
 
+function addFunctionalModuleGeometry(
+  scene: GeneratedScene,
+  lot: BuildingLot,
+  generated: ReturnType<typeof profile>,
+): void {
+  const modules = lot.functionalModules ?? [];
+  if (modules.length === 0) return;
+  const baseY = lot.baseY ?? FLOOR_SLAB_METERS;
+  const undergroundY = Math.min(baseY - feetToMeters(13), FLOOR_SLAB_METERS - feetToMeters(10));
+  const groundHeight = feetToMeters(generated.floorHeightFeet[0] ?? 10);
+  const totalHeight = feetToMeters(generated.floorHeightFeet.reduce((sum, height) => sum + height, 0));
+  const point = (x: number, z: number) => localPoint(lot, x, z);
+  const common = ["functional-module", `building-instance:${lot.id}`, `building:${lot.kind}`];
+  const addBox = (module: BuildingFunctionalModuleProgram, id: string, level: number, x: number, y: number, z: number, width: number, height: number, depth: number, material: MaterialKey, tags: string[] = []) => {
+    const world = point(x, z);
+    scene.primitives.push(box(`${lot.id}-${module.kind}-${id}`, level, world.x, y, world.z, width, height, depth, material, [...new Set([...common, `function:${module.kind}`, ...module.tags, ...tags])], lot.rotation));
+    return world;
+  };
+  const addCylinder = (module: BuildingFunctionalModuleProgram, id: string, level: number, x: number, y: number, z: number, diameter: number, height: number, material: MaterialKey, tags: string[] = []) => {
+    const world = point(x, z);
+    scene.primitives.push(cylinder(`${lot.id}-${module.kind}-${id}`, level, world.x, y, world.z, diameter, height, material, [...new Set([...common, `function:${module.kind}`, ...module.tags, ...tags])]));
+    return world;
+  };
+
+  for (const [index, module] of modules.entries()) {
+    const side = index % 2 === 0 ? 1 : -1;
+    const localX = side * lot.width * 0.38;
+    const localZ = lot.depth * (-0.16 + index * 0.14);
+    const moduleRoom = scene.rooms.find((room) => room.id === `${lot.id}-function-${module.kind}-${index + 1}`);
+    if (module.kind === "laboratory") {
+      const elevated = module.levelRole === "upper";
+      const level = elevated ? 1 : 0;
+      const laboratoryY = elevated ? baseY + groundHeight : baseY;
+      const laboratoryX = side * lot.width * 0.12;
+      const roomCenter = addBox(module, "floor", level, laboratoryX, laboratoryY, localZ, Math.max(3.2, lot.width * 0.38), FLOOR_SLAB_METERS, Math.max(3.2, lot.depth * 0.38), "stone", ["floor", "standable", "laboratory-floor"]);
+      addBox(module, "workbench", level, laboratoryX, laboratoryY + FLOOR_SLAB_METERS, localZ, Math.max(1.8, lot.width * 0.22), feetToMeters(3.2), 1.05, "wood", ["workbench", "cover"]);
+      addBox(module, "reagent-rack", level, laboratoryX - side * lot.width * 0.12, laboratoryY + FLOOR_SLAB_METERS, localZ - lot.depth * 0.11, 0.65, feetToMeters(5.5), Math.max(1.4, lot.depth * 0.24), "wood", ["storage", "reagent-rack", "cover"]);
+      addCylinder(module, "hazard-vat", level, laboratoryX + side * lot.width * 0.12, laboratoryY + FLOOR_SLAB_METERS, localZ + lot.depth * 0.1, 1.05, feetToMeters(3.5), "hazard", ["hazard-vat"]);
+      for (const [vialIndex, vialX, vialZ] of [[1, -0.45, -0.2], [2, 0, 0.16], [3, 0.46, -0.08]] as const) {
+        addCylinder(module, `vial-${vialIndex}`, level, laboratoryX + vialX, laboratoryY + feetToMeters(3.2), localZ + vialZ, 0.34, feetToMeters(1.8 + vialIndex * 0.25), vialIndex === 2 ? "warmLight" : "hazard", ["alchemical-vessel", "laboratory-fixture"]);
+      }
+      if (elevated) {
+        const access = point(laboratoryX + side * lot.width * 0.2, localZ + lot.depth * 0.18);
+        scene.primitives.push(stairs(`${lot.id}-${module.kind}-elevated-access`, 0, access.x, baseY, access.z, 1.05, groundHeight, 4.2, "wood", [...common, `function:${module.kind}`, "elevated-access", "standable", "vertical-opening"], lot.rotation));
+        for (const [supportIndex, supportX, supportZ] of [
+          [1, laboratoryX - lot.width * 0.16, localZ - lot.depth * 0.14],
+          [2, laboratoryX + lot.width * 0.16, localZ - lot.depth * 0.14],
+          [3, laboratoryX - lot.width * 0.16, localZ + lot.depth * 0.14],
+          [4, laboratoryX + lot.width * 0.16, localZ + lot.depth * 0.14],
+        ] as const) {
+          addCylinder(module, `tree-support-${supportIndex}`, 0, supportX, baseY, supportZ, 0.62, groundHeight, "wood", ["tree-support", "stilt-foundation", "structural-support"]);
+        }
+        addCylinder(module, "living-trunk", 1, laboratoryX - side * lot.width * 0.16, laboratoryY, localZ - lot.depth * 0.13, 1.35, feetToMeters(9), "wood", ["living-tree", "tree-trunk", "structural-support", "cover"]);
+        addBox(module, "branch-beam-a", 1, laboratoryX, laboratoryY + feetToMeters(5.8), localZ - lot.depth * 0.12, Math.max(3.4, lot.width * 0.42), 0.42, 0.5, "wood", ["living-tree", "branch-beam", "overhead"]);
+        addBox(module, "branch-beam-b", 1, laboratoryX - side * lot.width * 0.13, laboratoryY + feetToMeters(4.8), localZ, 0.5, 0.46, Math.max(3.2, lot.depth * 0.38), "wood", ["living-tree", "branch-beam", "overhead"]);
+        addBox(module, "branch-bridge", 1, laboratoryX + side * lot.width * 0.28, laboratoryY, localZ + lot.depth * 0.18, Math.max(2.8, lot.width * 0.34), 0.24, 1.25, "wood", ["branch-bridge", "standable", "alternate-route"]);
+        const roofCenter = point(laboratoryX, localZ);
+        scene.primitives.push(primitive(`${lot.id}-${module.kind}-canopy-roof`, "gable", 2, roofCenter.x, laboratoryY + feetToMeters(7), roofCenter.z, Math.max(3.8, lot.depth * 0.42) * GRID_METERS, feetToMeters(3.8), Math.max(4.2, lot.width * 0.44) * GRID_METERS, "roof", [...common, `function:${module.kind}`, "treehouse-roof", "pitched-roof"], lot.rotation + Math.PI / 2));
+        scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "vertical", [{ x: access.x, z: access.z, y: baseY }, { x: roomCenter.x, z: roomCenter.z, y: laboratoryY }], { purpose: "service", traffic: 0.5, schedule: "all" }));
+      }
+      scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-hazard`, "hazard", roomCenter.x, roomCenter.z, laboratoryY, 1.2, "A working laboratory introduces volatile cover and a controllable hazard."));
+    } else if (module.kind === "distillation") {
+      const tower = addCylinder(module, "tower", 0, localX, baseY, localZ, 2.4, Math.max(feetToMeters(13), groundHeight * 1.25), "metal", ["distillation-tower", "vertical-landmark"]);
+      addCylinder(module, "receiver", 0, localX + side * 1.65, baseY, localZ + 0.65, 1.45, feetToMeters(7), "metal", ["receiver-tank", "cover"]);
+      addBox(module, "pipe", 0, localX + side * 0.85, baseY + feetToMeters(7), localZ + 0.18, 1.75, 0.22, 0.28, "metal", ["pipe", "overhead"]);
+      addBox(module, "platform", 1, localX, baseY + feetToMeters(8), localZ, 3.5, 0.22, 3.1, "wood", ["maintenance-platform", "standable", "high-ground"]);
+      const stair = point(localX + side * 2.2, localZ);
+      scene.primitives.push(stairs(`${lot.id}-${module.kind}-access`, 0, stair.x, baseY, stair.z, 1, feetToMeters(8), 3.8, "metal", [...common, `function:${module.kind}`, "maintenance-access", "standable"], lot.rotation));
+      scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "vertical", [{ x: stair.x, z: stair.z, y: baseY }, { x: tower.x, z: tower.z, y: baseY + feetToMeters(8) }], { purpose: "service", traffic: 0.45, schedule: "all" }));
+      scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-high`, "highGround", tower.x, tower.z, baseY + feetToMeters(8), 1.6, "The distillation maintenance deck is reachable high ground."));
+    } else if (module.kind === "archive") {
+      const archiveY = undergroundY;
+      const center = addBox(module, "floor", 3, localX * 0.45, archiveY, localZ, Math.max(3.5, lot.width * 0.42), FLOOR_SLAB_METERS, Math.max(3.2, lot.depth * 0.36), "stone", ["floor", "standable", "archive-floor", "underground"]);
+      for (let shelf = -1; shelf <= 1; shelf += 1) {
+        addBox(module, `shelf-${shelf + 2}`, 3, localX * 0.45 + shelf * 1.05, archiveY + FLOOR_SLAB_METERS, localZ, 0.55, feetToMeters(6.2), Math.max(2.2, lot.depth * 0.27), "wood", ["archive-shelf", "cover", "restricted"]);
+      }
+      if (module.requiresWater) addBox(module, "floodwater", 3, localX * 0.45, archiveY + feetToMeters(1.1), localZ, Math.max(3, lot.width * 0.34), 0.14, Math.max(2.8, lot.depth * 0.3), "water", ["water", "flooded", "hazard"]);
+      scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-choke`, "chokepoint", center.x, center.z, archiveY, 1.1, "Dense archive stacks form narrow investigative and combat aisles."));
+    } else if (module.kind === "greenhouse") {
+      const width = Math.max(4, lot.width * 0.46);
+      const depth = Math.max(3.4, lot.depth * 0.4);
+      const submerged = module.levelRole === "basement";
+      const greenhouseY = submerged ? undergroundY : baseY;
+      const level = submerged ? 3 : 0;
+      const greenhouseX = submerged ? localX * 0.42 : localX;
+      const center = addBox(module, "floor", level, greenhouseX, greenhouseY, localZ, width, FLOOR_SLAB_METERS, depth, "stone", ["floor", "standable", "greenhouse-floor", ...(submerged ? ["underground"] : [])]);
+      addBox(module, "north-frame", level, greenhouseX, greenhouseY, localZ - depth / 2, width, feetToMeters(7), 0.16, "wood", ["greenhouse-frame", "wall"]);
+      addBox(module, "west-frame", level, greenhouseX - width / 2, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
+      for (const [postIndex, postX, postZ] of [
+        [1, greenhouseX - width / 2, localZ - depth / 2],
+        [2, greenhouseX + width / 2, localZ - depth / 2],
+        [3, greenhouseX - width / 2, localZ + depth / 2],
+        [4, greenhouseX + width / 2, localZ + depth / 2],
+      ] as const) {
+        addBox(module, `frame-post-${postIndex}`, level, postX, greenhouseY, postZ, 0.18, feetToMeters(7), 0.18, "metal", ["greenhouse-frame", "structural-support"]);
+      }
+      for (const [beamIndex, beamOffset] of [-0.38, -0.12, 0.12, 0.38].entries()) {
+        addBox(module, `roof-beam-${beamIndex + 1}`, submerged ? 3 : 1, greenhouseX + width * beamOffset, greenhouseY + feetToMeters(7), localZ, 0.14, 0.18, depth * 1.03, "wood", ["greenhouse-roof-frame", "overhead"]);
+      }
+      addBox(module, "roof-ridge", submerged ? 3 : 1, greenhouseX, greenhouseY + feetToMeters(7.35), localZ, width * 1.03, 0.18, 0.16, "metal", ["greenhouse-roof-frame", "ridge"]);
+      for (const bedOffset of [-0.24, 0.24]) addBox(module, `bed-${bedOffset > 0 ? 2 : 1}`, level, greenhouseX + width * bedOffset, greenhouseY + FLOOR_SLAB_METERS, localZ, width * 0.28, feetToMeters(1.6), depth * 0.68, "moss", ["growing-bed", "cover", "wet-zone"]);
+      if (submerged) addBox(module, "water", 3, greenhouseX, greenhouseY + feetToMeters(1.25), localZ, width * 0.9, 0.14, depth * 0.86, "water", ["water", "submerged", "hazard"]);
+      scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-cover`, "cover", center.x, center.z, greenhouseY, 1.6, "Raised cultivation beds divide the greenhouse into cover lanes."));
+    } else if (module.kind === "submerged-room") {
+      const submergedY = undergroundY;
+      const width = Math.max(3.6, lot.width * 0.42);
+      const depth = Math.max(3.4, lot.depth * 0.38);
+      const center = addBox(module, "floor", 3, localX * 0.42, submergedY, localZ, width, FLOOR_SLAB_METERS, depth, "stone", ["floor", "standable", "submerged-floor", "underground"]);
+      addBox(module, "water", 3, localX * 0.42, submergedY + feetToMeters(1.4), localZ, width * 0.82, 0.15, depth * 0.72, "water", ["water", "flooded", "hazard"]);
+      addBox(module, "retaining-wall", 3, localX * 0.42 - width / 2, submergedY, localZ, 0.2, feetToMeters(8), depth, "darkStone", ["wall", "submerged", "water-tight"]);
+      const access = point(localX * 0.42 + width * 0.34, localZ + depth * 0.34);
+      scene.primitives.push(stairs(`${lot.id}-${module.kind}-access`, 3, access.x, submergedY, access.z, 1.05, baseY - submergedY, 4.5, "stone", [...common, `function:${module.kind}`, "submerged-access", "standable"], lot.rotation));
+      scene.primitives.push(box(`${lot.id}-${module.kind}-door-opening`, 3, access.x, submergedY, access.z, 1.4, feetToMeters(7), 0.3, "stone", [...common, `function:${module.kind}`, "opening", "door-frame", "vertical-opening"], lot.rotation));
+      scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "vertical", [{ x: access.x, z: access.z, y: baseY }, { x: center.x, z: center.z, y: submergedY }], { purpose: "service", traffic: 0.25, schedule: "all" }));
+      scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-hazard`, "hazard", center.x, center.z, submergedY, 1.8, "Floodwater slows movement and conceals a lower access route."));
+    } else if (module.kind === "observation") {
+      const roofY = baseY + totalHeight;
+      const center = addBox(module, "platform", 2, 0, roofY, localZ * 0.25, Math.max(3.4, lot.width * 0.42), 0.24, Math.max(3.2, lot.depth * 0.36), "wood", ["roof-platform", "standable", "high-ground"]);
+      addCylinder(module, "mast", 2, 0, roofY + 0.24, localZ * 0.25, 0.48, feetToMeters(10), "metal", ["antenna", "vertical-landmark"]);
+      for (const rail of [-1, 1]) addBox(module, `rail-${rail > 0 ? 2 : 1}`, 2, rail * lot.width * 0.2, roofY + 0.24, localZ * 0.25, 0.12, feetToMeters(3), Math.max(3.2, lot.depth * 0.36), "metal", ["railing", "roof-edge"]);
+      scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-high`, "highGround", center.x, center.z, roofY, 2, "The observation deck provides a commanding but exposed sight line."));
+    } else {
+      const center = addBox(module, "floor", 0, localX, baseY, localZ, Math.max(3.8, lot.width * 0.44), FLOOR_SLAB_METERS, Math.max(3.4, lot.depth * 0.38), "stone", ["floor", "standable", "workshop-floor"]);
+      for (const offset of [-0.2, 0.2]) addBox(module, `machine-${offset > 0 ? 2 : 1}`, 0, localX + lot.width * offset, baseY + FLOOR_SLAB_METERS, localZ, 1.2, feetToMeters(4.5), 1.6, "metal", ["machinery", "cover"]);
+      scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-cover`, "cover", center.x, center.z, baseY, 1.6, "Heavy workshop machinery creates durable cover and a service bottleneck."));
+    }
+    if (moduleRoom) moduleRoom.name = module.label;
+  }
+}
+
 function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, generated: ReturnType<typeof profile>, envelope: BuildingEnvelopeProgram, interiorProgram: SettlementBuildingProgram): BuildingInstance {
   const baseY = lot.baseY ?? FLOOR_SLAB_METERS;
   const width = Math.max(5.2, lot.width * 0.9);
@@ -121,7 +283,7 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   // Keep the basement shell fully below the exterior grade. At exactly
   // 10 feet the 9-foot basement wall can protrude through a raised site pad,
   // making a surface trail look like it crosses an underground wall.
-  const basementY = baseY - feetToMeters(12);
+  const basementY = Math.min(baseY - feetToMeters(14), FLOOR_SLAB_METERS - feetToMeters(10));
   const tags = ["settlement-building", "independent-building-module", "full-interior", `building:${lot.kind}`, `building-instance:${lot.id}`, `district:${lot.district}`];
   const point = (x: number, z: number) => localPoint(lot, x, z);
   const addRotatedBox = (id: string, x: number, z: number, w: number, h: number, d: number, y: number, material: MaterialKey, extra: string[] = [], level = 0) => {
@@ -131,9 +293,9 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   addRotatedBox("floor", 0, 0, width, FLOOR_SLAB_METERS, depth, baseY, generated.material === "plaster" ? "wood" : "stone", ["floor", "standable", "program-room"]);
   addRotatedBox("north-wall", 0, -depth / 2, width, wallHeight, 0.22, baseY, generated.material, ["wall", "building-shell", "program-room", "opening", "window-opening"]);
   addRotatedBox("west-wall", -width / 2, 0, 0.22, wallHeight, depth, baseY, generated.material, ["wall", "building-shell", "program-room", "opening", "window-opening"]);
-  addRotatedBox("east-wall", width / 2, 0, 0.22, wallHeight, depth, baseY, generated.material, ["wall", "building-shell", "program-room", "opening", "window-opening"]);
-  addRotatedBox("south-wall-left", -width * 0.32, depth / 2, width * 0.34, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "building-shell"]);
-  addRotatedBox("south-wall-right", width * 0.32, depth / 2, width * 0.34, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "building-shell"]);
+  addRotatedBox("east-wall", width / 2, 0, 0.22, wallHeight, depth, baseY, generated.material, ["wall", "building-shell", "program-room", "opening", "window-opening", "focus-cutaway"]);
+  addRotatedBox("south-wall-left", -width * 0.32, depth / 2, width * 0.34, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "building-shell", "focus-cutaway"]);
+  addRotatedBox("south-wall-right", width * 0.32, depth / 2, width * 0.34, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "building-shell", "focus-cutaway"]);
   addRotatedBox("partition-a", -width * 0.2, 0, 0.22, wallHeight, depth * 0.36, baseY, generated.material, ["wall", "room-partition", "door-frame"]);
   addRotatedBox("partition-b", -width * 0.2, -depth * 0.38, 0.22, wallHeight, depth * 0.18, baseY, generated.material, ["wall", "room-partition", "door-frame"]);
   const upperWidth = width * 0.72;
@@ -146,7 +308,7 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   scene.primitives.push(primitive(`${lot.id}-gable-roof`, "gable", 2, roofP.x, upperY + wallHeight * 0.82, roofP.z, (upperDepth + 1) * 1.524, feetToMeters(5.5), (upperWidth + 1) * 1.524, "roof", [...tags, "roof", "pitched-roof", "standable"], lot.rotation + Math.PI / 2));
   addRotatedBox("basement-floor", 0, 0, width * 0.64, FLOOR_SLAB_METERS, depth * 0.58, basementY, "stone", ["floor", "underground", "standable"], 3);
   addRotatedBox("basement-north", 0, -depth * 0.29, width * 0.64, feetToMeters(9), 0.22, basementY, "darkStone", ["wall", "underground", "opening"], 3);
-  addRotatedBox("basement-south", 0, depth * 0.29, width * 0.64, feetToMeters(9), 0.22, basementY, "darkStone", ["wall", "underground", "door-frame"], 3);
+  addRotatedBox("basement-south", 0, depth * 0.29, width * 0.64, feetToMeters(9), 0.22, basementY, "darkStone", ["wall", "underground", "door-frame", "focus-cutaway"], 3);
   const basementDepth = depth * 0.58;
   const cellarOpeningCenter = depth * 0.08;
   const cellarOpeningWidth = Math.min(1.5, basementDepth * 0.28);
@@ -154,7 +316,7 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   const westSouthDepth = basementDepth / 2 - cellarOpeningCenter - cellarOpeningWidth / 2;
   addRotatedBox("basement-west-north", -width * 0.32, (-basementDepth / 2 + cellarOpeningCenter - cellarOpeningWidth / 2) / 2, 0.22, feetToMeters(9), westNorthDepth, basementY, "darkStone", ["wall", "underground", "door-frame"], 3);
   addRotatedBox("basement-west-south", -width * 0.32, (cellarOpeningCenter + cellarOpeningWidth / 2 + basementDepth / 2) / 2, 0.22, feetToMeters(9), westSouthDepth, basementY, "darkStone", ["wall", "underground", "door-frame"], 3);
-  addRotatedBox("basement-east", width * 0.32, 0, 0.22, feetToMeters(9), depth * 0.58, basementY, "darkStone", ["wall", "underground"], 3);
+  addRotatedBox("basement-east", width * 0.32, 0, 0.22, feetToMeters(9), depth * 0.58, basementY, "darkStone", ["wall", "underground", "focus-cutaway"], 3);
   addRotatedBox("basement-store", width * 0.12, -depth * 0.08, Math.max(1.1, width * 0.18), feetToMeters(4), Math.max(1, depth * 0.16), basementY + FLOOR_SLAB_METERS, "wood", ["underground", "storage", "cover"], 3);
   const stairP = point(width * 0.28, depth * 0.08);
   scene.primitives.push(stairs(`${lot.id}-upper-stair`, 0, stairP.x, baseY, stairP.z, 1.2, wallHeight, 4.2, "wood", [...tags, "building-stair", "vertical-opening"], lot.rotation));
@@ -200,10 +362,19 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     baseYMeters: baseY,
     exteriorHeightMeters: wallHeight * 1.82,
     ...(lot.parcelId ? { parcelId: lot.parcelId } : {}), ...(lot.frontageRoadId ? { frontageRoadId: lot.frontageRoadId } : {}), ...(lot.entrance ? { entranceCells: lot.entrance } : {}),
-    buildingProgram: summarizeBuildingProgram(interiorProgram, labels.tags),
+    buildingProgram: summarizeBuildingProgram(interiorProgram, [...labels.tags, ...functionalTags(lot)]),
     interiorProgram,
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },
   };
+  addFunctionalModuleGeometry(scene, lot, generated);
+  for (const [index, module] of (lot.functionalModules ?? []).entries()) {
+    const roomProgram = interiorProgram.rooms.find((room) => room.id === `function-${module.kind}-${index + 1}`);
+    if (!roomProgram) continue;
+    const world = point(roomProgram.centerLocalCells.x, roomProgram.centerLocalCells.z);
+    const roomId = `${lot.id}-${roomProgram.id}`;
+    scene.rooms.push(createRoom(roomId, roomProgram.name, roomProgram.role, roomProgram.level, world.x, world.z, roomProgram.sizeCells.x, roomProgram.sizeCells.z, roomProgram.level === 3 ? basementY : roomProgram.level > 0 ? upperY : baseY));
+    connectRooms(scene.rooms, roomProgram.level === 3 ? basementId : roomProgram.level > 0 ? upperId : publicId, roomId);
+  }
   (scene.buildingInstances ??= []).push(instance);
   return instance;
 }
@@ -241,7 +412,7 @@ function addFocusInteriorBlueprint(scene: GeneratedScene, lot: BuildingLot, gene
     if (level === 0) scene.primitives.push(box(`${lot.id}-focus-furniture`, level, center.x + width * 0.12, y + FLOOR_SLAB_METERS, center.z, Math.max(1.2, width * 0.24), feetToMeters(3.2), 1.1, lot.kind === "factory" || lot.kind === "clinic" ? "metal" : "wood", [...tags, "furniture", "cover"], lot.rotation));
     y += floorHeight;
   }
-  const cellarY = baseY - feetToMeters(9);
+  const cellarY = Math.min(baseY - feetToMeters(12), FLOOR_SLAB_METERS - feetToMeters(9));
   const cellarLocalX = primary.offset.x - primary.size.x * 0.08;
   const cellarLocalZ = primary.offset.z + primary.size.z * 0.08;
   const cellarWidth = primary.size.x * 0.62;
@@ -266,6 +437,7 @@ function addFocusInteriorBlueprint(scene: GeneratedScene, lot: BuildingLot, gene
 /** Independent exterior grammar consumed by settlement planners. */
 export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLot, rng: GeneratorContext["rng"]): BuildingInstance {
   const generated = profile(lot.kind, rng);
+  if (lot.functionalModules?.some((module) => module.kind === "laboratory" && module.levelRole === "upper")) generated.material = "wood";
   const envelope = planBuildingEnvelope(lot.kind, lot.width, lot.depth, rng.fork("building-envelope"));
   const interiorProgram = planSettlementBuildingProgram(lot, generated, envelope);
   if (lot.lod === "full-interior") return instantiateFullInterior(scene, lot, generated, envelope, interiorProgram);
@@ -325,8 +497,18 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
   }
 
   addFocusInteriorBlueprint(scene, lot, generated, envelope, interiorProgram);
+  addFunctionalModuleGeometry(scene, lot, generated);
 
   scene.rooms.push(createRoom(`${lot.id}-room`, `${lot.kind} at ${lot.district}`, lot.kind === "warehouse" ? "service" : lot.kind === "tower" ? "combat" : "public", 0, lot.x, lot.z, lot.width, lot.depth));
+  for (const [index, module] of (lot.functionalModules ?? []).entries()) {
+    const roomProgram = interiorProgram.rooms.find((room) => room.id === `function-${module.kind}-${index + 1}`);
+    if (!roomProgram) continue;
+    const world = localPoint(lot, roomProgram.centerLocalCells.x, roomProgram.centerLocalCells.z);
+    const moduleY = roomProgram.level === 3 ? y - feetToMeters(12) : roomProgram.level > 0 ? y + feetToMeters(generated.floorHeightFeet[0] ?? 10) : y;
+    const roomId = `${lot.id}-${roomProgram.id}`;
+    scene.rooms.push(createRoom(roomId, roomProgram.name, roomProgram.role, roomProgram.level, world.x, world.z, roomProgram.sizeCells.x, roomProgram.sizeCells.z, moduleY));
+    connectRooms(scene.rooms, `${lot.id}-room`, roomId);
+  }
   const instance: BuildingInstance = {
     id: lot.id,
     archetype: lot.kind,
@@ -343,7 +525,7 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
     ...(lot.parcelId ? { parcelId: lot.parcelId } : {}),
     ...(lot.frontageRoadId ? { frontageRoadId: lot.frontageRoadId } : {}),
     ...(lot.entrance ? { entranceCells: lot.entrance } : {}),
-    buildingProgram: summarizeBuildingProgram(interiorProgram, fullInteriorLabels(lot.kind).tags),
+    buildingProgram: summarizeBuildingProgram(interiorProgram, [...fullInteriorLabels(lot.kind).tags, ...functionalTags(lot)]),
     interiorProgram,
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },
   };

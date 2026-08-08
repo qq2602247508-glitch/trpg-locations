@@ -747,6 +747,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       entrance: placement,
       baseY: siteElevation + FLOOR_SLAB_METERS,
       state: parcel.state,
+      functionalModules: parcel.functionalModules,
     }, context.rng.fork(parcel.buildingSeed));
     if (isMangrovePort && siteElevation > 0.2) {
       for (const [pierIndex, dx, dz] of [[0, -0.31, -0.31], [1, 0.31, -0.31], [2, -0.31, 0.31], [3, 0.31, 0.31]] as const) {

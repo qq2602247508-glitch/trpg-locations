@@ -2,6 +2,8 @@ import type { SeededRandom } from "../core/random";
 import type { BuildingProgramSummary, SettlementBuildingKind, Vec2 } from "../schema";
 import type {
   BlockProgram,
+  BuildingFunctionalModuleProgram,
+  BuildingFunctionalModuleKind,
   DistrictProgram,
   DistrictRole,
   OpenSpaceProgram,
@@ -22,7 +24,7 @@ function sizeFactor(size: SitePlanningInput["request"]["size"]): number {
 }
 
 function inferSiteType(text: string, archetype: SitePlanningInput["archetype"]): SiteType {
-  if (contains(text, ["矿业聚落", "矿山聚落", "mining settlement"])) return "mining-settlement";
+  if (contains(text, ["矿业聚落", "矿山聚落", "采矿营地", "矿业营地", "矿工营地", "mining settlement", "mining camp"])) return "mining-settlement";
   if (contains(text, ["火星殖民", "殖民地港口", "mars colony", "colony port"])) return "city-district";
   if (archetype === "harbor") return "harbor-district";
   if (archetype === "city") return "city-district";
@@ -62,12 +64,84 @@ function requestedBuildingKinds(text: string): SettlementBuildingKind[] {
   return requested;
 }
 
+function requestedFunctionalModules(text: string): BuildingFunctionalModuleProgram[] {
+  const modules: BuildingFunctionalModuleProgram[] = [];
+  const elevatedLaboratory = contains(text, ["树上实验", "树冠实验", "高架实验", "tree laboratory", "canopy laboratory", "elevated laboratory"]);
+  const floodedArchive = contains(text, ["半淹档案", "水下档案", "淹水档案", "flooded archive", "submerged archive"]);
+  const submergedGreenhouse = contains(text, ["水下温室", "半淹温室", "潮池温室", "underwater greenhouse", "submerged greenhouse"]);
+  const undergroundGreenhouse = !submergedGreenhouse && contains(text, ["地下菌类温室", "地下温室", "洞穴温室", "underground greenhouse", "subterranean greenhouse"]);
+  const fungalGreenhouse = contains(text, ["菌类温室", "菌菇温室", "fungal greenhouse", "mushroom greenhouse"]);
+  const add = (
+    kind: BuildingFunctionalModuleKind,
+    label: string,
+    terms: readonly string[],
+    levelRole: BuildingFunctionalModuleProgram["levelRole"],
+    options: Pick<BuildingFunctionalModuleProgram, "minimumFootprintCells" | "tags"> & Partial<Pick<BuildingFunctionalModuleProgram, "requiresWater" | "requiresExteriorAccess" | "requiresVerticalLandmark">>,
+  ) => {
+    if (!contains(text, terms) || modules.some((module) => module.kind === kind)) return;
+    modules.push({
+      id: `function-${kind}-${modules.length + 1}`,
+      kind,
+      label,
+      levelRole,
+      ...options,
+    });
+  };
+  add("laboratory", elevatedLaboratory ? "Elevated research laboratory" : "Research laboratory", ["实验屋", "实验室", "研究室", "研究屋", "laboratory", "research lab"], elevatedLaboratory ? "upper" : "ground", {
+    minimumFootprintCells: 20,
+    tags: ["research", "workbench", "hazard", ...(elevatedLaboratory ? ["tree-platform", "elevated"] : [])],
+  });
+  add("distillation", "Distillation works", ["蒸馏塔", "蒸馏室", "冷凝塔", "炼金塔", "distillation", "still", "condenser"], "exterior", {
+    minimumFootprintCells: 18,
+    requiresExteriorAccess: true,
+    requiresVerticalLandmark: true,
+    tags: ["distillation", "tank", "pipe", "maintenance-platform"],
+  });
+  add("archive", floodedArchive ? "Half-flooded secured archive" : "Secured archive", ["档案库", "档案室", "藏经洞", "书库", "archive", "records vault"], "basement", {
+    minimumFootprintCells: 16,
+    requiresWater: floodedArchive,
+    tags: ["archive", "shelf", "restricted", ...(floodedArchive ? ["flooded", "water-access"] : [])],
+  });
+  add("greenhouse", submergedGreenhouse ? "Submerged cultivation greenhouse" : undergroundGreenhouse ? "Underground fungal greenhouse" : "Cultivation greenhouse", ["温室", "培育室", "植物研究", "greenhouse", "glasshouse", "cultivation"], submergedGreenhouse || undergroundGreenhouse ? "basement" : "exterior", {
+    minimumFootprintCells: 20,
+    requiresWater: submergedGreenhouse,
+    requiresExteriorAccess: true,
+    tags: ["greenhouse", "growing-bed", "wet-zone", ...(submergedGreenhouse ? ["submerged", "flooded"] : []), ...(undergroundGreenhouse ? ["underground"] : []), ...(fungalGreenhouse ? ["fungal"] : [])],
+  });
+  add("submerged-room", "Flood-adapted chamber", ["水下秘密入口", "水下入口", "水下通道", "半淹房间", "潮池入口", "submerged room", "underwater entrance", "half-flooded chamber"], "basement", {
+    minimumFootprintCells: 18,
+    requiresWater: true,
+    tags: ["submerged", "flooded", "water-access"],
+  });
+  add("observation", "Observation platform", ["观测台", "观星台", "天线", "瞭望平台", "observation", "observatory", "antenna"], "roof", {
+    minimumFootprintCells: 14,
+    requiresExteriorAccess: true,
+    requiresVerticalLandmark: true,
+    tags: ["observation", "high-ground", "roof-platform"],
+  });
+  add("workshop", "Specialist workshop", ["车间", "工坊", "维修间", "试金", "workshop", "machine shop", "assay"], "ground", {
+    minimumFootprintCells: 20,
+    tags: ["workshop", "machinery", "cover"],
+  });
+  return modules;
+}
+
+function preferredCarrier(module: BuildingFunctionalModuleProgram): SettlementBuildingKind {
+  if (module.kind === "observation") return "tower";
+  if (module.kind === "distillation") return "factory";
+  if (module.kind === "laboratory" && module.tags.includes("elevated")) return "home";
+  if (module.kind === "submerged-room") return "warehouse";
+  if (module.kind === "greenhouse") return "factory";
+  if (module.kind === "laboratory" || module.kind === "archive") return "guild";
+  return "factory";
+}
+
 function requestedSiteFeatures(text: string): string[] {
   const features: string[] = [];
   const add = (feature: string, terms: readonly string[]) => { if (contains(text, terms) && !features.includes(feature)) features.push(feature); };
   add("rail-yard", ["铁路货场", "铁路", "货运轨道", "rail yard", "railway", "freight rail"]);
-  add("industrial-plant", ["工业街区", "发电站", "厂房", "工业区", "维修机库", "industrial district", "power station", "factory", "hangar"]);
-  add("conveyor-network", ["输送桥", "输送带", "conveyor"]);
+  add("industrial-plant", ["工业街区", "发电站", "厂房", "工业区", "维修机库", "采矿营地", "矿业营地", "mining camp", "industrial district", "power station", "factory", "hangar"]);
+  add("conveyor-network", ["输送桥", "输送带", "维护桥", "维修桥", "maintenance bridge", "conveyor"]);
   add("underground-maintenance", ["地下维护", "地下电缆", "桥下维修", "生命维持层", "maintenance tunnel", "cable level", "life support"]);
   add("flooded-site", ["洪水", "淹没", "被淹", "flooded", "flood"]);
   add("elevated-rail", ["高架铁路", "高架铁道", "elevated railway", "viaduct"]);
@@ -84,7 +158,7 @@ function requestedSiteFeatures(text: string): string[] {
   add("coastal-cliff", ["海崖港镇", "分层海崖", "悬崖港镇", "sea-cliff port", "cliff port"]);
   add("fantasy-harbor", ["深水城港区", "奇幻港区", "deepwater harbor", "fantasy harbor"]);
   add("impact-crater-settlement", ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"]);
-  add("volcanic-settlement", ["火山口村", "火山村", "火山聚落", "破火山口聚落", "volcanic settlement", "volcano village", "caldera village"]);
+  add("volcanic-settlement", ["火山口村", "火山村", "火山聚落", "破火山口聚落", "火山灰峡谷", "熔岩营地", "volcanic settlement", "volcano village", "caldera village", "volcanic canyon"]);
   add("ice-crevasse-settlement", ["冰川裂隙", "冰川裂缝", "巨大裂隙", "冰隙聚落", "glacier crevasse", "crevasse settlement"]);
   add("underdark-settlement", ["幽暗地域村", "幽暗地域聚落", "地下聚落", "underdark village", "underdark settlement"]);
   add("hollow-tree-city", ["空心古树", "古树内部", "树内城市", "树上城市", "hollow tree", "hollow-tree city"]);
@@ -431,6 +505,7 @@ function closestSegment(point: Vec2, candidate: RoadProgram): { a: SitePoint; b:
 function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: readonly BlockProgram[], districts: readonly DistrictProgram[], roads: readonly RoadProgram[], features: readonly string[], rng: SeededRandom): ParcelProgram[] {
   const text = input.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const required = requestedBuildingKinds(text);
+  const requestedModules = requestedFunctionalModules(text);
   const base = siteType === "village" ? 9 : siteType === "town" ? 15 : siteType === "mining-settlement" ? 12 : 22;
   const target = Math.max(5, Math.round(base * sizeFactor(input.request.size) * (0.5 + input.request.density * 0.9)));
   const parcels: ParcelProgram[] = [];
@@ -453,7 +528,8 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
     const targetFrontage = siteType === "village" ? 5.5 : district.role === "industrial" ? 9.2 - input.request.density * 3.8 : 7 - input.request.density * 2.5;
     const count = Math.min(perBlock, Math.max(1, Math.floor(frontageSpan / targetFrontage)));
     for (let slot = 0; slot < count && parcels.length < target; slot += 1) {
-      const kind = required[parcels.length] ?? buildingKindFor(district.role, parcels.length, text);
+      const requestedModule = requestedModules[parcels.length];
+      const kind = required[parcels.length] ?? (requestedModule ? preferredCarrier(requestedModule) : buildingKindFor(district.role, parcels.length, text));
       const wide = kind === "warehouse" || kind === "factory" || kind === "barn" || kind === "manor";
       const slotSpan = frontageSpan / count;
       const parcelFrontage = Math.max(4.8, Math.min(slotSpan - 0.6, wide ? 10.5 : 7.2));
@@ -498,11 +574,14 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
         boundary,
         shapeSignature: boundary.map((point) => `${point.x.toFixed(1)},${point.z.toFixed(1)}`).join("|"),
         buildingProgram: parcelBuildingProgram(kind, floors.max),
+        ...(requestedModule ? { functionalModules: [requestedModule] } : {}),
       });
     }
   }
   const ranked = [...parcels].sort((left, right) => {
     const requestedLeft = required.indexOf(left.buildingKind); const requestedRight = required.indexOf(right.buildingKind);
+    const functionalLeft = (left.functionalModules?.length ?? 0) > 0; const functionalRight = (right.functionalModules?.length ?? 0) > 0;
+    if (functionalLeft !== functionalRight) return functionalLeft ? -1 : 1;
     if ((requestedLeft >= 0) !== (requestedRight >= 0)) return requestedLeft >= 0 ? -1 : 1;
     return Math.hypot(left.center.x, left.center.z) - Math.hypot(right.center.x, right.center.z);
   });

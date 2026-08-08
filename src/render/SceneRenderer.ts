@@ -315,6 +315,7 @@ export class SceneRenderer {
     this.modelRoot.clear();
     this.floorLayers.clear();
     this.primitiveBatches = 0;
+    this.buildGrid(this.currentScene);
     this.buildPrimitiveBatches(this.currentScene);
     if (!selected) {
       this.setFloorView("roof");
@@ -342,12 +343,20 @@ export class SceneRenderer {
     // BuildingInstance positions and footprints are tactical cells, whereas
     // rendered primitive positions are metres (see shared.cellPoint). Keep the
     // focus camera and its context filter in rendered world coordinates.
-    const target = new THREE.Vector3(
-      selected.positionCells.x * GRID_METERS,
-      focusY,
-      selected.positionCells.z * GRID_METERS,
-    );
-    const span = Math.max(selected.footprintCells.x, selected.footprintCells.z, 7) * GRID_METERS * (isBasement ? 0.72 : 1);
+    const selectedIdTag = `building-instance:${selected.id}`;
+    const viewLevel = typeof view === "number" ? view : 0;
+    const visibleBuildingPrimitives = this.currentScene?.primitives.filter((primitive) => (
+      primitive.tags?.includes(selectedIdTag) === true
+      && primitive.level === viewLevel
+      && primitive.tags?.includes("focus-cutaway") !== true
+      && primitive.tags?.includes("roof") !== true
+    )) ?? [];
+    const minX = visibleBuildingPrimitives.length > 0 ? Math.min(...visibleBuildingPrimitives.map((primitive) => primitive.position.x - primitive.size.x / 2)) : selected.positionCells.x * GRID_METERS - selected.footprintCells.x * GRID_METERS / 2;
+    const maxX = visibleBuildingPrimitives.length > 0 ? Math.max(...visibleBuildingPrimitives.map((primitive) => primitive.position.x + primitive.size.x / 2)) : selected.positionCells.x * GRID_METERS + selected.footprintCells.x * GRID_METERS / 2;
+    const minZ = visibleBuildingPrimitives.length > 0 ? Math.min(...visibleBuildingPrimitives.map((primitive) => primitive.position.z - primitive.size.z / 2)) : selected.positionCells.z * GRID_METERS - selected.footprintCells.z * GRID_METERS / 2;
+    const maxZ = visibleBuildingPrimitives.length > 0 ? Math.max(...visibleBuildingPrimitives.map((primitive) => primitive.position.z + primitive.size.z / 2)) : selected.positionCells.z * GRID_METERS + selected.footprintCells.z * GRID_METERS / 2;
+    const target = new THREE.Vector3((minX + maxX) / 2, focusY, (minZ + maxZ) / 2);
+    const span = Math.max(maxX - minX, maxZ - minZ, 7 * GRID_METERS) * (isBasement ? 0.78 : 1.08);
     // The focus blueprint cuts its local east and south walls. Approach from
     // that same local diagonal after applying the building's authored yaw;
     // a fixed world-space camera could otherwise look straight at the two
@@ -359,7 +368,7 @@ export class SceneRenderer {
     this.cameraMode = "perspective";
     this.controls.enabled = true;
     this.controls.target.copy(target);
-    this.camera.position.set(target.x + viewX * span * 1.8, target.y + span * 0.9, target.z + viewZ * span * 1.8);
+    this.camera.position.set(target.x + viewX * span * 1.92, target.y + span * 1.02, target.z + viewZ * span * 1.92);
     this.camera.near = 0.1;
     this.camera.far = Math.max(300, span * 20);
     this.controls.minDistance = Math.max(1.8, span * 0.35);
@@ -438,6 +447,22 @@ export class SceneRenderer {
     if (preset === "overview") {
       this.recenterCameraForFloor(this.activeFloorView);
       return;
+    }
+    if (this.focusedBuildingId && this.currentScene) {
+      const focused = this.currentScene.buildingInstances?.find((building) => building.id === this.focusedBuildingId);
+      if (focused) {
+        this.positionCameraForFocusedBuilding(focused, this.activeFloorView);
+        const target = this.controls.target.clone();
+        const span = Math.max(focused.footprintCells.x, focused.footprintCells.z, 7) * GRID_METERS;
+        const cosine = Math.cos(focused.rotationY);
+        const sine = Math.sin(focused.rotationY);
+        const viewX = (cosine + sine) / Math.SQRT2;
+        const viewZ = (-sine + cosine) / Math.SQRT2;
+        this.camera.position.set(target.x + viewX * span * 2.15, target.y + Math.max(3.8, span * 0.36), target.z + viewZ * span * 2.15);
+        this.camera.lookAt(target);
+        this.controls.update();
+        return;
+      }
     }
     const span = Math.max(this.worldBounds.maxX - this.worldBounds.minX, this.worldBounds.maxZ - this.worldBounds.minZ, 5);
     const target = this.controls.target.clone();
@@ -647,23 +672,28 @@ export class SceneRenderer {
     const { minX, maxX, minZ, maxZ } = this.worldBounds;
     const width = maxX - minX;
     const depth = maxZ - minZ;
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, depth),
-      new THREE.MeshStandardMaterial({
-        color: 0x1b3b31,
-        roughness: 1,
-        metalness: 0,
-      }),
-    );
-    ground.name = "Tactical ground";
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set((minX + maxX) / 2, -0.035, (minZ + maxZ) / 2);
-    ground.receiveShadow = true;
-    this.gridRoot.add(ground);
+    if (!this.focusedBuildingId) {
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, depth),
+        new THREE.MeshStandardMaterial({
+          color: 0x1b3b31,
+          roughness: 1,
+          metalness: 0,
+        }),
+      );
+      ground.name = "Tactical ground";
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.set((minX + maxX) / 2, -0.035, (minZ + maxZ) / 2);
+      ground.receiveShadow = true;
+      this.gridRoot.add(ground);
+    }
 
     const surfaceTags = new Set(["floor", "platform", "ledge", "terrain", "bridge", "boardwalk", "ice-island", "road", "plaza", "quay", "clearing"]);
     const surfaceLinesByLevel = new Map<number, number[]>();
+    const belongsToFocus = (primitive: ScenePrimitive): boolean => !this.focusedBuildingId
+      || primitive.tags?.includes(`building-instance:${this.focusedBuildingId}`) === true;
     const addSurfaceGrid = (surface: ScenePrimitive): void => {
+      if (!belongsToFocus(surface)) return;
       if (surface.shape !== "box" || !surface.tags?.some((tag) => surfaceTags.has(tag))) return;
       if (surface.id === "site-terrain-base") return;
       if (scene.siteProgram && surface.tags?.includes("terrain") && !surface.tags.some((tag) => ["road", "bridge", "platform", "ledge"].includes(tag))) return;
@@ -700,7 +730,7 @@ export class SceneRenderer {
     // transformed with the authored stair rotation, instead of leaving stairs
     // as ungridded solid ramps.
     const stairLinesByLevel = new Map<number, number[]>();
-    for (const stair of scene.primitives.filter((primitive) => primitive.shape === "stairs")) {
+    for (const stair of scene.primitives.filter((primitive) => primitive.shape === "stairs" && belongsToFocus(primitive))) {
       const steps = Math.max(2, Math.round(stair.size.y / 0.18));
       const treadDepth = stair.size.z / steps;
       const cosine = Math.cos(stair.rotationY ?? 0);
@@ -762,7 +792,10 @@ export class SceneRenderer {
         if (primitiveBuildingId === this.focusedBuildingId && primitive.tags?.includes("focus-cutaway")) continue;
         if (primitiveBuildingId === this.focusedBuildingId && !focusInterior && primitive.tags?.some((tag) => tag === "envelope-part" || tag === "roof") === true) continue;
         if (!primitiveBuildingId && primitive.tags?.includes("roof-route") === true) continue;
-        if (!primitiveBuildingId && focusCenter && primitive.id !== "site-terrain-base" && Math.hypot(primitive.position.x - focusCenter.x, primitive.position.z - focusCenter.y) > focusRadius) continue;
+        // The parent site's giant terrain slab used to remain visible during
+        // building focus and read as a ceiling slicing through the room.
+        if (!primitiveBuildingId && primitive.id === "site-terrain-base") continue;
+        if (!primitiveBuildingId && focusCenter && Math.hypot(primitive.position.x - focusCenter.x, primitive.position.z - focusCenter.y) > focusRadius) continue;
       }
       // A reachable roof deck is authored as ordinary stone/wood so it can
       // carry a tactical grid.  It is still part of the roof inspection
