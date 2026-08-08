@@ -17,6 +17,7 @@ export type MaterialKey =
   | "water"
   | "earth"
   | "rock"
+  | "ice"
   | "moss"
   | "hazard"
   | "warmLight";

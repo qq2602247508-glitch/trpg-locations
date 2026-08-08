@@ -27,20 +27,25 @@ const includesAny = (text: string, terms: readonly string[]): boolean => terms.s
 
 function terrainKind(program: SiteProgram, prompt: string): TerrainProgramSummary["kind"] {
   const text = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  // A named parent landform owns the site before secondary transport words.
+  // Otherwise a crater prompt containing “吊桥” was incorrectly promoted to
+  // the bridge-pier slum grammar and the crater disappeared entirely.
+  if (program.requiredFeatures.includes("impact-crater-settlement")) return "impact-crater";
+  if (program.requiredFeatures.includes("volcanic-settlement") || includesAny(text, ["火山口村", "火山聚落", "volcanic settlement", "caldera village"])) return "caldera";
+  if (program.requiredFeatures.includes("ice-crevasse-settlement") || includesAny(text, ["冰川裂隙", "冰川裂缝", "巨大裂隙", "冰隙聚落", "glacier crevasse", "crevasse settlement"])) return "ice-crevasse";
+  if (program.requiredFeatures.includes("underdark-settlement") || includesAny(text, ["幽暗地域", "underdark", "地下聚落"])) return "underdark";
   if (program.requiredFeatures.includes("tower-city") || includesAny(text, ["巨型塔楼结构", "巨塔城市", "tower city", "megastructure city"])) return "megastructure";
   if (program.requiredFeatures.includes("vertical-slum") || includesAny(text, ["桥墩之间", "垂直贫民", "bridge-pier settlement"])) return "bridge-megastructure";
   if (program.requiredFeatures.includes("coastal-cliff") || includesAny(text, ["海崖港镇", "分层海崖", "sea-cliff port", "cliff port"])) return "coastal-cliff";
   if (program.requiredFeatures.includes("bone-swamp-settlement") || includesAny(text, ["石化龙骨", "肋骨栈道", "dragonbone swamp", "fossil ribs"])) return "swamp-bone";
   if (program.requiredFeatures.includes("airship-wreck-settlement") || includesAny(text, ["坠毁飞艇", "飞艇残骸", "crashed airship", "airship wreck"])) return "wreck-field";
-  if (program.requiredFeatures.includes("underdark-settlement") || includesAny(text, ["幽暗地域", "underdark", "地下聚落"])) return "underdark";
-  if (program.requiredFeatures.includes("volcanic-settlement") || includesAny(text, ["火山口村", "火山聚落", "volcanic settlement", "caldera village"])) return "caldera";
-  if (program.requiredFeatures.includes("impact-crater-settlement")) return "impact-crater";
   if (program.requiredFeatures.includes("water-city")) return "river";
   return program.terrain.kind;
 }
 
 function materialFor(cell: TerrainCell, kind: TerrainProgramSummary["kind"]): MaterialKey {
   if (cell.surface === "lava") return "hazard";
+  if (kind === "ice-crevasse") return cell.elevationFeet <= -10 ? "darkStone" : "ice";
   if (cell.surface === "rock" || kind === "underdark" || kind === "caldera" || kind === "impact-crater" || kind === "megastructure") return cell.elevationFeet >= 20 ? "darkStone" : "rock";
   return kind === "river" ? "earth" : "earth";
 }
@@ -65,6 +70,15 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
   const craterRadius = Math.min(width, depth) * rng.float(0.27, 0.34);
   const breachAngle = rng.float(-Math.PI, Math.PI);
   const breachAngles = [breachAngle, breachAngle + Math.PI * 0.72, breachAngle - Math.PI * 0.69];
+  const normalizedPrompt = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const wantsCraterBridge = includesAny(normalizedPrompt, ["跨坑", "吊桥", "悬索桥", "suspension bridge", "rope bridge"]);
+  const wantsCraterShrine = includesAny(normalizedPrompt, ["神龛", "神殿", "祭坛", "shrine", "altar", "temple"]);
+  const wantsCraterMine = includesAny(normalizedPrompt, ["矿工入口", "矿井", "矿洞", "mine entrance", "mine"]);
+  const wantsCraterCollapse = includesAny(normalizedPrompt, ["坍塌", "塌陷", "崩塌", "collapse", "collapsed"]);
+  const collapseAngle = breachAngle + Math.PI * 1.31;
+  const crevasseCenterX = width * 0.5;
+  const crevasseHalfGap = 3.8 + (program.seed.length % 5) * 0.45;
+  const crevasseAt = (z: number) => crevasseCenterX + Math.sin(z * 0.17 + phase) * (2.1 + (program.seed.length % 4) * 0.4);
   const ravineX = width * rng.float(0.46, 0.57);
   const megaCx = width / 2;
   const megaCz = depth / 2;
@@ -136,7 +150,35 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         standable = false;
         hazard = true;
       }
+      const collapseDelta = Math.abs(Math.atan2(Math.sin(angle - collapseAngle), Math.cos(angle - collapseAngle)));
+      if (kind === "impact-crater" && wantsCraterCollapse && radial > 0.72 && radial < 1.2 && collapseDelta < 0.12) {
+        surface = "void";
+        buildable = false;
+        standable = false;
+        hazard = true;
+      }
       if (radial > 0.7 && radial < 1.12 && !breach) buildable = Math.abs(radial - 0.83) < 0.07 || Math.abs(radial - 1.04) < 0.055;
+    } else if (kind === "ice-crevasse") {
+      const gapCenter = crevasseAt(z + 0.5);
+      const distance = Math.abs(x + 0.5 - gapCenter);
+      const edge = Math.min(x, z, width - 1 - x, depth - 1 - z);
+      if (edge === 0) {
+        surface = "void"; buildable = false; standable = false;
+      } else if (distance <= 1.4) {
+        elevationFeet = -15;
+        surface = "rock";
+        buildable = false;
+        hazard = true;
+      } else if (distance <= crevasseHalfGap) {
+        surface = "void";
+        buildable = false;
+        standable = false;
+        hazard = true;
+      } else {
+        elevationFeet = x + 0.5 < gapCenter ? 20 : 30;
+        surface = "rock";
+        buildable = distance > crevasseHalfGap + 4;
+      }
     } else if (kind === "underdark") {
       const nx = (x + 0.5 - width / 2) / (width * 0.48);
       const nz = (z + 0.5 - depth / 2) / (depth * 0.47);
@@ -276,6 +318,13 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         const z = depth * (0.24 + ((index * 0.137) % 0.54));
         return { x, z, elevationFeet: cellAt(x, z).elevationFeet };
       }
+      if (kind === "ice-crevasse") {
+        const z = 3 + ((index * 9.17 + Math.abs(phase) * 3) % Math.max(4, depth - 6));
+        const side = index % 2 === 0 ? -1 : 1;
+        const gapCenter = crevasseAt(z);
+        const candidate = { x: gapCenter + side * (crevasseHalfGap + 5.5), z };
+        if (clearanceBuildable(candidate.x, candidate.z, Math.min(1.5, clearance))) return candidate;
+      }
       if (kind === "impact-crater" || kind === "caldera") {
         const band = index % (kind === "caldera" ? 3 : 4);
         const radii = kind === "caldera"
@@ -315,7 +364,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         const cell = cellAt(x, z);
         if (cell.surface === "void") continue;
         const height = feetToMeters(cell.elevationFeet - bottomFeet);
-        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `elevation:${cell.elevationFeet}`, ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
+        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `elevation:${cell.elevationFeet}`, ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(kind === "ice-crevasse" ? ["ice-crevasse", "rift-bank"] : []), ...(kind === "ice-crevasse" && cell.elevationFeet <= -10 ? ["rift-bottom"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
         if (cell.surface === "water") {
           const mainDistance = Math.abs(x + 0.5 - warpedRiverX(z + 0.5, width, depth, phase));
           scene.primitives.push(water(`terrain-water-${x}-${z}`, 0, x + 0.5, feetToMeters(cell.elevationFeet + (kind === "river" ? 7.5 : 0.5)), z + 0.5, 0.98, 0.12, 0.98, kind === "river"
@@ -353,6 +402,43 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           }
         }
       }
+      if (kind === "ice-crevasse") {
+        const bridgeRows = [depth * 0.28, depth * 0.57, depth * 0.82];
+        for (const [index, row] of bridgeRows.entries()) {
+          const gapCenter = crevasseAt(row);
+          const bridgeY = feetToMeters(index === 2 ? 30 : 25) + FLOOR_SLAB_METERS;
+          scene.primitives.push(
+            corridor(`ice-crevasse-ice-bridge-${index + 1}`, 0, gapCenter - crevasseHalfGap - 2, row, gapCenter + crevasseHalfGap + 2, row, bridgeY, index === 1 ? 2.2 : 1.5, "ice", ["ice-crevasse", "bridge", "rift-crossing", "standable", "supported", "terrain-program"]),
+            cylinder(`ice-crevasse-bridge-anchor-${index + 1}-west`, 0, gapCenter - crevasseHalfGap - 2, 0, row, 0.42, bridgeY + feetToMeters(2), "ice", ["ice-crevasse", "bridge-anchor", "support", "terrain-program"]),
+            cylinder(`ice-crevasse-bridge-anchor-${index + 1}-east`, 0, gapCenter + crevasseHalfGap + 2, 0, row, 0.42, bridgeY + feetToMeters(2), "ice", ["ice-crevasse", "bridge-anchor", "support", "terrain-program"]),
+          );
+        }
+        const descentZ = depth * 0.46;
+        const descentX = crevasseAt(descentZ) - crevasseHalfGap - 1;
+        scene.primitives.push(
+          stairs("ice-crevasse-cargo-lift", 0, descentX, feetToMeters(20), descentZ, 2.4, feetToMeters(35), 12, "metal", ["ice-crevasse", "cargo-lift", "cliff-descent", "vertical-route", "supported", "terrain-program"]),
+          corridor("ice-crevasse-rock-tunnel-west", 0, descentX - 7, descentZ, descentX - 1, descentZ, feetToMeters(20) + FLOOR_SLAB_METERS, 2.2, "rock", ["ice-crevasse", "rock-tunnel", "cliff-descent", "standable", "terrain-program"]),
+          water("ice-crevasse-hot-spring", 0, crevasseAt(depth * 0.72), feetToMeters(-14.4), depth * 0.72, 3.5, 0.25, 5.5, ["ice-crevasse", "hot-spring", "watercourse", "hazard", "terrain-program"]),
+          box("ice-crevasse-bottom-mine-portal", 0, crevasseAt(depth * 0.84), feetToMeters(-15), depth * 0.84, 4.8, feetToMeters(10), 3.2, "darkStone", ["ice-crevasse", "rift-bottom", "mine-entrance", "portal", "terrain-program"]),
+        );
+        if (includesAny(normalizedPrompt, ["熔炉", "锻炉", "forge", "smelter"])) {
+          const forgeZ = depth * 0.36;
+          const forgeX = crevasseAt(forgeZ) + crevasseHalfGap + 7;
+          const forgeY = feetToMeters(30) + FLOOR_SLAB_METERS;
+          scene.primitives.push(
+            box("ice-crevasse-forge-yard", 0, forgeX, forgeY, forgeZ, 8, FLOOR_SLAB_METERS, 6, "metal", ["ice-crevasse", "forge-hall", "industrial-platform", "standable", "terrain-program"]),
+            cylinder("ice-crevasse-forge-furnace-a", 0, forgeX - 2, forgeY, forgeZ, 1.2, feetToMeters(7), "warmLight", ["ice-crevasse", "forge-hall", "furnace", "landmark", "terrain-program"]),
+            cylinder("ice-crevasse-forge-furnace-b", 0, forgeX + 1.4, forgeY, forgeZ + 0.8, 1, feetToMeters(6), "warmLight", ["ice-crevasse", "forge-hall", "furnace", "landmark", "terrain-program"]),
+            cylinder("ice-crevasse-forge-chimney", 0, forgeX + 2.7, forgeY, forgeZ - 1.2, 0.75, feetToMeters(18), "darkStone", ["ice-crevasse", "forge-hall", "chimney", "vertical-landmark", "terrain-program"]),
+          );
+        }
+        scene.tactical.push(
+          tacticalFeature("ice-crevasse-bank-west", "highGround", crevasseAt(depth * 0.5) - crevasseHalfGap - 5, depth * 0.5, feetToMeters(20), 3, "The west ice shelf holds the main settlement and overlooks the fracture."),
+          tacticalFeature("ice-crevasse-bank-east", "highGround", crevasseAt(depth * 0.5) + crevasseHalfGap + 5, depth * 0.5, feetToMeters(30), 3, "The east ice shelf is a separated firing line across the crevasse."),
+          tacticalFeature("ice-crevasse-bottom", "hazard", crevasseAt(depth * 0.55), depth * 0.55, feetToMeters(-15), 3, "The deep crevasse floor is reachable only by the supported cargo descent."),
+        );
+        scene.routes.push(createRoute("ice-crevasse-bottom-route", "vertical", [{ x: descentX, z: descentZ, y: feetToMeters(20) }, { x: crevasseAt(descentZ), z: descentZ, y: feetToMeters(-15) }], { purpose: "service", traffic: 0.25, schedule: "all" }));
+      }
       if (kind === "impact-crater" || kind === "caldera") {
         const coreMaterial: MaterialKey = kind === "caldera" ? "hazard" : "metal";
         scene.primitives.push(primitive(`${kind}-core`, "cylinder", 0, craterCx, feetToMeters(kind === "caldera" ? -5 : 0), craterCz, craterRadius * 0.32 * 1.524, feetToMeters(kind === "caldera" ? 1 : 7), craterRadius * 0.32 * 1.524, coreMaterial, [kind, kind === "caldera" ? "lava" : "meteor-fragment", "landmark", "terrain-program"]));
@@ -366,6 +452,45 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
             const mid = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 };
             scene.primitives.push(corridor(`${kind}-breach-ramp-${index + 1}-${segment + 1}`, 0, from.x, from.z, to.x, to.z, feetToMeters(cellAt(mid.x, mid.z).elevationFeet) + FLOOR_SLAB_METERS, 1.8, "rock", [kind, segment === 0 ? "crater-ramp" : "crater-ramp-continuation", "alternate-route", "standable", "terrain-program", "surface-following"]));
           }
+        }
+        const ringSegments = 18;
+        for (let index = 0; index < ringSegments; index += 1) {
+          const fromAngle = (Math.PI * 2 * index) / ringSegments + phase;
+          const toAngle = (Math.PI * 2 * (index + 1)) / ringSegments + phase;
+          const radius = craterRadius * 0.84;
+          const from = { x: craterCx + Math.cos(fromAngle) * radius, z: craterCz + Math.sin(fromAngle) * radius };
+          const to = { x: craterCx + Math.cos(toAngle) * radius, z: craterCz + Math.sin(toAngle) * radius };
+          const mid = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 };
+          if (cellAt(mid.x, mid.z).surface === "void") continue;
+          scene.primitives.push(corridor(`${kind}-ring-road-${index + 1}`, 0, from.x, from.z, to.x, to.z, feetToMeters(cellAt(mid.x, mid.z).elevationFeet) + FLOOR_SLAB_METERS + 0.05, 1.45, "rock", [kind, "crater-ring-road", "primary-route", "standable", "terrain-program", "surface-following"]));
+        }
+        if (kind === "impact-crater" && wantsCraterBridge) {
+          const bridgeAngle = breachAngle + Math.PI * 0.42;
+          const bridgeRadius = craterRadius * 0.78;
+          const from = { x: craterCx + Math.cos(bridgeAngle) * bridgeRadius, z: craterCz + Math.sin(bridgeAngle) * bridgeRadius };
+          const to = { x: craterCx - Math.cos(bridgeAngle) * bridgeRadius, z: craterCz - Math.sin(bridgeAngle) * bridgeRadius };
+          const bridgeY = feetToMeters(13) + FLOOR_SLAB_METERS;
+          scene.primitives.push(
+            corridor("impact-crater-suspension-bridge", 0, from.x, from.z, to.x, to.z, bridgeY, 1.45, "wood", ["impact-crater", "suspension-bridge", "bridge", "standable", "site-program", "supported"]),
+            cylinder("impact-crater-bridge-anchor-a", 0, from.x, 0, from.z, 0.55, bridgeY + feetToMeters(3), "wood", ["impact-crater", "bridge-anchor", "support", "site-program"]),
+            cylinder("impact-crater-bridge-anchor-b", 0, to.x, 0, to.z, 0.55, bridgeY + feetToMeters(3), "wood", ["impact-crater", "bridge-anchor", "support", "site-program"]),
+          );
+        }
+        if (kind === "impact-crater" && wantsCraterShrine) {
+          scene.primitives.push(
+            cylinder("impact-crater-basin-shrine", 0, craterCx + craterRadius * 0.22, feetToMeters(1), craterCz - craterRadius * 0.12, 1.7, feetToMeters(4), "plaster", ["impact-crater", "basin-shrine", "shrine", "landmark", "cover", "site-program"]),
+            corridor("impact-crater-shrine-path", 0, craterCx + craterRadius * 0.5, craterCz - craterRadius * 0.12, craterCx + craterRadius * 0.22, craterCz - craterRadius * 0.12, feetToMeters(5) + FLOOR_SLAB_METERS, 1.2, "rock", ["impact-crater", "shrine-route", "standable", "site-program"]),
+          );
+        }
+        if (kind === "impact-crater" && wantsCraterMine) {
+          const mineAngle = breachAngle - Math.PI * 0.83;
+          const mineX = craterCx + Math.cos(mineAngle) * craterRadius * 0.96;
+          const mineZ = craterCz + Math.sin(mineAngle) * craterRadius * 0.96;
+          const mineY = feetToMeters(cellAt(mineX, mineZ).elevationFeet);
+          scene.primitives.push(
+            box("impact-crater-mine-portal", 0, mineX, mineY, mineZ, 4.8, feetToMeters(11), 3.4, "darkStone", ["impact-crater", "mine-entrance", "portal", "site-program"]),
+            corridor("impact-crater-mine-approach", 0, craterCx + Math.cos(mineAngle) * craterRadius * 0.72, craterCz + Math.sin(mineAngle) * craterRadius * 0.72, mineX, mineZ, mineY + FLOOR_SLAB_METERS + 0.04, 1.4, "rock", ["impact-crater", "mine-route", "standable", "site-program"]),
+          );
         }
         if (kind === "caldera") {
           const outlet = breachAngles[0] ?? 0;

@@ -368,6 +368,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   const settlementTitle = program.requiredFeatures.includes("water-city") ? "The Waterwoven Quarter"
     : program.requiredFeatures.includes("impact-crater-settlement") ? "The Fallen-Star Village"
       : program.requiredFeatures.includes("volcanic-settlement") ? "The Cinder-Rim Village"
+        : program.requiredFeatures.includes("ice-crevasse-settlement") ? "The Blue-Deep Hold"
         : program.requiredFeatures.includes("underdark-settlement") ? "The Deep-Shelf Enclave"
           : program.requiredFeatures.includes("tower-city") ? "The Many-Ring Tower City"
             : program.requiredFeatures.includes("vertical-slum") ? "The Pier-Hung Market"
@@ -396,7 +397,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   else if (!isFloating) scene.primitives.push(box("site-terrain-base", 0, program.bounds.x / 2, 0, landDepth / 2, program.bounds.x, FLOOR_SLAB_METERS, landDepth, "earth", ["floor", "terrain", "site-program", `site:${program.siteType}`]));
   // Districts are planning ownership, not giant coloured floor decals. Their
   // identity is made legible by parcel use, landmarks and road hierarchy.
-  const semanticTerrain = ["river", "impact-crater", "caldera", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind);
+  const semanticTerrain = ["river", "impact-crater", "caldera", "ice-crevasse", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind);
   if (!semanticTerrain) addBlockAndParcelSurfaces(scene, program, elevationAt);
   if (!semanticTerrain) {
     for (const road of program.roads) scene.primitives.push(...roadPieces(road, legacySpecialElevation ? { ...terrain, elevationAt, surfaceAt: () => "ground" } : terrain));

@@ -49,7 +49,7 @@ interface GeometryMetrics {
 
 const SCENE_KINDS = ["tavern", "tower", "sewer", "cave", "dungeon", "building", "settlement", "wilderness", "adaptive"] as const satisfies readonly SceneKind[];
 const PRIMITIVE_SHAPES = ["box", "cylinder", "cone", "sphere", "gable", "stairs", "water"] as const satisfies readonly PrimitiveShape[];
-const MATERIAL_KEYS = ["stone", "darkStone", "wood", "plaster", "roof", "metal", "water", "earth", "rock", "moss", "hazard", "warmLight"] as const satisfies readonly MaterialKey[];
+const MATERIAL_KEYS = ["stone", "darkStone", "wood", "plaster", "roof", "metal", "water", "earth", "rock", "ice", "moss", "hazard", "warmLight"] as const satisfies readonly MaterialKey[];
 const ROOM_ROLES = ["public", "private", "service", "circulation", "combat", "natural"] as const satisfies readonly Room["role"][];
 const ROUTE_KINDS = ["primary", "alternate", "vertical", "waterflow"] as const satisfies readonly Route["kind"][];
 const ROUTE_PURPOSES = ["movement", "crowd", "service", "escape", "water"] as const satisfies readonly NonNullable<Route["purpose"]>[];
@@ -364,6 +364,11 @@ function validateGeometryInvariants(
       const wallViolations = new Set<string>();
       for (const sample of routeSamples(route)) {
         for (const wall of solidWalls) {
+          // A surface route may pass over a basement wall. Underground
+          // partitions only block routes while the sample is actually inside
+          // their vertical span; otherwise every cabin trail crossing the
+          // building footprint becomes a false wall violation.
+          if (hasTag(wall, "underground") && sample.y > wall.position.y + wall.size.y + ROUTE_SURFACE_MARGIN_METERS) continue;
           if (!pointNearPrimitiveSurface(sample, wall, 0, 0)) continue;
           const hasNearbyOpening = openings.some((opening) => (
             opening.level === wall.level

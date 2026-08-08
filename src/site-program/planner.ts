@@ -78,13 +78,14 @@ function requestedSiteFeatures(text: string): string[] {
   if ((text.includes("水城") && !text.includes("深水城")) || contains(text, ["主运河", "支流", "运河", "water city", "canal"])) features.push("water-city");
   add("hillside-district", ["山坡贵族区", "等高线道路", "山顶神殿", "hillside", "contour road"]);
   add("war-damaged", ["战争破坏", "坍塌住宅", "临时街垒", "破损道路", "war-damaged", "barricade"]);
-  add("vertical-slum", ["垂直贫民", "巨型桥墩", "多层棚屋", "吊桥", "vertical slum", "bridge pier"]);
+  add("vertical-slum", ["垂直贫民", "巨型桥墩", "桥墩棚屋", "多层棚屋", "vertical slum", "bridge pier settlement"]);
   add("colony-port", ["火星殖民", "气闸", "居住模块", "温室", "mars colony", "airlock"]);
   add("coastal-town", ["海滨小镇", "1920年代海滨", "coastal town", "seaside town"]);
   add("coastal-cliff", ["海崖港镇", "分层海崖", "悬崖港镇", "sea-cliff port", "cliff port"]);
   add("fantasy-harbor", ["深水城港区", "奇幻港区", "deepwater harbor", "fantasy harbor"]);
   add("impact-crater-settlement", ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"]);
   add("volcanic-settlement", ["火山口村", "火山村", "火山聚落", "破火山口聚落", "volcanic settlement", "volcano village", "caldera village"]);
+  add("ice-crevasse-settlement", ["冰川裂隙", "冰川裂缝", "巨大裂隙", "冰隙聚落", "glacier crevasse", "crevasse settlement"]);
   add("underdark-settlement", ["幽暗地域村", "幽暗地域聚落", "地下聚落", "underdark village", "underdark settlement"]);
   add("tower-city", ["巨塔城市", "巨型塔楼结构", "城市分布在巨型塔", "tower city", "megastructure city"]);
   add("bone-swamp-settlement", ["石化龙骨", "肋骨栈道", "骨架高台", "dragonbone swamp", "fossil ribs"]);
@@ -143,6 +144,7 @@ function roleSequence(siteType: SiteType, features: readonly string[]): readonly
 }
 
 function buildingKindFor(role: DistrictRole, index: number, text: string): SettlementBuildingKind {
+  if ((role === "industrial" || role === "service") && contains(text, ["熔炉", "锻炉", "forge", "smelter"])) return "blacksmith";
   if (role === "harbor" || role === "industrial") return index % 3 === 0 ? "factory" : "warehouse";
   if (role === "sacred") return "shrine";
   if (role === "civic") return index % 2 === 0 ? "manor" : "tower";

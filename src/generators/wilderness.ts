@@ -37,7 +37,7 @@ interface TerrainMorphology {
 }
 
 const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>> = {
-  "river-valley": ["river", "valley", "riverbank", "河谷", "河流", "河川", "溪谷", "峡谷河"],
+  "river-valley": ["river", "stream", "creek", "riverbank", "river bend", "河谷", "河流", "河川", "河湾", "溪流", "溪谷", "水湾", "峡谷河"],
   "dry-riverbed": ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床", "河床"],
   "impact-crater": ["impact crater", "meteor crater", "陨石坑", "撞击坑", "流星坑"],
   volcanic: ["volcano", "volcanic", "caldera", "火山", "火山口", "破火山口"],
@@ -1143,9 +1143,26 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   if (!wantsBuilding || (archetype !== "forest" && archetype !== "river-valley" && archetype !== "mountain" && archetype !== "swamp")) return;
   const alchemical = ["炼金", "alchemy", "alchemist"].some((term) => text.includes(term));
   const hunter = ["猎人", "hunter"].some((term) => text.includes(term));
-  const x = archetype === "forest" ? width * 0.52 : width * 0.28;
-  const z = archetype === "forest" ? depth * 0.5 : depth * 0.28;
-  const baseY = archetype === "river-valley" || archetype === "mountain" ? feetToMeters(10) : FLOOR_SLAB_METERS * 2;
+  const riverAnchor = archetype === "river-valley"
+    ? scene.primitives
+      .filter((item) => item.tags?.includes("watercourse") && !item.tags?.includes("tributary"))
+      .sort((left, right) => Math.abs(left.position.x / CELL - width * 0.3) - Math.abs(right.position.x / CELL - width * 0.3))[0]
+    : undefined;
+  const riverX = riverAnchor?.position.x ? riverAnchor.position.x / CELL : width * 0.28;
+  const riverZ = riverAnchor?.position.z ? riverAnchor.position.z / CELL : depth * 0.5;
+  const shoreDirection = riverZ < depth * 0.5 ? 1 : -1;
+  const x = archetype === "forest" ? width * 0.52 : Math.max(12, Math.min(width - 12, riverX));
+  const z = archetype === "river-valley"
+    ? Math.max(8, Math.min(depth - 8, riverZ + shoreDirection * 7.5))
+    : archetype === "forest" ? depth * 0.5 : depth * 0.28;
+  const supportSurface = scene.primitives
+    .filter((item) => item.tags?.includes("floor") && item.tags?.includes("terrain"))
+    .map((item) => ({ item, distance: Math.hypot(item.position.x / CELL - x, item.position.z / CELL - z) }))
+    .filter((entry) => entry.distance < 3)
+    .sort((left, right) => left.distance - right.distance)[0]?.item;
+  const baseY = supportSurface
+    ? supportSurface.position.y + supportSurface.size.y
+    : archetype === "river-valley" || archetype === "mountain" ? feetToMeters(10) : FLOOR_SLAB_METERS * 2;
   // Clear only procedural clutter in the building pad. Authored terrain,
   // rivers, cliffs and routes remain the owner of the surrounding site.
   scene.primitives = scene.primitives.filter((item) => {
@@ -1154,9 +1171,9 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     // pad may clear brush and ordinary trees, but must not orphan a retained
     // canopy route by deleting its stair or platform primitive.
     if (item.tags?.some((tag) => tag === "vertical-route" || tag === "canopy-platform" || tag === "giant-tree")) return true;
-    if (!item.tags?.some((tag) => tag === "natural-detail" || tag === "natural-prop" || tag === "cover" || tag === "forest")) return true;
+    if (!item.tags?.some((tag) => tag === "natural-detail" || tag === "natural-prop" || tag === "cover" || tag === "forest" || tag === "woodland-cover" || tag === "tree" || tag === "canopy" || tag === "fallen-log")) return true;
     const px = item.position.x / CELL; const pz = item.position.z / CELL;
-    return Math.hypot(px - x, pz - z) > 8;
+    return Math.hypot(px - x, pz - z) > (archetype === "river-valley" ? 12 : 10);
   });
   scene.primitives.push(box("wilderness-building-pad", 0, x, baseY - FLOOR_SLAB_METERS, z, 13, FLOOR_SLAB_METERS, 12, archetype === "forest" ? "earth" : "rock", ["floor", "terrain", "building-pad", "site-program", "standable"]));
   for (const [index, dx, dz] of [[0, -4.8, -3.8], [1, 4.8, -3.8], [2, -4.8, 3.8], [3, 4.8, 3.8]] as const) scene.primitives.push(cylinder(`wilderness-foundation-pier-${index}`, 0, x + dx, 0, z + dz, 0.7, Math.max(FLOOR_SLAB_METERS, baseY), "darkStone", ["foundation", "terrain-adapter", "site-program"]));
@@ -1177,6 +1194,33 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     entrance,
     baseY,
   }, context.rng.fork("wilderness-building"));
+  if (archetype === "forest") {
+    const hunterTrail = scene.routes.find((route) => route.id === "forest-hunter-trail");
+    if (hunterTrail && hunterTrail.points.length >= 2) {
+      const surfacePointAtCells = (px: number, pz: number): { x: number; y: number; z: number } => {
+        const worldX = px * CELL;
+        const worldZ = pz * CELL;
+        const surface = scene.primitives
+          .filter((item) => item.tags?.includes("floor") && item.tags?.includes("terrain"))
+          .sort((left, right) => Math.hypot(worldX - left.position.x, worldZ - left.position.z) - Math.hypot(worldX - right.position.x, worldZ - right.position.z))[0];
+        return surface
+          ? { x: surface.position.x, y: surface.position.y + surface.size.y + 0.04, z: surface.position.z }
+          : { x: worldX, y: baseY, z: worldZ };
+      };
+      const first = hunterTrail.points[0]!;
+      const last = hunterTrail.points.at(-1)!;
+      const skirtWest = x - 10.5;
+      const skirtNorth = z - 9.5;
+      const skirtSouth = z + 9.5;
+      hunterTrail.points = [
+        first,
+        surfacePointAtCells(skirtWest, skirtNorth),
+        surfacePointAtCells(skirtWest, skirtSouth),
+        surfacePointAtCells(x + 10.5, skirtSouth),
+        last,
+      ];
+    }
+  }
   const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
   const siteAnchor = scene.rooms.find((room) => room.id === "forest-clearing-room") ?? scene.rooms.find((room) => room.level === 0 && !room.id.startsWith("core-wilderness"));
   if (wildernessRoot && siteAnchor) connectRooms(scene.rooms, siteAnchor.id, wildernessRoot.id);
@@ -1209,12 +1253,55 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     siteRoadCount += 1;
     siteRoadLength += Math.hypot(7, 1) + Math.hypot(escapeEnd.x - (x + 9), escapeEnd.z - (z - 5));
   }
+  const waterfrontDirection = archetype === "river-valley" ? -shoreDirection : 1;
+  const inlandDirection = -waterfrontDirection;
   scene.primitives.push(
-    box("wilderness-porch", 0, x, baseY + FLOOR_SLAB_METERS, z + 5, 5, feetToMeters(2), 2.2, "wood", ["porch", "standable", "building-exterior", "site-program"]),
-    cylinder("wilderness-well", 0, x - 6, baseY, z + 3.5, 2, feetToMeters(3), "stone", ["well", "cover", "building-exterior", "site-program"]),
-    box("wilderness-woodpile", 0, x + 5.5, baseY, z + 3, 3.5, feetToMeters(3), 1.8, "wood", ["woodpile", "cover", "building-exterior"]),
+    box("wilderness-porch", 0, x, baseY + FLOOR_SLAB_METERS, z + waterfrontDirection * 5, 5, feetToMeters(2), 2.2, "wood", ["porch", "standable", "building-exterior", "site-program"]),
+    cylinder("wilderness-well", 0, x - 6, baseY, z + inlandDirection * 3.5, 2, feetToMeters(3), "stone", ["well", "cover", "building-exterior", "site-program"]),
+    box("wilderness-woodpile", 0, x + 5.5, baseY, z + inlandDirection * 3, 3.5, feetToMeters(3), 1.8, "wood", ["woodpile", "cover", "building-exterior"]),
   );
-  for (const [index, fx, fz] of [[0, -6, -5], [1, 6, -5], [2, -6, 5], [3, 6, 5]] as const) scene.primitives.push(box(`wilderness-fence-${index}`, 0, x + fx, baseY, z + fz, index < 2 ? 0.25 : 12, feetToMeters(4), index < 2 ? 10 : 0.25, "wood", ["fence", "cover", "building-exterior"]));
+  if (archetype === "river-valley" && riverAnchor) {
+    const waterY = riverAnchor.position.y + riverAnchor.size.y;
+    const dockY = waterY + 0.22;
+    const dockStartZ = z - shoreDirection * 5.4;
+    const dockEndZ = riverZ + shoreDirection * 0.45;
+    scene.primitives.push(
+      corridor("wilderness-river-dock", 0, x, dockStartZ, x, dockEndZ, dockY, 2.2, "wood", ["dock", "river-access", "standable", "site-program"]),
+      cylinder("wilderness-dock-pile-a", 0, x - 0.75, waterY - feetToMeters(5), dockEndZ, 0.24, feetToMeters(7), "wood", ["dock", "support", "site-program"]),
+      cylinder("wilderness-dock-pile-b", 0, x + 0.75, waterY - feetToMeters(5), dockEndZ, 0.24, feetToMeters(7), "wood", ["dock", "support", "site-program"]),
+    );
+    const bankPortal = { xCells: x, zCells: dockStartZ - shoreDirection * 1.2, yMeters: baseY };
+    const dockPortal = { xCells: x, zCells: dockStartZ + shoreDirection * 1.1, yMeters: dockY };
+    const bankConnection = stairConnection(
+      "wilderness-river-bank-descent",
+      0,
+      baseY <= dockY ? bankPortal : dockPortal,
+      baseY <= dockY ? dockPortal : bankPortal,
+      1.5,
+      "wood",
+      ["river-access", "vertical-route", "supported", "site-program"],
+    );
+    scene.primitives.push(bankConnection.primitive);
+    scene.routes.push(
+      stairRoute("wilderness-river-bank-route", bankConnection),
+      createRoute("wilderness-dock-route", "alternate", [
+        { x, z: dockStartZ, y: dockY },
+        { x, z: dockEndZ, y: dockY },
+      ], { purpose: "movement", traffic: 0.3, schedule: "all" }),
+    );
+    scene.tactical.push(
+      tacticalFeature("wilderness-river-dock-choke", "chokepoint", x, dockEndZ, dockY, 2, "The narrow cabin dock is a supported river access point and exposed tactical bottleneck."),
+    );
+  }
+  if (archetype === "river-valley") {
+    const inlandFenceZ = z + inlandDirection * 5;
+    scene.primitives.push(
+      box("wilderness-fence-inland-west", 0, x - 4.25, baseY, inlandFenceZ, 3.5, feetToMeters(4), 0.25, "wood", ["fence", "cover", "building-exterior", "river-aware"]),
+      box("wilderness-fence-inland-east", 0, x + 4.25, baseY, inlandFenceZ, 3.5, feetToMeters(4), 0.25, "wood", ["fence", "cover", "building-exterior", "river-aware"]),
+    );
+  } else {
+    for (const [index, fx, fz] of [[0, -6, -5], [1, 6, -5], [2, -6, 5], [3, 6, 5]] as const) scene.primitives.push(box(`wilderness-fence-${index}`, 0, x + fx, baseY, z + fz, index < 2 ? 0.25 : 12, feetToMeters(4), index < 2 ? 10 : 0.25, "wood", ["fence", "cover", "building-exterior"]));
+  }
   if (alchemical) {
     scene.primitives.push(
       cylinder("alchemy-giant-tree", 0, x + 6, baseY, z - 5, 3.8, feetToMeters(32), "wood", ["giant-tree", "vertical-landmark", "cover"]),

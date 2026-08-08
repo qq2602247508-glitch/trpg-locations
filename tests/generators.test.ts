@@ -372,7 +372,31 @@ describe("scene generators", () => {
     expect(craterVillage.siteProgram?.roadPattern).toBe("radial-ring");
     expect(craterVillage.primitives.filter((primitive) => primitive.tags?.includes("crater-rim")).length).toBeGreaterThanOrEqual(12);
     expect(craterVillage.primitives.filter((primitive) => primitive.tags?.includes("crater-ramp")).length).toBe(3);
+    expect(craterVillage.primitives.some((primitive) => primitive.tags?.includes("vertical-slum"))).toBe(false);
     expect(waterCity.diagnostics.valid && craterVillage.diagnostics.valid).toBe(true);
+  });
+
+  it("keeps crater bridge vocabulary subordinate to the crater parent terrain", () => {
+    const scene = generateScene({ ...request("r15-crater-bridge-village", "medium", 0.78), prompt: "围绕古老陨石坑边缘生长的中世纪村庄，坑壁道路、坑底神龛、环形房屋组团、跨坑吊桥、矿工入口和危险坍塌区" }, "adaptive");
+    expect(scene.terrainProgram?.kind).toBe("impact-crater");
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("suspension-bridge") && primitive.tags?.includes("impact-crater"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("basin-shrine"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("mine-entrance"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("crater-ring-road"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("vertical-slum"))).toBe(false);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("realizes a settlement on two separated ice-crevasse banks", () => {
+    const scene = generateScene({ ...request("r15-ice-crevasse-settlement", "medium", 0.82), prompt: "建在冰川巨大裂隙两侧的矮人聚落，有冰桥、岩石隧道、升降货梯、熔炉大厅、贴崖住宅、地下热泉和裂隙底部的废弃矿道" }, "adaptive");
+    expect(scene.terrainProgram?.kind).toBe("ice-crevasse");
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("rift-crossing")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("cliff-descent") && primitive.tags?.includes("cargo-lift"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("hot-spring"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.material === "ice" && primitive.tags?.includes("rift-bank"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("forge-hall"))).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "blacksmith")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
   });
 
   it("compiles semantic parent terrain before placing settlement buildings", () => {
@@ -489,6 +513,16 @@ describe("scene generators", () => {
     expect(dense.routes.some((route) => route.id === "wilderness-escape-route")).toBe(true);
     expect(hasTag(dense, "escape-route")).toBe(true);
     expect(sparse.diagnostics.valid && dense.diagnostics.valid).toBe(true);
+  });
+
+  it("composes a river-bank cabin, supported dock, and bank descent into one site", () => {
+    const scene = generateScene({ ...request("river-cabin-site", "medium", 0.72), prompt: "森林河湾中的猎人小屋，有真实木屋内部、前廊、储藏间、烟囱、河边小码头、上坡兽径、林间掩体和屋后地下储藏窖" }, "adaptive");
+    expect(scene.archetype).toBe("river-valley");
+    expect(scene.buildingInstances?.some((building) => building.detailLevel === "full-interior")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("dock") && primitive.tags?.includes("standable"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.id === "wilderness-river-bank-descent" && primitive.tags?.includes("supported"))).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-dock-route")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
   });
 
   it("realizes mining infrastructure as terrain, water, bridge and portal geometry", () => {

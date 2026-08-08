@@ -18,7 +18,7 @@ export interface SitePoint extends Vec2 {
 }
 
 export interface SiteTerrainProgram {
-  kind: "coast" | "coastal-cliff" | "river" | "rolling" | "valley" | "forest-clearing" | "urban" | "impact-crater" | "caldera" | "underdark" | "megastructure" | "bridge-megastructure" | "swamp-bone" | "wreck-field";
+  kind: "coast" | "coastal-cliff" | "river" | "rolling" | "valley" | "forest-clearing" | "urban" | "impact-crater" | "caldera" | "ice-crevasse" | "underdark" | "megastructure" | "bridge-megastructure" | "swamp-bone" | "wreck-field";
   buildableRatio: number;
   elevationBandsFeet: number[];
   waterEdge?: SitePoint[];

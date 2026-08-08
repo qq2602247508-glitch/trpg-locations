@@ -118,7 +118,10 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   const depth = Math.max(5, lot.depth * 0.86);
   const wallHeight = feetToMeters(generated.floorHeightFeet[0] ?? 10);
   const upperY = baseY + wallHeight;
-  const basementY = baseY - feetToMeters(10);
+  // Keep the basement shell fully below the exterior grade. At exactly
+  // 10 feet the 9-foot basement wall can protrude through a raised site pad,
+  // making a surface trail look like it crosses an underground wall.
+  const basementY = baseY - feetToMeters(12);
   const tags = ["settlement-building", "independent-building-module", "full-interior", `building:${lot.kind}`, `building-instance:${lot.id}`, `district:${lot.district}`];
   const point = (x: number, z: number) => localPoint(lot, x, z);
   const addRotatedBox = (id: string, x: number, z: number, w: number, h: number, d: number, y: number, material: MaterialKey, extra: string[] = [], level = 0) => {

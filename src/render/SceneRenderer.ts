@@ -118,6 +118,15 @@ const MATERIAL_STYLE: Record<
   },
   earth: { color: 0x8a6e50, roughness: 1 },
   rock: { color: 0x7e8981, roughness: 0.96 },
+  ice: {
+    color: 0x9fc9d6,
+    roughness: 0.28,
+    metalness: 0.08,
+    emissive: 0x173a45,
+    emissiveIntensity: 0.18,
+    opacity: 0.88,
+    transparent: true,
+  },
   moss: { color: 0x5e865d, roughness: 1 },
   hazard: {
     color: 0xba5138,

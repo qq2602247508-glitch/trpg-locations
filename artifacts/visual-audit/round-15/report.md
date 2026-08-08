@@ -108,9 +108,38 @@ Browser route: `/?atom=<capability-id>`.
 
 Implemented fixtures currently cover waterfall, vertical route, ancient tree and bridge. `atom-bench/waterfall-low-angle.png` visibly verifies an upper source, vertical water face, lower basin, two support surfaces and a supported bridge.
 
+### Mixed-site composition regressions
+
+`mixed-sites/river-cabin-a-overview-v3.png` and
+`mixed-sites/river-cabin-a-low-angle-v2.png` are the same-seed regression for
+“森林河湾中的猎人小屋”. The first attempt was forest-only and hid the cabin
+inside the canopy. The repaired composition classifies the river bay as the
+parent terrain, clears only local woodland clutter, places the full-interior
+cabin on a supported bank surface, and adds a waterfront porch, bank descent,
+short dock, dock route and river-side tactical choke.
+
+`mixed-sites/crater-village-a-overview-v2.png` is the repaired same-seed
+regression for the crater-edge village. The earlier image was incorrectly
+promoted to the bridge-pier/slum grammar because the prompt contained “吊桥”.
+The parent-priority fix now produces a warped crater with a broken rim, three
+radial descent ramps, a crater-ring road, a cross-crater suspension bridge,
+collapse void, basin shrine and mine portal. Browser audit: 99/100 and 100%
+semantic coverage.
+
+`mixed-sites/ice-crevasse-a-overview-v3.png`,
+`mixed-sites/ice-crevasse-a-low-angle-v3.png` and
+`mixed-sites/ice-crevasse-a-top-v3.png` cover the ice-crevasse settlement
+prompt. The new parent terrain has two separate ice shelves, a deep rock
+floor, three supported bridges, a cargo-lift descent, rock tunnel, hot spring,
+bottom mine portal and forge-hall/furnace landmarks. The top view confirms the
+fracture is a real map boundary rather than a surface decal. The same prompt
+with seed `round15-ice-crevasse-b` and density 55 is captured in
+`mixed-sites/ice-crevasse-b-top-density55.png`; its bank geometry and building
+placement differ while retaining the same parent grammar.
+
 ## Automated gates
 
-- TypeScript + Vitest: 168/168 passing.
+- TypeScript + Vitest: 171/171 passing across the complete test suite.
 - Production build: passing.
 - Atom quality gate checks footprint/elevation ranges, geometry builder, at least two automatic validations, at least three visual fixtures, at least two explicit failure conditions, and rejects `production-ready` entries backed by a planned builder.
 - Density regression measures ecology counts, tributary structures, lava branches and obsidian ridges.
@@ -121,7 +150,9 @@ Implemented fixtures currently cover waterfall, vertical route, ancient tree and
 
 - Planned primitive operations such as arbitrary polygon surfaces, robust boolean openings, true lofts and cave cuts remain planned.
 - The generic grammar can retrieve BGE capabilities, but not every retrieved planned capability has a geometry solver. The tidal-cave monastery audit correctly proves BGE selection, not full tidal-cave realization.
-- Ice-crevasse settlements, hollow-tree cities, mangrove smuggler ports, river-bay cabin docks, crater villages and floating salt-crystal monasteries need dedicated combinations of the new atoms; they are not claimed complete in this round.
+- Hollow-tree cities, mangrove smuggler ports and floating salt-crystal
+  monasteries still need dedicated combinations of the new atoms; they are not
+  claimed complete in this round.
 - StyleProgram is auditable and influences the specialized natural slices through material/silhouette rules, but the full roof/opening/lighting/fog style compiler remains incomplete.
 - Debug rendering currently exposes route/tactical/grid views; dedicated rendered blocked-volume and port glyph layers remain planned.
 - The renderer batches repeated shapes effectively, but it does not yet use a true per-species `InstancedMesh` ecology pipeline.
