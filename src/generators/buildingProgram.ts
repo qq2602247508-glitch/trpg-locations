@@ -49,6 +49,10 @@ export interface ProgramConnection {
   width: number;
 }
 
+export type BuildingState = "ruined" | "abandoned" | "collapsed" | "fire" | "flooded" | "overgrown" | "infernal" | "war-damaged" | "sealed" | "temporary-conversion";
+export type ExteriorStyle = "sacred-close" | "defensive-approach" | "institutional-street" | "coastal-cliff" | "service-yard" | "estate-drive" | "station-platform" | "academy-court";
+export type FacadeStyle = "sacred" | "fortified" | "civic" | "industrial" | "domestic" | "academic";
+
 export interface BuildingProgram {
   id: string;
   title: string;
@@ -64,6 +68,148 @@ export interface BuildingProgram {
   detailCount?: number;
   floorMaterial: MaterialKey;
   wallMaterial: MaterialKey;
+  states?: BuildingState[];
+  exteriorStyle?: ExteriorStyle;
+  facadeStyle?: FacadeStyle;
+}
+
+function roomBaseY(program: BuildingProgram, room: ProgramRoom): number {
+  return baseY(program, room.level, room.elevationFeet, room.absoluteElevationFeet);
+}
+
+function addParapet(scene: GeneratedScene, id: string, room: ProgramRoom, y: number, material: MaterialKey): void {
+  const h = feetToMeters(3.2);
+  const t = 0.28;
+  scene.primitives.push(
+    box(`${id}-north`, room.level, room.x, y, room.z - room.depth / 2, room.width, h, t, material, ["parapet", "cover", "roof-route"]),
+    box(`${id}-south`, room.level, room.x, y, room.z + room.depth / 2, room.width, h, t, material, ["parapet", "cover", "roof-route"]),
+    box(`${id}-west`, room.level, room.x - room.width / 2, y, room.z, t, h, room.depth, material, ["parapet", "cover", "roof-route"]),
+    box(`${id}-east`, room.level, room.x + room.width / 2, y, room.z, t, h, room.depth, material, ["parapet", "cover", "roof-route"]),
+  );
+}
+
+function addFacadeAndMassing(scene: GeneratedScene, program: BuildingProgram): void {
+  const aboveGrade = program.rooms.filter((room) => !room.openAir && room.absoluteElevationFeet === undefined && !room.tags.includes("underground"));
+  const groundRooms = aboveGrade.filter((room) => room.level === 0);
+  for (const room of groundRooms) {
+    const y = roomBaseY(program, room) + feetToMeters(Math.min(7, (program.floorHeights[room.level] ?? 12) * 0.48));
+    const nearNorth = room.z - room.depth / 2 < 6;
+    const nearSouth = room.z + room.depth / 2 > program.bounds.z - 6;
+    const sideZ = nearNorth ? room.z - room.depth / 2 - 0.05 : nearSouth ? room.z + room.depth / 2 + 0.05 : undefined;
+    if (sideZ !== undefined) {
+      const count = Math.max(1, Math.min(4, Math.floor(room.width / 4)));
+      for (let index = 0; index < count; index += 1) {
+        const x = room.x + (index - (count - 1) / 2) * Math.min(3, room.width / count);
+        scene.primitives.push(box(`facade-window-${room.id}-${index}`, room.level, x, y, sideZ, 1.15, feetToMeters(4.6), 0.12, "warmLight", ["window", "facade", `room:${room.id}`]));
+      }
+    }
+  }
+
+  const roofRooms = program.rooms.filter((room) => room.tags.includes("roof-platform"));
+  for (const room of roofRooms) addParapet(scene, `roof-parapet-${room.id}`, room, roomBaseY(program, room) + FLOOR_SLAB_METERS, program.wallMaterial);
+
+  const tallestGround = groundRooms.toSorted((a, b) => b.width * b.depth - a.width * a.depth)[0];
+  if (tallestGround) {
+    const roofY = roomBaseY(program, tallestGround) + feetToMeters(program.floorHeights[0] ?? 12);
+    if (program.facadeStyle === "domestic" || program.facadeStyle === "sacred" || program.facadeStyle === "academic") {
+      for (let tier = 0; tier < 3; tier += 1) {
+        scene.primitives.push(box(`massing-roof-${tier}`, tallestGround.level, tallestGround.x, roofY + tier * 0.34, tallestGround.z, Math.max(2, tallestGround.width - tier * 1.6), 0.32, Math.max(2, tallestGround.depth - tier * 1.2), "roof", ["roof", "stepped-roof", program.facadeStyle]));
+      }
+    }
+    if (program.facadeStyle === "industrial") {
+      for (let index = 0; index < 3; index += 1) scene.primitives.push(cylinder(`industrial-stack-${index}`, 0, tallestGround.x - tallestGround.width * 0.28 + index * tallestGround.width * 0.28, roofY, tallestGround.z + tallestGround.depth * 0.18, 1.1, feetToMeters(12 + index * 3), "metal", ["chimney", "industrial", "vertical-landmark"]));
+    }
+  }
+
+  if (program.facadeStyle === "sacred") {
+    const nave = program.rooms.find((room) => room.tags.includes("nave")) ?? groundRooms[0];
+    if (nave) {
+      const towerX = nave.x - nave.width * 0.62;
+      const towerZ = nave.z - nave.depth * 0.38;
+      const towerH = feetToMeters((program.floorHeights[0] ?? 18) + 24);
+      scene.primitives.push(
+        box("sacred-bell-tower-mass", 0, towerX, 0, towerZ, 5.4, towerH, 5.4, program.wallMaterial, ["building-shell", "bell-tower", "vertical-landmark", "sacred"]),
+        primitive("sacred-bell-spire", "cone", 0, towerX, towerH, towerZ, 6.2 * 1.524, feetToMeters(15), 6.2 * 1.524, "roof", ["roof", "spire", "bell-tower", "landmark"]),
+      );
+      for (const side of [-1, 1]) {
+        scene.primitives.push(box(`sacred-buttress-${side}`, 0, nave.x + side * (nave.width / 2 + 0.35), 0, nave.z + nave.depth * 0.08, 0.8, feetToMeters(12), 3.2, "stone", ["flying-buttress", "sacred", "cover"]));
+      }
+    }
+  }
+  for (const tower of program.rooms.filter((room) => room.tags.includes("research-tower") || room.tags.includes("clock-tower"))) {
+    const topY = roomBaseY(program, tower) + feetToMeters(program.floorHeights[tower.level] ?? 13);
+    const diameter = Math.max(5.4, Math.min(tower.width, tower.depth) + 0.9);
+    scene.primitives.push(
+      cylinder(`facade-tower-${tower.id}`, tower.level, tower.x, 0, tower.z, diameter, topY, tower.tags.includes("clock-tower") ? "stone" : program.wallMaterial, ["building-shell", "tower-mass", "vertical-landmark", ...tower.tags]),
+      primitive(`facade-tower-${tower.id}-cap`, "cone", tower.level, tower.x, topY, tower.z, (diameter + 1.1) * 1.524, feetToMeters(9), (diameter + 1.1) * 1.524, "roof", ["roof", "tower-cap", "vertical-landmark", ...tower.tags]),
+    );
+  }
+}
+
+function addExterior(scene: GeneratedScene, program: BuildingProgram): void {
+  const cx = program.bounds.x / 2;
+  const style = program.exteriorStyle;
+  if (!style) return;
+  const addApproach = (id: string, x: number, z: number, w: number, d: number, material: MaterialKey, tags: string[] = []) => scene.primitives.push(box(id, 0, x, 0, z, w, FLOOR_SLAB_METERS, d, material, ["floor", "exterior", "approach", ...tags]));
+  if (style === "sacred-close") {
+    addApproach("sacred-forecourt", cx, 2.2, 14, 5, "stone", ["forecourt"]);
+    for (let index = 0; index < 8; index += 1) scene.primitives.push(box(`grave-marker-${index}`, 0, 3 + (index % 4) * 2.1, FLOOR_SLAB_METERS, 5 + Math.floor(index / 4) * 2.4, 0.55, feetToMeters(3.2), 1.1, "stone", ["graveyard", "cover"]));
+  } else if (style === "defensive-approach") {
+    addApproach("fortress-kill-approach", cx, 1.8, 18, 8, "earth", ["kill-zone"]);
+    scene.primitives.push(box("fortress-ditch", 0, cx, -0.45, 5.5, 22, 0.35, 3.5, "hazard", ["ditch", "hazard", "exterior"]));
+  } else if (style === "institutional-street") {
+    addApproach("civic-front-street", cx, 2, 20, 5, "stone", ["street"]);
+    addApproach("civic-rear-alley", program.bounds.x - 4, program.bounds.z - 4, 7, 15, "stone", ["rear-alley", "service-route"]);
+  } else if (style === "coastal-cliff") {
+    addApproach("cliff-maintenance-road", cx, program.bounds.z - 2, 22, 4, "rock", ["cliff-road", "high-ground"]);
+    scene.primitives.push(box("cliff-drop", 0, cx, -feetToMeters(8), program.bounds.z + 1, 26, feetToMeters(8), 5, "rock", ["cliff", "vertical-face", "hazard"]));
+  } else if (style === "service-yard") {
+    addApproach("industrial-loading-yard", cx, 3, 22, 8, "stone", ["loading-yard"]);
+    for (let index = 0; index < 4; index += 1) scene.primitives.push(cylinder(`yard-tank-${index}`, 0, 5 + index * 3.1, FLOOR_SLAB_METERS, program.bounds.z - 3.5, 2.1, feetToMeters(7), "metal", ["storage-tank", "cover", "exterior"]));
+  } else if (style === "estate-drive") {
+    addApproach("estate-carriage-drive", cx, 2.5, 8, 9, "stone", ["drive"]);
+    for (const side of [-1, 1]) scene.primitives.push(box(`estate-gatehouse-${side}`, 0, cx + side * 7, 0, 2.5, 4, feetToMeters(9), 4, program.wallMaterial, ["gatehouse", "exterior", "cover"]));
+  } else if (style === "station-platform") {
+    addApproach("station-platform-a", cx - 7, program.bounds.z - 4, 5, 22, "stone", ["station-platform"]);
+    addApproach("station-platform-b", cx + 7, program.bounds.z - 4, 5, 22, "stone", ["station-platform"]);
+    scene.primitives.push(box("station-track-bed", 0, cx, -0.08, program.bounds.z - 4, 6, 0.12, 22, "darkStone", ["rail-track", "exterior"]));
+  } else if (style === "academy-court") {
+    addApproach("academy-processional-court", cx, 4, 18, 8, "stone", ["academy-court"]);
+  }
+}
+
+function applyStates(scene: GeneratedScene, program: BuildingProgram): void {
+  const states = new Set(program.states ?? []);
+  if (states.has("collapsed") || states.has("war-damaged")) {
+    const candidateWalls = scene.primitives.filter((primitive) => primitive.tags?.includes("wall") && primitive.tags?.includes("program-room"));
+    const removeIds = new Set(candidateWalls.filter((_, index) => index % 7 === 2 || index % 11 === 5).map((primitive) => primitive.id));
+    scene.primitives = scene.primitives.filter((primitive) => !removeIds.has(primitive.id));
+    const target = program.rooms.find((room) => room.tags.includes("collapsed-transept")) ?? program.rooms.find((room) => room.level === 0 && !room.openAir);
+    if (target) {
+      const y = roomBaseY(program, target) + FLOOR_SLAB_METERS;
+      for (let index = 0; index < 7; index += 1) scene.primitives.push(box(`collapse-rubble-${index}`, target.level, target.x - target.width * 0.3 + (index % 4) * target.width * 0.2, y, target.z - target.depth * 0.2 + Math.floor(index / 4) * 1.8, 1.2 + (index % 3) * 0.35, 0.45 + (index % 2) * 0.35, 1.1, "rock", ["rubble", "cover", "collapsed", `room:${target.id}`], index * 0.31));
+      scene.primitives.push(corridor("temporary-collapse-bridge", target.level, target.x - target.width * 0.42, target.z, target.x + target.width * 0.42, target.z, y + feetToMeters(2.5), 1.5, "wood", ["temporary-bridge", "alternate-route", "standable"]));
+      scene.routes.push(createRoute("temporary-collapse-route", "alternate", [{ x: target.x - target.width * 0.42, z: target.z, y }, { x: target.x + target.width * 0.42, z: target.z, y: y + feetToMeters(2.5) }], { purpose: "escape" }));
+    }
+  }
+  if (states.has("flooded")) {
+    for (const target of program.rooms.filter((room) => room.tags.includes("underground") || room.absoluteElevationFeet !== undefined)) {
+      scene.primitives.push(primitive(`flood-${target.id}`, "water", target.level, target.x, roomBaseY(program, target) + FLOOR_SLAB_METERS + 0.06, target.z, target.width * 0.92 * 1.524, 0.22, target.depth * 0.92 * 1.524, "water", ["flooded", "hazard", `room:${target.id}`]));
+    }
+  }
+  if (states.has("infernal")) {
+    scene.primitives.push(
+      primitive("infernal-lava-trench-a", "water", 0, program.bounds.x * 0.36, 0.04, program.bounds.z * 0.46, 2.2 * 1.524, 0.3, 18 * 1.524, "hazard", ["lava", "infernal", "hazard"]),
+      primitive("infernal-lava-trench-b", "water", 0, program.bounds.x * 0.64, 0.04, program.bounds.z * 0.46, 2.2 * 1.524, 0.3, 18 * 1.524, "hazard", ["lava", "infernal", "hazard"]),
+    );
+    for (let index = 0; index < 5; index += 1) scene.primitives.push(cylinder(`infernal-chain-${index}`, 0, 5 + index * 7, feetToMeters(8), program.bounds.z * 0.54, 0.34, feetToMeters(18 + index * 2), "metal", ["chain", "infernal", "vertical-landmark"]));
+  }
+  if (states.has("fire")) {
+    for (let index = 0; index < 5; index += 1) scene.primitives.push(primitive(`fire-zone-${index}`, "cone", 0, program.bounds.x * 0.28 + index * 2.1, FLOOR_SLAB_METERS, program.bounds.z * 0.7, 1.1, feetToMeters(6 + index), 1.1, "warmLight", ["fire", "hazard", "state"]));
+  }
+  if (states.has("overgrown")) {
+    for (let index = 0; index < 9; index += 1) scene.primitives.push(cylinder(`overgrowth-${index}`, 0, 3 + (index % 5) * (program.bounds.x - 6) / 4, 0, 4 + Math.floor(index / 5) * (program.bounds.z - 8), 0.7, feetToMeters(5 + (index % 4) * 2), "moss", ["overgrowth", "cover", "state"]));
+  }
 }
 
 function baseY(program: BuildingProgram, level: number, elevationFeet = 0, absoluteElevationFeet?: number): number {
@@ -154,8 +300,19 @@ export function compileBuildingProgram(program: BuildingProgram): GeneratedScene
       const upper = fromHeight <= toHeight ? to : from;
       const lowerY = baseY(program, lower.level, lower.elevationFeet, lower.absoluteElevationFeet) + FLOOR_SLAB_METERS;
       const upperY = baseY(program, upper.level, upper.elevationFeet, upper.absoluteElevationFeet) + FLOOR_SLAB_METERS;
-      const stair = stairConnection(connection.id, lower.level, { xCells: lower.x, zCells: lower.z, yMeters: lowerY }, { xCells: upper.x, zCells: upper.z, yMeters: upperY }, connection.width, "stone", ["building-stair", "vertical-opening", `connects:${lower.id}:${upper.id}`]);
-      scene.primitives.push(stair.primitive);
+      const riseCells = Math.abs(upperY - lowerY) / feetToMeters(5);
+      const alongX = lower.width >= lower.depth;
+      const available = Math.max(3.2, (alongX ? lower.width : lower.depth) - 1.8);
+      const run = Math.min(available, Math.max(3.2, Math.min(6.5, riseCells * 1.55)));
+      const direction = alongX ? (upper.x >= lower.x ? 1 : -1) : (upper.z >= lower.z ? 1 : -1);
+      const bottom = { xCells: lower.x - (alongX ? direction * run * 0.5 : 0), zCells: lower.z - (alongX ? 0 : direction * run * 0.5), yMeters: lowerY };
+      const top = { xCells: lower.x + (alongX ? direction * run * 0.5 : 0), zCells: lower.z + (alongX ? 0 : direction * run * 0.5), yMeters: upperY };
+      const stair = stairConnection(connection.id, lower.level, bottom, top, connection.width, "stone", ["building-stair", "vertical-opening", `connects:${lower.id}:${upper.id}`]);
+      scene.primitives.push(
+        stair.primitive,
+        box(`${connection.id}-lower-landing`, lower.level, bottom.xCells, lowerY, bottom.zCells, connection.width + 0.8, FLOOR_SLAB_METERS, 2.2, lower.floor ?? program.floorMaterial, ["floor", "stair-landing", "standable", `room:${lower.id}`]),
+        box(`${connection.id}-upper-landing`, upper.level, top.xCells, upperY, top.zCells, connection.width + 0.8, FLOOR_SLAB_METERS, 2.2, upper.floor ?? program.floorMaterial, ["floor", "stair-landing", "standable", `room:${upper.id}`]),
+      );
       scene.routes.push(stairRoute(`${connection.id}-route`, stair));
       continue;
     }
@@ -187,6 +344,43 @@ export function compileBuildingProgram(program: BuildingProgram): GeneratedScene
     }
     if (target.tags.includes("bunker")) {
       scene.primitives.push(box(`${program.id}-bunker-stores`, target.level, target.x, y, target.z, 3.4, feetToMeters(3.5), 2, "wood", ["bunker", "emergency-stores", "cover", `room:${target.id}`]));
+    }
+    if (target.tags.includes("alchemy-lab")) {
+      for (let index = 0; index < 3; index += 1) {
+        scene.primitives.push(box(`${target.id}-alchemy-bench-${index}`, target.level, target.x - target.width * 0.28 + index * target.width * 0.28, y, target.z, 2.2, feetToMeters(3.2), 1.1, "wood", ["alchemy-bench", "cover", `room:${target.id}`]));
+        scene.primitives.push(primitive(`${target.id}-alembic-${index}`, "sphere", target.level, target.x - target.width * 0.28 + index * target.width * 0.28, y + feetToMeters(3.2), target.z, 0.65, 0.65, 0.65, "warmLight", ["alembic", "alchemy", `room:${target.id}`]));
+      }
+    }
+    if (target.tags.includes("library")) {
+      for (let index = 0; index < 5; index += 1) scene.primitives.push(box(`${target.id}-stack-${index}`, target.level, target.x - target.width * 0.35 + index * target.width * 0.175, y, target.z + target.depth * 0.2, 0.65, feetToMeters(8), target.depth * 0.34, "wood", ["bookcase", "blocks-sight", "cover", `room:${target.id}`]));
+    }
+    if (target.tags.includes("ritual-circle") || target.tags.includes("summoning-circle") || target.tags.includes("ritual-core")) {
+      scene.primitives.push(cylinder(`${target.id}-ritual-dais`, target.level, target.x, y, target.z, Math.max(3, Math.min(target.width, target.depth) * 0.48), feetToMeters(1.2), target.tags.includes("ritual-core") ? "hazard" : "darkStone", ["ritual-circle", "objective", "platform", `room:${target.id}`]));
+    }
+    if (target.tags.includes("turbine-hall")) {
+      for (let index = 0; index < 3; index += 1) scene.primitives.push(cylinder(`${target.id}-turbine-${index}`, target.level, target.x - target.width * 0.3 + index * target.width * 0.3, y, target.z, 3.4, feetToMeters(9), "metal", ["turbine", "machinery", "cover", `room:${target.id}`]));
+    }
+    if (target.tags.includes("boiler")) {
+      for (let index = 0; index < 3; index += 1) scene.primitives.push(cylinder(`${target.id}-boiler-${index}`, target.level, target.x - target.width * 0.28 + index * target.width * 0.28, y, target.z, 2.2, feetToMeters(8), "metal", ["boiler", "machinery", "hazard", `room:${target.id}`]));
+    }
+    if (target.tags.includes("control-room")) {
+      scene.primitives.push(box(`${target.id}-control-bank`, target.level, target.x, y, target.z, target.width * 0.62, feetToMeters(4), 1.2, "metal", ["control-console", "cover", `room:${target.id}`]));
+    }
+    if (target.tags.includes("detention")) {
+      for (let index = 0; index < 4; index += 1) scene.primitives.push(box(`${target.id}-cell-bars-${index}`, target.level, target.x - target.width * 0.36 + index * target.width * 0.24, y, target.z, 0.16, feetToMeters(8), target.depth * 0.72, "metal", ["cell-bars", "detention", `room:${target.id}`]));
+    }
+    if (target.tags.includes("taproom") || target.tags.includes("dining")) {
+      const count = Math.max(3, Math.floor(target.width * target.depth / 28));
+      for (let index = 0; index < count; index += 1) scene.primitives.push(cylinder(`${target.id}-table-${index}`, target.level, target.x - target.width * 0.3 + (index % 3) * target.width * 0.3, y, target.z - target.depth * 0.22 + Math.floor(index / 3) * 2.7, 1.8, feetToMeters(3), "wood", ["table", "cover", `room:${target.id}`]));
+    }
+    if (target.tags.includes("kitchen")) {
+      scene.primitives.push(box(`${target.id}-hearth`, target.level, target.x, y, target.z + target.depth * 0.32, target.width * 0.58, feetToMeters(4), 1.2, "darkStone", ["kitchen-hearth", "hazard", `room:${target.id}`]));
+    }
+    if (target.tags.includes("war-machine-workshop")) {
+      scene.primitives.push(cylinder(`${target.id}-war-engine`, target.level, target.x, y, target.z, Math.min(5, target.width * 0.56), feetToMeters(8), "metal", ["war-machine", "infernal", "cover", `room:${target.id}`]));
+    }
+    if (target.tags.includes("archive-carriage")) {
+      scene.primitives.push(box(`${target.id}-rail-car-body`, target.level, target.x, y + feetToMeters(1), target.z, target.width * 0.82, feetToMeters(7), target.depth * 0.88, "wood", ["rail-car", "archive", "landmark", `room:${target.id}`]));
     }
   }
   if (program.archetype === "hospital") {
@@ -260,6 +454,9 @@ export function compileBuildingProgram(program: BuildingProgram): GeneratedScene
       );
     }
   }
+  addFacadeAndMassing(scene, program);
+  addExterior(scene, program);
+  applyStates(scene, program);
   for (const primitive of scene.primitives) {
     primitive.tags = [...new Set([...(primitive.tags ?? []), program.archetype])];
   }

@@ -270,7 +270,12 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   const promptKey = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const rootRng = new SeededRandom(`${normalized.seed}|prompt:${promptKey}`);
   const program = suppliedProgram ?? planSceneProgramLocally(normalized.prompt, kind);
-  const primary = kind === "adaptive" ? program.primaryKind : kind;
+  let primary = kind === "adaptive" ? program.primaryKind : kind;
+  const programText = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  // Multi-storey hospitality prompts need the same auditable room graph as
+  // institutions: cellar, attic, service stair and roof pursuit cannot be
+  // represented by the compact encounter-only tavern grammar.
+  if (kind === "adaptive" && primary === "tavern" && ["三层", "three-storey", "three story", "酒窖", "cellar", "屋顶", "roof"].some((term) => programText.includes(term))) primary = "building";
   const semanticHints = suppliedClassification?.traits ?? semanticHintsFromProgram(program);
   const generated = generatorRegistry[primary]({
     request: normalized,

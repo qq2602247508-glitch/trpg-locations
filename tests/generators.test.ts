@@ -592,4 +592,31 @@ describe("scene generators", () => {
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("radio-console"))).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
   });
+
+  it("compiles an arcane academy into towers, specialist rooms, a roof bridge and a basement ritual level", () => {
+    const scene = generateScene({ ...request("academy-program-r10"), prompt: "D&D 法师学院，中央讲堂、两座研究塔、炼金翼、图书馆、地下召唤室、屋顶连桥和秘密教授通道" }, "adaptive");
+    expect(scene.archetype).toBe("school");
+    for (const tag of ["lecture-hall", "research-tower", "alchemy-lab", "library", "summoning-circle", "roof-bridge", "secret-passage"]) expect(hasTag(scene, tag)).toBe(true);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("tower-mass"))).toHaveLength(2);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("turns destructive and flooded prompt states into geometry while preserving a valid room graph", () => {
+    const church = generateScene({ ...request("ruined-state-r10"), prompt: "破败教堂，坍塌耳堂、地下墓室和临时木桥" }, "adaptive");
+    const museum = generateScene({ ...request("flood-state-r10"), prompt: "被洪水淹没的博物馆，半淹地下库房和屋顶逃生路线" }, "adaptive");
+    expect(hasTag(church, "rubble")).toBe(true);
+    expect(hasTag(church, "temporary-bridge")).toBe(true);
+    expect(hasTag(museum, "flooded")).toBe(true);
+    expect(church.diagnostics.valid && museum.diagnostics.valid).toBe(true);
+  });
+
+  it("keeps composed-building stair runs local instead of stretching a ramp between remote room centres", () => {
+    const scene = generateScene({ ...request("compact-stairs-r10"), prompt: "建在旧火车站里的炼金公会，有站台大厅、实验车间、档案车厢、地下货运隧道、钟楼和屋顶输送桥" }, "adaptive");
+    const stairs = scene.primitives.filter((primitive) => primitive.tags?.includes("building-stair"));
+    expect(stairs.length).toBeGreaterThanOrEqual(3);
+    expect(Math.max(...stairs.map((primitive) => primitive.size.z / GRID_METERS))).toBeLessThanOrEqual(6.6);
+    expect(scene.archetype).toBe("workshop");
+    expect(hasTag(scene, "station-platform")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
 });

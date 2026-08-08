@@ -798,7 +798,13 @@ export class SceneRenderer {
       const levels = Array.isArray(object.userData.levels)
         ? object.userData.levels.filter((level): level is number => typeof level === "number")
         : [];
-      object.visible = levels.length === 0 || overlayTouchesFloor(levels, view);
+      // A full cutaway may expose several storeys, but drawing every storey's
+      // grid at once turns the building into a stack of moire planes. Keep the
+      // 1F tactical grid as the spatial reference in cut mode; numeric views
+      // still show the exact grid for every standable upper or basement face.
+      object.visible = root === this.gridRoot && view === "cut"
+        ? levels.length === 0 || levels.includes(0)
+        : levels.length === 0 || overlayTouchesFloor(levels, view);
     }
   }
 
@@ -816,7 +822,7 @@ export class SceneRenderer {
 
   private recenterCameraForFloor(view: FloorView): void {
     if (!this.currentScene) return;
-    if (view === "cut") {
+    if (view === "cut" || view === "roof") {
       this.positionCamera();
       return;
     }
@@ -827,10 +833,6 @@ export class SceneRenderer {
         && (authoredRoofView || (primitive.material !== "roof"
           && !primitive.tags?.includes("roof")
           && !(primitive.tags?.includes("roof-platform") && !primitive.tags?.includes("wall-walk")))));
-    } else if (view === "roof") {
-      visible = this.currentScene.primitives.filter((primitive) => primitive.material === "roof"
-        || primitive.tags?.includes("roof")
-        || primitive.tags?.includes("roof-platform"));
     }
     if (visible.length === 0) return;
     const minX = Math.min(...visible.map((primitive) => primitive.position.x - primitive.size.x / 2));
@@ -937,7 +939,7 @@ export class SceneRenderer {
       emissive: style.emissive ?? style.color,
       emissiveIntensity: style.emissiveIntensity ?? 0.26,
       transparent: ghost || style.transparent === true,
-      opacity: ghost ? 0.34 : style.opacity ?? 1,
+      opacity: ghost ? 0.48 : style.opacity ?? 1,
       depthWrite: ghost ? false : key !== "water",
       vertexColors: false,
     });

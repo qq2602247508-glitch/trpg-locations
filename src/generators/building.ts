@@ -816,6 +816,11 @@ function buildHotel(scene: GeneratedScene, profile: BuildingProfile, width: numb
 }
 
 export function generateBuilding(context: GeneratorContext): GeneratedScene {
+  const semanticText = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const usesExpandedProgram = ["法师学院", "魔法学院", "mage academy", "wizard academy", "arcane academy", "发电站", "power station", "power plant", "电厂"].some((term) => semanticText.includes(term))
+    || (["火车站", "railway station", "train station"].some((term) => semanticText.includes(term)) && ["炼金", "alchemy", "alchemical"].some((term) => semanticText.includes(term)))
+    || ["酒店", "hotel", "酒馆", "旅店", "tavern", "inn"].some((term) => semanticText.includes(term));
+  if (usesExpandedProgram) return generateComposedBuilding(context);
   if (context.sceneProgram && (
     (!hasKnownBuildingArchetype(context.request.prompt) && (context.sceneProgram.coverage.includes("institutional-rooms") || context.sceneProgram.coverage.includes("residential-rooms")))
     || context.sceneProgram.domain === "building" && !hasKnownBuildingArchetype(context.request.prompt)
