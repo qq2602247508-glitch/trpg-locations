@@ -1,5 +1,6 @@
 import type { GeneratedScene, GeneratorContext, MaterialKey } from "../schema";
 import type { SceneProgramRegion } from "../scene-program/schema";
+import { generateComposedBuilding } from "./composedBuilding";
 import {
   FLOOR_SLAB_METERS,
   baseScene,
@@ -822,6 +823,9 @@ export function generateBuilding(context: GeneratorContext): GeneratedScene {
     return generateProgramBuilding(context);
   }
   const archetype = classifyBuildingArchetype(context.request.prompt);
+  if (["church", "temple", "manor", "fortress", "hospital", "museum", "police"].includes(archetype)) {
+    return generateComposedBuilding(context);
+  }
   const profile = PROFILES[archetype];
   const widthRange = scaledRange(profile.width, context.request.size);
   const depthRange = scaledRange(profile.depth, context.request.size);

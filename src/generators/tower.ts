@@ -68,13 +68,33 @@ function roundTowerWalls(
   return result;
 }
 
+function spiralFlight(id: string, level: number, center: number, bottomY: number, topY: number, radius: number): { steps: ReturnType<typeof box>[]; route: ReturnType<typeof createRoute> } {
+  const count = 18;
+  const steps: ReturnType<typeof box>[] = [];
+  const points: Array<{ x: number; z: number; y: number }> = [];
+  for (let index = 0; index < count; index += 1) {
+    const fraction = index / (count - 1);
+    const angle = -Math.PI * 0.5 + fraction * Math.PI * 2;
+    const x = center + Math.cos(angle) * radius;
+    const z = center + Math.sin(angle) * radius;
+    const y = bottomY + (topY - bottomY) * fraction;
+    steps.push(box(`${id}-step-${index}`, level, x, y, z, 1.25, Math.max(0.16, (topY - bottomY) / count), 0.72, "stone", ["stairs", "spiral-stair", "standable", "vertical-opening"], -angle));
+    points.push({ x, z, y });
+  }
+  return { steps, route: createRoute(`${id}-route`, "vertical", points) };
+}
+
 /** A vertically navigable tower whose silhouette and floor use are independently varied. */
 export function generateTower(context: GeneratorContext): GeneratedScene {
   const { request, rng } = context;
   const promptText = request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const wizardTower = ["法师塔", "魔法塔", "巫师塔", "wizard tower", "mage tower"].some((term) => promptText.includes(term));
-  const profile = towerProfile(context);
-  const isRound = rng.bool();
+  const profileBase = towerProfile(context);
+  const profile = {
+    ...profileBase,
+    floors: wizardTower && ["三层", "three floors", "three-level", "3-floor"].some((term) => promptText.includes(term)) ? 3 : profileBase.floors,
+  };
+  const isRound = wizardTower || rng.bool();
   const floorHeightFeet = Array.from({ length: profile.floors }, () => rng.int(13, 15));
   const floorBaseY: number[] = [];
   let topY = 0;
@@ -88,8 +108,8 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
   const purpose = choose(rng, ["watch", "arcane survey", "river patrol", "border signal"]);
   const scene = baseScene(
     "tower",
-    choose(rng, ["The Warden's Needle", "The Starward Tower", "Greywatch Spire", "The Lantern Keep"]),
-    `${isRound ? "Round" : "Square"} ${purpose} tower with stacked chambers, landings, and exposed platforms.`,
+    wizardTower ? "The Starward Wizard Tower" : choose(rng, ["The Warden's Needle", "The Starward Tower", "Greywatch Spire", "The Lantern Keep"]),
+    wizardTower ? "Three-level arcane tower with a true spiral stair, alchemy laboratory, restricted library, observatory, and roof duel platform." : `${isRound ? "Round" : "Square"} ${purpose} tower with stacked chambers, landings, and exposed platforms.`,
     request.seed,
     { x: bounds, z: bounds },
     profile.floors,
@@ -118,23 +138,25 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
     const baseY = floorBaseY[level] ?? 0;
     const floorHeight = feetToMeters(floorHeightFeet[level] ?? 14);
     const roomId = `tower-chamber-${level}`;
-    const roomName = level === 0 ? "Entry chamber" : roomNames[(level - 1) % roomNames.length] ?? "Tower chamber";
+    const roomName = wizardTower
+      ? level === 0 ? "Alchemy laboratory" : level === 1 ? "Restricted library" : level === profile.floors - 1 ? "Spell observatory" : "Arcane study"
+      : level === 0 ? "Entry chamber" : roomNames[(level - 1) % roomNames.length] ?? "Tower chamber";
     const roomRole = level === 0 ? "public" : roomRoles[(level - 1) % roomRoles.length] ?? "private";
     const stairsId = `tower-landing-${level}`;
     const landingPortal = stairBottomPortal(level, baseY + FLOOR_SLAB_METERS);
     const floorOpenings = level === 0
       ? []
-      : [{ id: `tower-stair-opening-${level}`, centerXCells: landingPortal.xCells, centerZCells: landingPortal.zCells, widthCells: 2.7, depthCells: 2.7, tags: ["stair-opening", "vertical-opening"] }];
+      : [{ id: `tower-stair-opening-${level}`, centerXCells: wizardTower ? center : landingPortal.xCells, centerZCells: wizardTower ? center : landingPortal.zCells, widthCells: wizardTower ? 4.2 : 2.7, depthCells: wizardTower ? 4.2 : 2.7, tags: ["stair-opening", "vertical-opening"] }];
     scene.rooms.push(
       createRoom(roomId, roomName, roomRole, level, center, center, profile.footprint - 1.2, profile.footprint - 1.2, baseY),
       createRoom(stairsId, level === 0 ? "Lower landing" : "Stair landing", "circulation", level, landingPortal.xCells, landingPortal.zCells, 3, 3, baseY),
     );
     if (wizardTower) {
-      const featureTag = level === 1 ? "alchemy" : level === 2 ? "library" : level === 3 ? "observatory" : level === profile.floors - 1 ? "roof-duel" : "arcane-core";
+      const featureTag = level === 0 ? "alchemy" : level === 1 ? "library" : level === profile.floors - 1 ? "observatory" : "arcane-core";
       scene.primitives.push(
         box(`wizard-${featureTag}-${level}`, level, center, baseY + FLOOR_SLAB_METERS, center, Math.max(2.2, profile.footprint * 0.34), level === profile.floors - 1 ? 2.4 : 1.6, Math.max(2.2, profile.footprint * 0.28), featureTag === "alchemy" ? "hazard" : featureTag === "library" ? "wood" : "darkStone", ["wizard-tower", featureTag, "cover"]),
       );
-      scene.tactical.push(tacticalFeature(`wizard-${featureTag}-tactical-${level}`, featureTag === "roof-duel" ? "highGround" : featureTag === "alchemy" ? "hazard" : "cover", center, center, baseY, 2, `The ${featureTag} floor gives the wizard tower a distinct tactical purpose.`));
+      scene.tactical.push(tacticalFeature(`wizard-${featureTag}-tactical-${level}`, featureTag === "observatory" ? "highGround" : featureTag === "alchemy" ? "hazard" : "cover", center, center, baseY, 2, `The ${featureTag} floor gives the wizard tower a distinct tactical purpose.`));
     }
     connectRooms(scene.rooms, roomId, stairsId);
     if (level > 0) connectRooms(scene.rooms, `tower-landing-${level - 1}`, stairsId);
@@ -198,8 +220,14 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
         "stone",
         ["main-stair", "alternating-flight"],
       );
-      scene.primitives.push(mainStairs.primitive);
-      scene.routes.push(stairRoute(`tower-vertical-route-${level}`, mainStairs));
+      if (wizardTower) {
+        const spiral = spiralFlight(`tower-spiral-${level}-${level + 1}`, level, center, baseY + FLOOR_SLAB_METERS, nextY + FLOOR_SLAB_METERS, Math.max(1.65, profile.footprint * 0.2));
+        scene.primitives.push(...spiral.steps);
+        scene.routes.push(spiral.route);
+      } else {
+        scene.primitives.push(mainStairs.primitive);
+        scene.routes.push(stairRoute(`tower-vertical-route-${level}`, mainStairs));
+      }
     }
   }
 
@@ -222,6 +250,14 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
     box("tower-entry-jamb-south", 0, entranceX, FLOOR_SLAB_METERS, center + 1.15, 0.45, feetToMeters(8), 0.45, "darkStone", ["entrance", "door-frame"]),
     box("tower-entry-step", 0, entranceX, FLOOR_SLAB_METERS, center, 1.4, 0.45, 2.2, "stone", ["entrance", "stairs"]),
   );
+  if (wizardTower) {
+    scene.rooms.push(createRoom("wizard-roof-duel-room", "Roof duel platform", "combat", profile.floors - 1, center, center, Math.max(5, profile.footprint * 0.7), Math.max(5, profile.footprint * 0.7), topY));
+    connectRooms(scene.rooms, `tower-chamber-${profile.floors - 1}`, "wizard-roof-duel-room");
+    scene.primitives.push(
+      cylinder("wizard-roof-duel-platform", profile.floors - 1, center, topY + roofHeight * 0.78, center, profile.footprint * 0.82, FLOOR_SLAB_METERS, "stone", ["roof-platform", "roof-duel", "standable", "high-ground"]),
+      cylinder("wizard-roof-parapet", profile.floors - 1, center, topY + roofHeight * 0.78 + FLOOR_SLAB_METERS, center, profile.footprint * 0.9, feetToMeters(3), "darkStone", ["roof", "parapet", "cover"]),
+    );
+  }
   scene.routes.push(
     createRoute("tower-primary-route", "primary", [
       { x: entranceX - 1.5, z: center, y: 0 },
