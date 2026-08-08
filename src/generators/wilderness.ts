@@ -1,4 +1,5 @@
 import type { GeneratedScene, GeneratorContext, MaterialKey, SemanticGenerationHints } from "../schema";
+import { instantiateBuildingModule } from "./buildingModule";
 import {
   CELL,
   FLOOR_SLAB_METERS,
@@ -48,7 +49,7 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   ruin: ["ruin", "ruined", "wilderness ruin", "遗迹", "废墟", "残垣", "荒野遗迹"],
   "underground-lake": ["underground lake", "dark lake", "subterranean lake", "地下湖", "地底湖"],
   underdark: ["underdark", "幽暗地域", "地底世界", "地下洞窟", "菌林", "发光水晶", "mushroom", "fungal", "蘑菇", "菌类"],
-  forest: ["forest", "woodland", "林地", "森林", "树林"],
+  forest: ["forest", "woodland", "林地", "森林", "树林", "林间", "巨树", "树冠"],
   swamp: ["swamp", "marsh", "bog", "沼泽", "湿地"],
   "floating-islands": ["floating island", "sky island", "levitating island", "浮空岛", "浮岛", "空岛", "悬浮岛"],
   "industrial-ruin": ["industrial district", "industrial ruins", "factory district", "废弃工业区", "工业区", "工业遗址", "厂房", "输送桥", "锈蚀管道"],
@@ -974,6 +975,103 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, rng: G
   scene.tactical.push(tacticalFeature("forest-entrance", "entrance", 1, 4, 0, 2, "A narrow game trail enters beneath the canopy."), tacticalFeature("forest-clearing-choke", "chokepoint", clearX, clearZ, 0, 3, "The clearing is exposed but controls both forest trails."));
 }
 
+function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorContext, width: number, depth: number, archetype: WildernessArchetype): void {
+  const text = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const wantsBuilding = ["木屋", "小屋", "猎人屋", "炼金师小屋", "林间屋", "cabin", "lodge", "hut", "cottage", "outpost", "驿站"].some((term) => text.includes(term));
+  if (!wantsBuilding || (archetype !== "forest" && archetype !== "river-valley" && archetype !== "mountain" && archetype !== "swamp")) return;
+  const alchemical = ["炼金", "alchemy", "alchemist"].some((term) => text.includes(term));
+  const hunter = ["猎人", "hunter"].some((term) => text.includes(term));
+  const x = archetype === "forest" ? width * 0.52 : width * 0.28;
+  const z = archetype === "forest" ? depth * 0.5 : depth * 0.28;
+  const baseY = archetype === "river-valley" || archetype === "mountain" ? feetToMeters(10) : FLOOR_SLAB_METERS * 2;
+  // Clear only procedural clutter in the building pad. Authored terrain,
+  // rivers, cliffs and routes remain the owner of the surrounding site.
+  scene.primitives = scene.primitives.filter((item) => {
+    if (item.tags?.includes("floor") || item.tags?.includes("terrain")) return true;
+    if (!item.tags?.some((tag) => tag === "natural-detail" || tag === "natural-prop" || tag === "cover" || tag === "forest")) return true;
+    const px = item.position.x / CELL; const pz = item.position.z / CELL;
+    return Math.hypot(px - x, pz - z) > 8;
+  });
+  scene.primitives.push(box("wilderness-building-pad", 0, x, baseY - FLOOR_SLAB_METERS, z, 13, FLOOR_SLAB_METERS, 12, archetype === "forest" ? "earth" : "rock", ["floor", "terrain", "building-pad", "site-program", "standable"]));
+  for (const [index, dx, dz] of [[0, -4.8, -3.8], [1, 4.8, -3.8], [2, -4.8, 3.8], [3, 4.8, 3.8]] as const) scene.primitives.push(cylinder(`wilderness-foundation-pier-${index}`, 0, x + dx, 0, z + dz, 0.7, Math.max(FLOOR_SLAB_METERS, baseY), "darkStone", ["foundation", "terrain-adapter", "site-program"]));
+  const entrance = { x: x - 8.5, z: z + 5.5 };
+  instantiateBuildingModule(scene, {
+    id: "wilderness-core-building",
+    kind: alchemical ? "guild" : "home",
+    x,
+    z,
+    width: alchemical ? 11 : 9,
+    depth: alchemical ? 10 : 8,
+    rotation: context.rng.fork("wilderness-building-facing").float(-0.18, 0.18),
+    district: `${archetype}-clearing`,
+    seed: `${context.request.seed}/wilderness-building/1`,
+    lod: "full-interior",
+    parcelId: "wilderness-parcel-1",
+    frontageRoadId: "wilderness-access-trail",
+    entrance,
+    baseY,
+  }, context.rng.fork("wilderness-building"));
+  const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
+  const siteAnchor = scene.rooms.find((room) => room.id === "forest-clearing-room") ?? scene.rooms.find((room) => room.level === 0 && !room.id.startsWith("core-wilderness"));
+  if (wildernessRoot && siteAnchor) connectRooms(scene.rooms, siteAnchor.id, wildernessRoot.id);
+  if (archetype === "forest") {
+    scene.routes = scene.routes.filter((route) => route.id !== "forest-primary-route" && route.id !== "forest-hunter-trail");
+    scene.routes.push(
+      createRoute("forest-primary-route", "primary", [{ x: 1, z: 4 }, { x: x - 9, z: z - 7 }, { x: x - 9, z: z + 7 }, { x: width - 2, z: depth - 5 }]),
+      createRoute("forest-hunter-trail", "alternate", [{ x: 3, z: depth - 4 }, { x: x + 9, z: z + 7 }, { x: x + 9, z: z - 7 }, { x: width - 3, z: 4 }]),
+    );
+  }
+  scene.primitives.push(corridor("wilderness-access-path", 0, entrance.x - 7, entrance.z + 5, entrance.x, entrance.z, baseY, 1.6, archetype === "forest" ? "earth" : "rock", ["road", "trail", "parcel-access", "site-program"]));
+  scene.routes.push(createRoute("wilderness-building-access", "primary", [{ x: entrance.x - 7, z: entrance.z + 5, y: baseY }, { x: entrance.x, z: entrance.z, y: baseY }, { x, z, y: baseY }], { purpose: "movement", traffic: 0.45, schedule: "all" }));
+  let siteRoadCount = 1;
+  let siteRoadLength = Math.hypot(7, 5);
+  if (context.request.density >= 0.5) {
+    const serviceTurn = { x: x + 8, z: z + 7 };
+    scene.primitives.push(
+      corridor("wilderness-service-path-a", 0, entrance.x, entrance.z, serviceTurn.x, serviceTurn.z, baseY, 1.15, archetype === "forest" ? "earth" : "rock", ["road", "trail", "service-route", "site-program"]),
+      corridor("wilderness-service-path-b", 0, serviceTurn.x, serviceTurn.z, x + 9, z - 5, baseY, 1.15, archetype === "forest" ? "earth" : "rock", ["road", "trail", "service-route", "site-program"]),
+    );
+    scene.routes.push(createRoute("wilderness-service-loop", "alternate", [
+      { x: entrance.x, z: entrance.z, y: baseY },
+      { x: serviceTurn.x, z: serviceTurn.z, y: baseY },
+      { x: x + 9, z: z - 5, y: baseY },
+    ], { purpose: "service", traffic: 0.25, schedule: "all" }));
+    siteRoadCount += 1;
+    siteRoadLength += Math.hypot(serviceTurn.x - entrance.x, serviceTurn.z - entrance.z) + Math.hypot(1, 12);
+  }
+  if (context.request.density >= 0.8) {
+    const escapeEnd = { x: Math.min(width - 2, x + width * 0.32), z: Math.max(2, z - depth * 0.34) };
+    scene.primitives.push(corridor("wilderness-escape-path", 0, x + 9, z - 5, escapeEnd.x, escapeEnd.z, baseY, 0.9, archetype === "forest" ? "earth" : "rock", ["road", "trail", "escape-route", "site-program"]));
+    scene.routes.push(createRoute("wilderness-escape-route", "alternate", [
+      { x: x + 2, z: z - 4, y: baseY },
+      { x: x + 9, z: z - 5, y: baseY },
+      { x: escapeEnd.x, z: escapeEnd.z, y: baseY },
+    ], { purpose: "escape", traffic: 0.12, schedule: "night" }));
+    siteRoadCount += 1;
+    siteRoadLength += Math.hypot(7, 1) + Math.hypot(escapeEnd.x - (x + 9), escapeEnd.z - (z - 5));
+  }
+  scene.primitives.push(
+    box("wilderness-porch", 0, x, baseY + FLOOR_SLAB_METERS, z + 5, 5, feetToMeters(2), 2.2, "wood", ["porch", "standable", "building-exterior", "site-program"]),
+    cylinder("wilderness-well", 0, x - 6, baseY, z + 3.5, 2, feetToMeters(3), "stone", ["well", "cover", "building-exterior", "site-program"]),
+    box("wilderness-woodpile", 0, x + 5.5, baseY, z + 3, 3.5, feetToMeters(3), 1.8, "wood", ["woodpile", "cover", "building-exterior"]),
+  );
+  for (const [index, fx, fz] of [[0, -6, -5], [1, 6, -5], [2, -6, 5], [3, 6, 5]] as const) scene.primitives.push(box(`wilderness-fence-${index}`, 0, x + fx, baseY, z + fz, index < 2 ? 0.25 : 12, feetToMeters(4), index < 2 ? 10 : 0.25, "wood", ["fence", "cover", "building-exterior"]));
+  if (alchemical) {
+    scene.primitives.push(
+      cylinder("alchemy-giant-tree", 0, x + 6, baseY, z - 5, 3.8, feetToMeters(32), "wood", ["giant-tree", "vertical-landmark", "cover"]),
+      box("alchemy-roof-observation", 2, x + 2, baseY + feetToMeters(22), z - 1, 6, FLOOR_SLAB_METERS, 5, "wood", ["floor", "roof-platform", "high-ground", "observation"]),
+      box("alchemy-underground-greenhouse", 3, x + 3, baseY - feetToMeters(10), z + 1, 6, FLOOR_SLAB_METERS, 5, "moss", ["floor", "underground", "greenhouse", "alchemy"]),
+    );
+    const basement = scene.rooms.find((room) => room.id === "core-wilderness-core-building-basement");
+    if (basement) basement.name = "Underground greenhouse and root laboratory";
+  }
+  if (hunter) scene.tactical.push(tacticalFeature("hunter-ambush-line", "cover", x + 5.5, z + 3, baseY, 2, "The woodpile, fence and tree line form a prepared hunter ambush position."));
+  scene.siteProgram = { version: 1, siteType: "wilderness-site", districtCount: 1, roadCount: siteRoadCount, parcelCount: 1, fullInteriorCount: 1, facadeCount: 0, massCount: 0, roadLengthCells: siteRoadLength, parcelCoverage: (13 * 12) / (width * depth) };
+  scene.floors = Math.max(scene.floors, 4);
+  scene.floorHeightFeet = [12, 10, 8, 10];
+  scene.floorLabels = ["地形/1F", "阁楼", "屋顶", "B1"];
+}
+
 function buildSwamp(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
   scene.primitives.push(box("swamp-ground", 0, width / 2, -0.12, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "moss", ["floor", "terrain", "swamp"]));
   const pools = 5;
@@ -1392,5 +1490,6 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
     addStandableProps(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("standable-props"));
     addTerrainComplexity(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("terrain-complexity"));
   }
+  addWildernessBuildingSite(scene, context, profile.width, profile.depth, archetype);
   return scene;
 }

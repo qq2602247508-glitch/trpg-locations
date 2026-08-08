@@ -2,6 +2,7 @@ export const GRID_FEET = 5;
 export const GRID_METERS = 1.524;
 
 import type { SceneProgram, SceneProgramSummary } from "./scene-program/schema";
+import type { SiteProgramSummary } from "./site-program/schema";
 
 export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "dungeon" | "building" | "settlement" | "wilderness" | "adaptive";
 export type PrimitiveShape = "box" | "cylinder" | "cone" | "sphere" | "gable" | "stairs" | "water";
@@ -77,7 +78,7 @@ export interface SceneDiagnostics {
   metrics: Record<string, number>;
 }
 
-export type SettlementBuildingKind = "home" | "tavern" | "shrine" | "warehouse" | "tower" | "manor";
+export type SettlementBuildingKind = "home" | "tavern" | "shrine" | "warehouse" | "tower" | "manor" | "guild" | "clinic" | "blacksmith" | "mill" | "barn" | "factory";
 
 /**
  * Persistent identity for an independently generated building placed by a
@@ -94,7 +95,11 @@ export interface BuildingInstance {
   rotationY: number;
   floors: number;
   floorHeightFeet: number[];
-  detailLevel: "exterior-proxy" | "full-interior";
+  detailLevel: "mass" | "facade" | "full-interior";
+  parcelId?: string;
+  frontageRoadId?: string;
+  entranceCells?: Vec2;
+  buildingProgram?: BuildingProgramSummary;
 }
 
 /** Auditable room-graph contract used before building geometry is compiled. */
@@ -135,6 +140,8 @@ export interface GeneratedScene {
   };
   /** Auditable semantic plan compiled into this deterministic scene. */
   sceneProgram?: SceneProgramSummary;
+  /** Auditable terrain/road/district/parcel plan for settlements and mixed sites. */
+  siteProgram?: SiteProgramSummary;
   buildingProgram?: BuildingProgramSummary;
 }
 

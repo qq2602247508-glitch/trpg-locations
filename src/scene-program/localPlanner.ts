@@ -51,14 +51,26 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   // spatial domain (for example "modern city hospital").
   // An explicit dungeon noun owns the topology even when the prompt also names
   // a room function such as laboratory, temple, prison, or archive.
+  const hasWildernessBuilding = has(text, ["木屋", "小屋", "猎人屋", "cabin", "lodge", "hut", "cottage", "outpost"])
+    && has(text, ["森林", "树林", "林间", "巨树", "树根", "山地", "河谷", "沼泽", "海岸", "forest", "woodland", "tree", "mountain", "valley", "swamp", "coast"]);
+  if (hasWildernessBuilding) return { domain: "natural", primaryKind: "wilderness" };
+  const hasCompoundRoadSite = has(text, ["驿站", "road station", "coach stop"])
+    && has(text, ["主路", "桥", "马厩", "收费岗", "仓库", "main road", "bridge", "stable", "toll", "warehouse"]);
+  if (hasCompoundRoadSite) return { domain: "settlement", primaryKind: "settlement" };
   const hasBuildingSubject = has(text, ["庄园", "宅邸", "教堂", "神殿", "堡垒", "警局", "警察局", "医院", "学校", "车站", "修道院", "办公楼", "银行", "市政厅", "公寓", "住宅", "发电站", "研究所", "防空洞", "电影院", "夜总会", "诊所", "大学", "manor", "mansion", "church", "temple", "fortress", "police station", "monastery", "office", "bank", "city hall", "apartment", "residence", "power station", "institute", "bunker", "cinema", "nightclub", "clinic", "university"]);
   const hasExplicitDungeonSubject = has(text, ["地牢", "地下城", "迷宫", "龙巢", "地下神殿", "dungeon", "labyrinth", "lair"]);
+  // A settlement is the parent site and named buildings are its children.
+  // "港区有酒馆和神殿" must therefore plan a district, not collapse into
+  // whichever child building noun appears last in the prompt.
+  const hasStrongSettlementSubject = has(text, ["城镇", "村庄", "村落", "市场村", "聚居地", "街区", "港区", "深水城", "聚落", "小镇", "town", "village", "market village", "district", "harbor", "settlement"]);
+  const hasSettlementSubject = hasStrongSettlementSubject || (!hasBuildingSubject && has(text, ["城市", "city"]));
+  if (hasSettlementSubject) return { domain: "settlement", primaryKind: "settlement" };
   if (hasExplicitDungeonSubject || (!hasBuildingSubject && has(text, ["墓穴", "crypt"]))) return { domain: "building", primaryKind: "dungeon" };
   if (has(text, ["法师塔", "魔法塔", "巫师塔", "炼金塔", "炼金术塔", "wizard tower", "mage tower", "alchemy tower"])) return { domain: "building", primaryKind: "tower" };
   if (has(text, ["灯塔", "lighthouse", "light house"])) return { domain: "building", primaryKind: "tower" };
   if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "警察局", "工厂", "宅邸", "庄园", "教堂", "神殿", "神庙", "堡垒", "要塞", "城堡", "灯塔", "建筑", "观测所", "天文馆", "天文台", "研究所", "实验室", "博物馆", "剧院", "车站", "修道院", "办公楼", "银行", "市政厅", "公寓", "住宅", "发电站", "防空洞", "电影院", "夜总会", "诊所", "大学", "hospital", "hotel", "school", "police", "factory", "manor", "mansion", "church", "temple", "fortress", "citadel", "castle", "lighthouse", "observatory", "planetarium", "laboratory", "museum", "theatre", "station", "monastery", "office", "bank", "city hall", "apartment", "residence", "power station", "institute", "bunker", "cinema", "nightclub", "clinic", "university"])) return { domain: "building", primaryKind: "building" };
   if (has(text, ["工业区", "工业遗址", "废弃工业区", "潮汐", "潮池", "珊瑚庭院", "珊瑚礁"])) return { domain: "natural", primaryKind: "wilderness" };
-  if (has(text, ["城市", "城镇", "村庄", "街区", "港区", "深水城", "city", "town", "village", "district", "harbor"])) return { domain: "settlement", primaryKind: "settlement" };
+  if (has(text, ["城市", "城镇", "村庄", "街区", "港区", "深水城", "聚落", "city", "town", "village", "district", "harbor", "settlement"])) return { domain: "settlement", primaryKind: "settlement" };
   if (has(text, ["下水道", "排水", "隧道", "地铁", "sewer", "drain", "subway"])) return { domain: "infrastructure", primaryKind: "sewer" };
   const classified = classifyInput(text);
   if (classified.kind !== "adaptive") return inferDomain(text, classified.kind);

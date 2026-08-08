@@ -233,7 +233,12 @@ describe("scene generators", () => {
     expect(harbor.routes.some((route) => route.purpose === "crowd" && (route.traffic ?? 0) > 0.8)).toBe(true);
     expect(harbor.routes.some((route) => route.purpose === "service")).toBe(true);
     expect(harbor.buildingInstances?.length).toBe(harbor.rooms.filter((room) => room.id.startsWith("settlement-building-")).length);
-    expect(harbor.buildingInstances?.every((building) => building.detailLevel === "exterior-proxy" && building.seed.length > 0)).toBe(true);
+    expect(harbor.buildingInstances?.every((building) => ["mass", "facade", "full-interior"].includes(building.detailLevel) && building.seed.length > 0)).toBe(true);
+    expect(harbor.buildingInstances?.filter((building) => building.detailLevel === "full-interior").length).toBeGreaterThanOrEqual(3);
+    expect(harbor.primitives.some((primitive) => primitive.level === 1 && primitive.tags?.includes("upper-floor"))).toBe(true);
+    expect(harbor.primitives.some((primitive) => primitive.level === 3 && primitive.tags?.includes("underground"))).toBe(true);
+    expect(harbor.siteProgram?.siteType).toBe("harbor-district");
+    expect(harbor.primitives.filter((primitive) => primitive.tags?.includes("dock")).length).toBe(6);
   });
 
   it("separates daytime crowds from night watch routes in walled settlements", () => {
@@ -273,13 +278,94 @@ describe("scene generators", () => {
     expect(hasTag(harborDistrict, "harbor-edge")).toBe(true);
   });
 
+  it("keeps a settlement as the parent site when its prompt names child buildings", () => {
+    const prompt = "深水城港区，有不规则海岸、六码头、货运主路、仓储区、鱼市、酒馆、公会大厅、神殿、居民巷和巡逻岗楼";
+    const scene = generateScene({ ...request("site-parent-over-buildings", "large", 0.8), prompt }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.siteProgram?.siteType).toBe("harbor-district");
+    expect(scene.buildingInstances?.some((building) => building.archetype === "tavern" || building.archetype === "guild")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "shrine")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("composes a full-interior cabin into wilderness terrain instead of replacing the forest", () => {
+    const scene = generateScene({ ...request("forest-cabin-site", "medium", 0.68), prompt: "森林中的猎人木屋，有起居室、储藏间、阁楼、地窖、门廊和林间道路" }, "adaptive");
+    expect(scene.archetype).toBe("forest");
+    expect(scene.siteProgram?.siteType).toBe("wilderness-site");
+    expect(scene.buildingInstances?.[0]?.detailLevel).toBe("full-interior");
+    expect(scene.rooms.some((room) => room.name === "Root cellar")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("foundation"))).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-building-access")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("turns wilderness density into additional physical service and escape routes", () => {
+    const prompt = "森林中的猎人木屋，有起居室、地窖、门廊、柴堆和林间道路";
+    const sparse = generateScene({ ...request("forest-cabin-density", "medium", 0.25), prompt }, "adaptive");
+    const dense = generateScene({ ...request("forest-cabin-density", "medium", 0.9), prompt }, "adaptive");
+    expect(dense.siteProgram?.roadCount ?? 0).toBeGreaterThan(sparse.siteProgram?.roadCount ?? 0);
+    expect(dense.siteProgram?.roadLengthCells ?? 0).toBeGreaterThan((sparse.siteProgram?.roadLengthCells ?? 0) * 2);
+    expect(dense.routes.some((route) => route.id === "wilderness-escape-route")).toBe(true);
+    expect(hasTag(dense, "escape-route")).toBe(true);
+    expect(sparse.diagnostics.valid && dense.diagnostics.valid).toBe(true);
+  });
+
+  it("realizes mining infrastructure as terrain, water, bridge and portal geometry", () => {
+    const scene = generateScene({ ...request("mining-valley-site", "medium", 0.74), prompt: "山谷矿业聚落，有矿井入口、仓库、铁匠铺、矿车轨道、废石坡和河上装卸桥" }, "adaptive");
+    expect(scene.siteProgram?.siteType).toBe("mining-settlement");
+    expect(hasTag(scene, "mine-entrance")).toBe(true);
+    expect(hasTag(scene, "loading-bridge")).toBe(true);
+    expect(hasTag(scene, "valley-wall")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("composes a three-band floating settlement from the SceneProgram morphology", () => {
+    const scene = generateScene({ ...request("floating-radio-site", "medium", 0.76), prompt: "浮空玄武岩岛上的无线电观测城镇，有环形主路、无线电塔、旅店、维护仓库、悬索桥和地下避难所" }, "adaptive");
+    expect(scene.sceneProgram?.morphology).toContain("floating-islands");
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("floating-island")).length).toBeGreaterThanOrEqual(6);
+    expect(hasTag(scene, "suspension-bridge")).toBe(true);
+    const islandLevels = new Set(scene.primitives.filter((primitive) => primitive.id.endsWith("-top") && primitive.tags?.includes("floating-island")).map((primitive) => Math.round(primitive.position.y * 100)));
+    expect(islandLevels.size).toBe(3);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
   it("propagates requested density into settlement building count and adds city defenses", () => {
     const sparse = generateScene({ ...request("settlement-density", "large", 0), prompt: "大型城市街区" }, "settlement");
     const dense = generateScene({ ...request("settlement-density", "large", 1), prompt: "大型城市街区" }, "settlement");
     const buildingCount = (scene: GeneratedScene) => scene.rooms.filter((room) => room.id.startsWith("settlement-building-")).length;
     expect(buildingCount(dense)).toBeGreaterThan(buildingCount(sparse));
+    expect(dense.siteProgram?.roadLengthCells ?? 0).toBeGreaterThan(sparse.siteProgram?.roadLengthCells ?? 0);
     expect(hasTag(dense, "city-wall")).toBe(true);
     expect(hasTag(dense, "corner-tower")).toBe(true);
+  });
+
+  it("changes district count, bounds and LOD population across settlement scale bands", () => {
+    const small = generateScene({ ...request("site-scale-structure", "small", 0.7), prompt: "深水城港区，有仓库、酒馆和神殿" }, "adaptive");
+    const large = generateScene({ ...request("site-scale-structure", "large", 0.7), prompt: "深水城港区，有仓库、酒馆和神殿" }, "adaptive");
+    expect(large.siteProgram?.districtCount ?? 0).toBeGreaterThan(small.siteProgram?.districtCount ?? 0);
+    expect(large.diagnostics.metrics.boundsAreaCells ?? 0).toBeGreaterThan((small.diagnostics.metrics.boundsAreaCells ?? 0) * 2.5);
+    expect(large.buildingInstances?.length ?? 0).toBeGreaterThan((small.buildingInstances?.length ?? 0) * 1.5);
+    expect(large.siteProgram?.massCount ?? 0).toBeGreaterThan(small.siteProgram?.massCount ?? 0);
+  });
+
+  it("realizes flooded, elevated-rail and mountain-site requirements as geometry", () => {
+    const flooded = generateScene({ ...request("site-state-flooded", "medium", 0.7), prompt: "被洪水淹没的河畔村庄，有高脚住宅、粮仓和临时木桥" }, "adaptive");
+    const elevated = generateScene({ ...request("site-elevated-market", "medium", 0.78), prompt: "建在废弃高架铁路下的炼金市场村，有车厢商铺和中央广场" }, "adaptive");
+    const mountain = generateScene({ ...request("site-mountain-monastery", "medium", 0.62), prompt: "山地修道院聚落，有礼拜堂、钟塔、外部栈道和地下墓穴" }, "adaptive");
+    expect(hasTag(flooded, "stilt-foundation")).toBe(true);
+    expect(hasTag(flooded, "temporary-bridge")).toBe(true);
+    expect(hasTag(elevated, "elevated-rail")).toBe(true);
+    expect(hasTag(elevated, "carriage-shop")).toBe(true);
+    expect(hasTag(mountain, "mountain-terrace")).toBe(true);
+    expect(hasTag(mountain, "external-boardwalk")).toBe(true);
+    expect(flooded.diagnostics.valid && elevated.diagnostics.valid && mountain.diagnostics.valid).toBe(true);
+  });
+
+  it("backs requested settlement rooftop routes with standable geometry", () => {
+    const scene = generateScene({ ...request("r11-required-11", "medium", 0.65), prompt: "建在废弃高架铁路下的炼金市场村，有车厢商铺、炼金工坊、住宅棚屋、地下排水层、屋顶栈道和中央交易广场。" }, "adaptive");
+    expect(scene.routes.some((route) => route.id === "site-rooftop-pursuit")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("roof-walkway") && primitive.tags?.includes("standable"))).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
   });
 
   it.each([

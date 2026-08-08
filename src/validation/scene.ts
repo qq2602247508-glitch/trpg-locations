@@ -53,8 +53,8 @@ const ROUTE_KINDS = ["primary", "alternate", "vertical", "waterflow"] as const s
 const ROUTE_PURPOSES = ["movement", "crowd", "service", "escape", "water"] as const satisfies readonly NonNullable<Route["purpose"]>[];
 const ROUTE_SCHEDULES = ["day", "night", "all"] as const satisfies readonly NonNullable<Route["schedule"]>[];
 const TACTICAL_KINDS = ["cover", "highGround", "hazard", "chokepoint", "entrance", "secret"] as const satisfies readonly TacticalFeature["kind"][];
-const SETTLEMENT_BUILDING_KINDS = ["home", "tavern", "shrine", "warehouse", "tower", "manor"] as const satisfies readonly SettlementBuildingKind[];
-const BUILDING_DETAIL_LEVELS = ["exterior-proxy", "full-interior"] as const satisfies readonly BuildingInstance["detailLevel"][];
+const SETTLEMENT_BUILDING_KINDS = ["home", "tavern", "shrine", "warehouse", "tower", "manor", "guild", "clinic", "blacksmith", "mill", "barn", "factory"] as const satisfies readonly SettlementBuildingKind[];
+const BUILDING_DETAIL_LEVELS = ["mass", "facade", "full-interior"] as const satisfies readonly BuildingInstance["detailLevel"][];
 
 const GEOMETRY_EPSILON = 0.000_1;
 const ROUTE_BOUNDS_MARGIN_METERS = GRID_METERS * 2.5;
@@ -862,7 +862,7 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
     }
     const positionRecord = isRecord(raw.positionCells) ? raw.positionCells : {};
     if (!isRecord(raw.positionCells)) repairable(`buildingInstances[${index}].positionCells was invalid; using the origin.`);
-    const detailLevel = enumValue(raw.detailLevel, BUILDING_DETAIL_LEVELS, "exterior-proxy", `buildingInstances[${index}].detailLevel`);
+    const detailLevel = enumValue(raw.detailLevel, BUILDING_DETAIL_LEVELS, "facade", `buildingInstances[${index}].detailLevel`);
     const instance: BuildingInstance = {
       id,
       archetype,
@@ -877,8 +877,11 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
       floors: manifestFloors,
       floorHeightFeet: manifestHeights,
       detailLevel,
+      ...(typeof raw.parcelId === "string" ? { parcelId: raw.parcelId } : {}),
+      ...(typeof raw.frontageRoadId === "string" ? { frontageRoadId: raw.frontageRoadId } : {}),
+      ...(isRecord(raw.entranceCells) ? { entranceCells: sizeVec2(raw.entranceCells, { x: 0, z: 0 }, `buildingInstances[${index}].entranceCells`) } : {}),
     };
-    if (detailLevel === "exterior-proxy" && !primitives.some((primitive) => primitive.id.startsWith(`${id}-`) && hasTag(primitive, "independent-building-module"))) {
+    if (!primitives.some((primitive) => primitive.id.startsWith(`${id}-`) && hasTag(primitive, "independent-building-module"))) {
       fatal(`Building instance ${id} has no independently generated exterior primitive evidence.`);
     }
     buildingInstances.push(instance);

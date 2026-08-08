@@ -9,7 +9,12 @@ interface WorkerResponse {
 interface PendingGeneration {
   resolve: (scene: GeneratedScene) => void;
   reject: (error: Error) => void;
+  request: GenerationRequest;
+  kind: SceneKind;
+  timeoutId: ReturnType<typeof setTimeout>;
 }
+
+const WORKER_TIMEOUT_MS = 10_000;
 
 /** Runs deterministic planning off the render thread, with a lazy local fallback. */
 export class GenerationClient {
@@ -41,7 +46,10 @@ export class GenerationClient {
     const id = this.nextId;
     this.nextId += 1;
     return new Promise<GeneratedScene>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timeoutId = setTimeout(() => {
+        void this.fallbackPending(id);
+      }, WORKER_TIMEOUT_MS);
+      this.pending.set(id, { resolve, reject, request, kind, timeoutId });
       this.worker?.postMessage({ id, request, kind });
     });
   }
@@ -51,7 +59,10 @@ export class GenerationClient {
     this.worker?.removeEventListener("error", this.handleWorkerFailure);
     this.worker?.terminate();
     this.worker = undefined;
-    for (const pending of this.pending.values()) pending.reject(new Error("Scene planner was disposed."));
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timeoutId);
+      pending.reject(new Error("Scene planner was disposed."));
+    }
     this.pending.clear();
   }
 
@@ -59,6 +70,7 @@ export class GenerationClient {
     const pending = this.pending.get(event.data.id);
     if (!pending) return;
     this.pending.delete(event.data.id);
+    clearTimeout(pending.timeoutId);
     if (event.data.scene) pending.resolve(event.data.scene);
     else pending.reject(new Error(event.data.error ?? "Scene planner returned no scene."));
   };
@@ -66,7 +78,19 @@ export class GenerationClient {
   private readonly handleWorkerFailure = (): void => {
     this.worker?.terminate();
     this.worker = undefined;
-    for (const pending of this.pending.values()) pending.reject(new Error("Scene planner worker failed; retry to use the local fallback."));
-    this.pending.clear();
+    for (const id of [...this.pending.keys()]) void this.fallbackPending(id);
   };
+
+  private async fallbackPending(id: number): Promise<void> {
+    const pending = this.pending.get(id);
+    if (!pending) return;
+    this.pending.delete(id);
+    clearTimeout(pending.timeoutId);
+    try {
+      const { generateScene } = await import("../generators");
+      pending.resolve(await generateScene(pending.request, pending.kind));
+    } catch (error) {
+      pending.reject(error instanceof Error ? error : new Error("Local scene planning fallback failed."));
+    }
+  }
 }

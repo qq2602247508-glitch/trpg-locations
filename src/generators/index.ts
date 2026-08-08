@@ -20,7 +20,7 @@ import {
 import { generateTavern } from "./tavern";
 import { generateTower } from "./tower";
 import { generateBuilding } from "./building";
-import { generateSettlement } from "./settlement";
+import { generateSiteSettlement } from "./siteSettlement";
 import { generateWilderness } from "./wilderness";
 import { applySceneProgram, planSceneProgramLocally, semanticHintsFromProgram, summarizeSceneProgram, type SceneProgram } from "../scene-program";
 
@@ -35,7 +35,7 @@ export const generatorRegistry: Readonly<Record<FixedSceneKind, SceneGenerator>>
   cave: generateCave,
   dungeon: generateDungeon,
   building: generateBuilding,
-  settlement: generateSettlement,
+  settlement: generateSiteSettlement,
   wilderness: generateWilderness,
 };
 
@@ -269,11 +269,21 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   // “洞窟 + 水晶” and “洞窟 + 熔岩” do not collapse to the same layout.
   const promptKey = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const rootRng = new SeededRandom(`${normalized.seed}|prompt:${promptKey}`);
-  const program = suppliedProgram ?? planSceneProgramLocally(normalized.prompt, kind);
+  let program = suppliedProgram ?? planSceneProgramLocally(normalized.prompt, kind);
   let primary = kind === "adaptive" ? program.primaryKind : kind;
   const programText = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const explicitBuildingNouns = ["精神病院", "医院", "警察局", "警局", "博物馆", "酒店", "旅店", "教堂", "神殿", "庄园", "宅邸", "堡垒", "要塞", "发电站", "修道院", "学院", "火车站", "hospital", "sanatorium", "police station", "museum", "hotel", "church", "temple", "manor", "fortress", "power station", "monastery", "academy", "railway station"];
-  if (kind === "adaptive" && primary !== "dungeon" && explicitBuildingNouns.some((term) => programText.includes(term))) primary = "building";
+  const hasExplicitBuilding = explicitBuildingNouns.some((term) => programText.includes(term));
+  const strongSettlementNouns = ["城镇", "村庄", "村落", "市场村", "聚居地", "街区", "港区", "深水城", "聚落", "小镇", "town", "village", "market village", "district", "harbor", "settlement"];
+  const ownsSite = strongSettlementNouns.some((term) => programText.includes(term)) || (!hasExplicitBuilding && ["城市", "city"].some((term) => programText.includes(term)));
+  // Parent-site ownership is a hard schema constraint, not a model opinion.
+  // A semantic provider may notice "crypt" or "chapel" inside a monastery
+  // settlement, but those are child programs and cannot replace the site.
+  if (kind === "adaptive" && ownsSite && program.domain !== "settlement") {
+    program = planSceneProgramLocally(normalized.prompt, kind);
+    primary = "settlement";
+  }
+  if (kind === "adaptive" && primary !== "dungeon" && primary !== "settlement" && !ownsSite && hasExplicitBuilding) primary = "building";
   // Multi-storey hospitality prompts need the same auditable room graph as
   // institutions: cellar, attic, service stair and roof pursuit cannot be
   // represented by the compact encounter-only tavern grammar.
