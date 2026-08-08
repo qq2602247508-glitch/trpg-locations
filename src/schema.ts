@@ -2,7 +2,7 @@ export const GRID_FEET = 5;
 export const GRID_METERS = 1.524;
 
 import type { SceneProgram, SceneProgramSummary } from "./scene-program/schema";
-import type { SiteProgramSummary } from "./site-program/schema";
+import type { SettlementAdaptationProgramSummary, SiteProgramSummary, TerrainProgramSummary } from "./site-program/schema";
 
 export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "dungeon" | "building" | "settlement" | "wilderness" | "adaptive";
 export type PrimitiveShape = "box" | "cylinder" | "cone" | "sphere" | "gable" | "stairs" | "water";
@@ -169,6 +169,10 @@ export interface GeneratedScene {
   sceneProgram?: SceneProgramSummary;
   /** Auditable terrain/road/district/parcel plan for settlements and mixed sites. */
   siteProgram?: SiteProgramSummary;
+  /** Parent terrain contract compiled before settlement roads and buildings. */
+  terrainProgram?: TerrainProgramSummary;
+  /** How buildings and circulation were adapted onto that parent terrain. */
+  settlementAdaptation?: SettlementAdaptationProgramSummary;
   buildingProgram?: BuildingProgramSummary;
 }
 

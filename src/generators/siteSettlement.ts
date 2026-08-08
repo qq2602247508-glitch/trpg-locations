@@ -2,13 +2,24 @@ import type { GeneratedScene, GeneratorContext } from "../schema";
 import { planSettlementSite, summarizeSiteProgram, type RoadProgram } from "../site-program";
 import { instantiateBuildingModule } from "./buildingModule";
 import { classifySettlementArchetype } from "./settlement";
+import { compileSettlementTerrain, type SettlementTerrain } from "./settlementTerrain";
 import { FLOOR_SLAB_METERS, baseScene, box, connectRooms, corridor, createRoom, createRoute, cylinder, feetToMeters, primitive, stairConnection, stairs, tacticalFeature, water } from "./shared";
 
-function roadPieces(road: RoadProgram, elevationAt: (x: number, z: number) => number = () => 0) {
-  return road.points.slice(1).map((point, index) => {
+function roadPieces(road: RoadProgram, terrain: SettlementTerrain) {
+  return road.points.slice(1).flatMap((point, index) => {
     const previous = road.points[index];
     if (!previous) throw new Error(`Road ${road.id} has no start point`);
-    return corridor(`site-${road.id}-${index + 1}`, 0, previous.x, previous.z, point.x, point.z, elevationAt((previous.x + point.x) / 2, (previous.z + point.z) / 2) + FLOOR_SLAB_METERS + 0.02, road.widthCells, road.hierarchy === "trail" ? "earth" : road.hierarchy === "quay" ? "stone" : "stone", ["road", `road:${road.hierarchy}`, `purpose:${road.purpose}`, "site-program", "standable"]);
+    const length = Math.hypot(point.x - previous.x, point.z - previous.z);
+    const steps = Math.max(1, Math.ceil(length / 2.5));
+    return Array.from({ length: steps }, (_, step) => {
+      const t0 = step / steps; const t1 = (step + 1) / steps;
+      const from = { x: previous.x + (point.x - previous.x) * t0, z: previous.z + (point.z - previous.z) * t0 };
+      const to = { x: previous.x + (point.x - previous.x) * t1, z: previous.z + (point.z - previous.z) * t1 };
+      const mx = (from.x + to.x) / 2; const mz = (from.z + to.z) / 2;
+      const surface = terrain.surfaceAt(mx, mz);
+      if (surface === "water" || surface === "lava" || surface === "void") return undefined;
+      return corridor(`site-${road.id}-${index + 1}-${step + 1}`, 0, from.x, from.z, to.x, to.z, terrain.elevationAt(mx, mz) + FLOOR_SLAB_METERS + 0.02, road.widthCells, road.hierarchy === "trail" ? "earth" : "stone", ["road", `road:${road.hierarchy}`, `purpose:${road.purpose}`, "site-program", "standable", "terrain-adapted"]);
+    }).filter((piece): piece is NonNullable<typeof piece> => Boolean(piece));
   });
 }
 
@@ -356,6 +367,12 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   const program = planSettlementSite({ request: context.request, archetype }, context.rng.fork("site-program"));
   const settlementTitle = program.requiredFeatures.includes("water-city") ? "The Waterwoven Quarter"
     : program.requiredFeatures.includes("impact-crater-settlement") ? "The Fallen-Star Village"
+      : program.requiredFeatures.includes("volcanic-settlement") ? "The Cinder-Rim Village"
+        : program.requiredFeatures.includes("underdark-settlement") ? "The Deep-Shelf Enclave"
+          : program.requiredFeatures.includes("tower-city") ? "The Many-Ring Tower City"
+            : program.requiredFeatures.includes("vertical-slum") ? "The Pier-Hung Market"
+              : program.requiredFeatures.includes("bone-swamp-settlement") ? "The Fossil-Marsh Village"
+                : program.requiredFeatures.includes("airship-wreck-settlement") ? "The Fallen Airframe Camp"
       : program.siteType === "harbor-district" ? "The Layered Quays"
         : program.siteType === "village" ? "The Living Crossroads"
           : program.siteType === "mining-settlement" ? "Orewater Camp"
@@ -363,23 +380,33 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   const scene = baseScene("settlement", settlementTitle, `${program.siteType} compiled as a ${program.morphology.era} ${program.morphology.roadPattern} settlement from terrain constraints, districts, hierarchical roads, frontage parcels and independently seeded buildings.`, context.request.seed, program.bounds, 4, [12, 10, 8, 10]);
   scene.archetype = archetype;
   scene.floorLabels = ["地面/1F", "主要上层", "屋顶", "B1"];
+  const terrain = compileSettlementTerrain(program, context.request.prompt, context.rng.fork("settlement-terrain"));
+  program.terrain.kind = terrain.summary.kind;
+  program.terrain.buildableRatio = terrain.summary.buildableRatio;
+  program.terrain.elevationBandsFeet = terrain.summary.elevationBandsFeet;
   scene.siteProgram = summarizeSiteProgram(program);
+  scene.terrainProgram = terrain.summary;
   const landDepth = program.siteType === "harbor-district" ? program.bounds.z - 8 : program.bounds.z;
   const isFloating = context.sceneProgram?.morphology.includes("floating-islands") ?? false;
   const isMountainMonastery = program.requiredFeatures.includes("mountain-monastery") || program.requiredFeatures.includes("hillside-district");
   const isFlooded = program.requiredFeatures.includes("flooded-site");
-  const elevationAt = isFloating ? addFloatingIslandTerrain(scene, program.bounds.x, program.bounds.z) : isMountainMonastery ? addMountainTerraces(scene, program.bounds.x, program.bounds.z) : () => 0;
-  if (!isFloating) scene.primitives.push(box("site-terrain-base", 0, program.bounds.x / 2, 0, landDepth / 2, program.bounds.x, FLOOR_SLAB_METERS, landDepth, program.siteType === "village" || program.siteType === "mining-settlement" || program.siteType === "town" ? "earth" : "darkStone", ["floor", "terrain", "site-program", `site:${program.siteType}`]));
+  const legacySpecialElevation = isFloating || isMountainMonastery;
+  const elevationAt = isFloating ? addFloatingIslandTerrain(scene, program.bounds.x, program.bounds.z) : isMountainMonastery ? addMountainTerraces(scene, program.bounds.x, program.bounds.z) : terrain.elevationAt;
+  if (!legacySpecialElevation) terrain.render(scene);
+  else if (!isFloating) scene.primitives.push(box("site-terrain-base", 0, program.bounds.x / 2, 0, landDepth / 2, program.bounds.x, FLOOR_SLAB_METERS, landDepth, "earth", ["floor", "terrain", "site-program", `site:${program.siteType}`]));
   // Districts are planning ownership, not giant coloured floor decals. Their
   // identity is made legible by parcel use, landmarks and road hierarchy.
-  addBlockAndParcelSurfaces(scene, program, elevationAt);
-  for (const road of program.roads) scene.primitives.push(...roadPieces(road, elevationAt));
-  addRoadJunctions(scene, program, elevationAt);
-  addOpenSpaces(scene, program, elevationAt);
-  if (program.siteType === "harbor-district") addHarbor(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
-  if (program.siteType === "village") addVillageLandmarks(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
-  if (!isFloating && (program.siteType === "city-district" || program.siteType === "town")) addUrbanDefences(scene, program.bounds.x, program.bounds.z);
-  if (program.siteType === "mining-settlement") {
+  const semanticTerrain = ["river", "impact-crater", "caldera", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind);
+  if (!semanticTerrain) addBlockAndParcelSurfaces(scene, program, elevationAt);
+  if (!semanticTerrain) {
+    for (const road of program.roads) scene.primitives.push(...roadPieces(road, legacySpecialElevation ? { ...terrain, elevationAt, surfaceAt: () => "ground" } : terrain));
+    addRoadJunctions(scene, program, elevationAt);
+  }
+  if (!semanticTerrain) addOpenSpaces(scene, program, elevationAt);
+  if (program.siteType === "harbor-district" && terrain.summary.kind !== "coastal-cliff") addHarbor(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
+  if (program.siteType === "village" && !semanticTerrain) addVillageLandmarks(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
+  if (!isFloating && !semanticTerrain && (program.siteType === "city-district" || program.siteType === "town")) addUrbanDefences(scene, program.bounds.x, program.bounds.z);
+  if (program.siteType === "mining-settlement" && !semanticTerrain) {
     addMiningValley(scene, program.bounds.x, program.bounds.z);
     scene.primitives.push(corridor("mining-cart-track", 0, 1, program.bounds.z * 0.28, program.bounds.x - 2, program.bounds.z * 0.72, FLOOR_SLAB_METERS + 0.08, 1.4, "metal", ["mine-cart-track", "industrial-route", "site-program"]));
     scene.primitives.push(box("mining-waste-slope", 0, program.bounds.x * 0.82, feetToMeters(5), program.bounds.z * 0.2, 9, feetToMeters(10), 8, "rock", ["waste-rock", "slope", "high-ground", "site-program"]));
@@ -387,22 +414,39 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   if (program.requiredFeatures.includes("industrial-plant") || program.requiredFeatures.includes("rail-yard")) addIndustrialSite(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
   if (isFlooded) addFloodedSite(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("elevated-rail")) addElevatedRailMarket(scene, program.bounds.x, program.bounds.z);
-  if (program.requiredFeatures.includes("water-city")) addWaterCity(scene, program.bounds.x, program.bounds.z);
-  if (program.requiredFeatures.includes("impact-crater-settlement")) addImpactCraterSettlement(scene, program.bounds.x, program.bounds.z);
+  // Water, impact, volcanic, underdark and megastructure parents are now
+  // realized by TerrainProgram before any road or building is emitted.
   if (program.requiredFeatures.includes("gate-district")) addGateDistrict(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("war-damaged")) addWarDamage(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("vertical-slum")) addVerticalSlum(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("colony-port")) addColonyPort(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("river-crossing") && program.siteType !== "village" && program.siteType !== "mining-settlement" && program.siteType !== "harbor-district") addRiverCrossingSite(scene, program.bounds.x, program.bounds.z);
 
+  const nearestBuildable = (x: number, z: number, clearance: number): { x: number; z: number; elevationFeet?: number } | undefined => {
+    if (legacySpecialElevation || terrain.buildableAt(x, z, clearance)) return { x, z };
+    for (let radius = 1; radius <= 12; radius += 1) {
+      for (let dz = -radius; dz <= radius; dz += 1) for (let dx = -radius; dx <= radius; dx += 1) {
+        if (Math.abs(dx) !== radius && Math.abs(dz) !== radius) continue;
+        const candidate = { x: x + dx, z: z + dz };
+        if (terrain.buildableAt(candidate.x, candidate.z, clearance)) return candidate;
+      }
+    }
+    return undefined;
+  };
+  let adaptedBuildings = 0;
   for (const parcel of program.parcels) {
+    if (terrain.summary.kind === "bridge-megastructure" && adaptedBuildings >= 9) continue;
     const district = program.districts.find((candidate) => candidate.id === parcel.districtId);
-    const siteElevation = isFlooded ? feetToMeters(5) : elevationAt(parcel.center.x, parcel.center.z);
+    const clearance = Math.min(2, Math.max(parcel.buildingSize.x, parcel.buildingSize.z) * 0.18);
+    const semanticPlacement = semanticTerrain ? terrain.placementFor(adaptedBuildings, program.parcels.length, parcel.center, clearance) : undefined;
+    const placement = semanticPlacement ?? nearestBuildable(parcel.center.x, parcel.center.z, clearance);
+    if (!placement) continue;
+    const siteElevation = isFlooded ? feetToMeters(5) : placement.elevationFeet === undefined ? elevationAt(placement.x, placement.z) : feetToMeters(placement.elevationFeet);
     instantiateBuildingModule(scene, {
       id: `settlement-building-${parcel.id.replace("parcel-", "")}`,
       kind: parcel.buildingKind,
-      x: parcel.center.x,
-      z: parcel.center.z,
+      x: placement.x,
+      z: placement.z,
       width: parcel.buildingSize.x,
       depth: parcel.buildingSize.z,
       rotation: parcel.rotationY,
@@ -411,11 +455,12 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       lod: parcel.lod,
       parcelId: parcel.id,
       frontageRoadId: parcel.frontageRoadId,
-      entrance: parcel.entrance,
+      entrance: placement,
       baseY: siteElevation + FLOOR_SLAB_METERS,
       state: parcel.state,
     }, context.rng.fork(parcel.buildingSeed));
-    scene.primitives.push(corridor(`parcel-access-${parcel.id}`, 0, parcel.entrance.x, parcel.entrance.z, parcel.center.x, parcel.center.z, siteElevation + FLOOR_SLAB_METERS + 0.06, parcel.lod === "full-interior" ? 1.4 : 1, program.siteType === "village" ? "earth" : "stone", ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable"]));
+    adaptedBuildings += 1;
+    scene.primitives.push(corridor(`parcel-access-${parcel.id}`, 0, placement.x - 1.4, placement.z, placement.x, placement.z, siteElevation + FLOOR_SLAB_METERS + 0.06, parcel.lod === "full-interior" ? 1.4 : 1, program.siteType === "village" ? "earth" : "stone", ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted"]));
     if (isFlooded) {
       for (const [pierIndex, dx, dz] of [[0, -0.36, -0.36], [1, 0.36, -0.36], [2, -0.36, 0.36], [3, 0.36, 0.36]] as const) scene.primitives.push(cylinder(`flood-pier-${parcel.id}-${pierIndex}`, 0, parcel.center.x + parcel.size.x * dx, 0, parcel.center.z + parcel.size.z * dz, 0.55, siteElevation, "wood", ["stilt-foundation", "flooded-site", "site-program"]));
       scene.primitives.push(stairs(`flood-access-stair-${parcel.id}`, 0, parcel.entrance.x, 0, parcel.entrance.z, 1.2, siteElevation, 3.8, "wood", ["flooded-site", "vertical-opening", "site-program"], parcel.rotationY));
@@ -430,7 +475,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   const buildingRoots = scene.rooms.filter((room) => room.id.startsWith("settlement-building-") && room.id.endsWith("-room"));
   for (const [index, room] of buildingRoots.entries()) connectRooms(scene.rooms, index === 0 ? plaza.id : (buildingRoots[index - 1]?.id ?? plaza.id), room.id);
 
-  for (const road of program.roads) scene.routes.push(createRoute(`route-${road.id}`, road.hierarchy === "arterial" ? "primary" : "alternate", road.points.map((point) => ({ ...point, y: elevationAt(point.x, point.z) })), { purpose: road.purpose === "cargo" || road.purpose === "service" ? "service" : "crowd", traffic: road.hierarchy === "arterial" ? 0.94 : road.hierarchy === "street" ? 0.86 : road.hierarchy === "lane" || road.hierarchy === "trail" ? 0.44 : 0.7, schedule: road.purpose === "patrol" ? "night" : road.purpose === "service" ? "all" : "day" }));
+  if (!semanticTerrain) for (const road of program.roads) scene.routes.push(createRoute(`route-${road.id}`, road.hierarchy === "arterial" ? "primary" : "alternate", road.points.map((point) => ({ ...point, y: elevationAt(point.x, point.z) })), { purpose: road.purpose === "cargo" || road.purpose === "service" ? "service" : "crowd", traffic: road.hierarchy === "arterial" ? 0.94 : road.hierarchy === "street" ? 0.86 : road.hierarchy === "lane" || road.hierarchy === "trail" ? 0.44 : 0.7, schedule: road.purpose === "patrol" ? "night" : road.purpose === "service" ? "all" : "day" }));
   const core = scene.buildingInstances?.filter((building) => building.detailLevel === "full-interior") ?? [];
   const wantsRoofRoute = ["屋顶", "房顶", "追逐", "roof", "rooftop", "chase"].some((term) => context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term));
   if (wantsRoofRoute && core.length > 0) {
@@ -459,6 +504,9 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   }
   for (const zone of program.encounterZones) scene.tactical.push(tacticalFeature(`site-${zone.id}`, zone.kind === "high-ground" ? "highGround" : zone.kind, zone.center.x, zone.center.z, 0, zone.radiusCells, `SiteProgram ${zone.kind} derived from district and route relationships.`));
   scene.diagnostics.metrics.siteRoadLengthCells = program.diagnostics.roadLengthCells;
+  scene.diagnostics.metrics.terrainBuildableRatio = terrain.summary.buildableRatio;
+  scene.diagnostics.metrics.terrainElevationRangeFeet = terrain.summary.maximumElevationFeet - terrain.summary.minimumElevationFeet;
+  scene.diagnostics.metrics.terrainAdaptedBuildings = adaptedBuildings;
   scene.diagnostics.metrics.siteParcelCoverage = program.diagnostics.parcelCoverage;
   scene.diagnostics.metrics.siteBuildingCoverage = program.diagnostics.buildingCoverage;
   scene.diagnostics.metrics.siteFullInteriors = program.lodPolicy.fullInteriorCount;
@@ -470,5 +518,17 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   scene.diagnostics.metrics.siteNonRectangularBlockRatio = program.diagnostics.nonRectangularBlockRatio;
   scene.diagnostics.metrics.siteBuildingPrograms = scene.buildingInstances?.filter((building) => Boolean(building.interiorProgram)).length ?? 0;
   scene.diagnostics.metrics.siteFocusInteriorPrimitives = scene.primitives.filter((primitive) => primitive.tags?.includes("focus-interior")).length;
+  const bridgeCount = scene.primitives.filter((primitive) => primitive.tags?.some((tag) => tag === "bridge" || tag.includes("bridge"))).length;
+  const verticalConnectionCount = scene.primitives.filter((primitive) => primitive.tags?.some((tag) => tag === "vertical-route" || tag === "vertical-opening")).length;
+  scene.settlementAdaptation = {
+    version: 1,
+    terrainKind: terrain.summary.kind,
+    roadMode: semanticTerrain ? "terrain-owned" : "planned",
+    relocatedBuildings: adaptedBuildings,
+    supportSurfaceCount: terrain.summary.supportSurfaces,
+    bridgeCount,
+    verticalConnectionCount,
+    elevationRangeFeet: terrain.summary.maximumElevationFeet - terrain.summary.minimumElevationFeet,
+  };
   return scene;
 }

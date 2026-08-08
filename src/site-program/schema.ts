@@ -18,10 +18,38 @@ export interface SitePoint extends Vec2 {
 }
 
 export interface SiteTerrainProgram {
-  kind: "coast" | "river" | "rolling" | "valley" | "forest-clearing" | "urban";
+  kind: "coast" | "coastal-cliff" | "river" | "rolling" | "valley" | "forest-clearing" | "urban" | "impact-crater" | "caldera" | "underdark" | "megastructure" | "bridge-megastructure" | "swamp-bone" | "wreck-field";
   buildableRatio: number;
   elevationBandsFeet: number[];
   waterEdge?: SitePoint[];
+}
+
+export interface TerrainProgramSummary {
+  version: 1;
+  kind: SiteTerrainProgram["kind"];
+  widthCells: number;
+  depthCells: number;
+  elevationBandsFeet: number[];
+  minimumElevationFeet: number;
+  maximumElevationFeet: number;
+  buildableRatio: number;
+  waterRatio: number;
+  hazardRatio: number;
+  bridgeCandidates: number;
+  supportSurfaces: number;
+}
+
+/** Auditable contract describing how a settlement was fitted onto its parent
+ * terrain instead of being rendered as an unrelated flat town layer. */
+export interface SettlementAdaptationProgramSummary {
+  version: 1;
+  terrainKind: SiteTerrainProgram["kind"];
+  roadMode: "terrain-owned" | "planned";
+  relocatedBuildings: number;
+  supportSurfaceCount: number;
+  bridgeCount: number;
+  verticalConnectionCount: number;
+  elevationRangeFeet: number;
 }
 
 export interface DistrictProgram {
@@ -150,6 +178,7 @@ export interface SiteProgramSummary {
   roadPattern: SettlementMorphologyProgram["roadPattern"];
   curvedRoadRatio: number;
   nonRectangularBlockRatio: number;
+  terrainKind: SiteTerrainProgram["kind"];
 }
 
 export interface SitePlanningInput {
@@ -177,5 +206,6 @@ export function summarizeSiteProgram(program: SiteProgram): SiteProgramSummary {
     roadPattern: program.morphology.roadPattern,
     curvedRoadRatio: program.diagnostics.curvedRoadRatio,
     nonRectangularBlockRatio: program.diagnostics.nonRectangularBlockRatio,
+    terrainKind: program.terrain.kind,
   };
 }

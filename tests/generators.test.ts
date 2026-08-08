@@ -375,11 +375,80 @@ describe("scene generators", () => {
     expect(waterCity.diagnostics.valid && craterVillage.diagnostics.valid).toBe(true);
   });
 
+  it("compiles semantic parent terrain before placing settlement buildings", () => {
+    const prompts = [
+      { seed: "terrain-parent-river", prompt: "河道水城，弯曲主运河、三条支流、石桥、木桥和两岸街区", kind: "river", minimumRange: 15 },
+      { seed: "terrain-parent-crater", prompt: "陨石坑村庄，房屋分布在坑底、环壁台地和坑缘，三条下坑坡道", kind: "impact-crater", minimumRange: 25 },
+      { seed: "terrain-parent-caldera", prompt: "火山口村庄，熔岩沟、链桥、高处祭坛和环壁聚落", kind: "caldera", minimumRange: 25 },
+      { seed: "terrain-parent-underdark", prompt: "幽暗地域村庄，多层岩台、裂谷、地下湖和两座桥", kind: "underdark", minimumRange: 20 },
+      { seed: "terrain-parent-tower", prompt: "塔楼城市，城市分布在一个巨型塔楼结构上，有三层环形平台和塔顶神殿", kind: "megastructure", minimumRange: 60 },
+    ] as const;
+    for (const sample of prompts) {
+      const scene = generateScene({ ...request(sample.seed, "medium", 0.66), prompt: sample.prompt }, "adaptive");
+      expect(scene.sceneProgram?.domain).toBe("settlement");
+      expect(scene.terrainProgram?.kind).toBe(sample.kind);
+      expect(scene.settlementAdaptation?.terrainKind).toBe(sample.kind);
+      expect(scene.settlementAdaptation?.roadMode).toBe("terrain-owned");
+      expect(scene.settlementAdaptation?.relocatedBuildings ?? 0).toBeGreaterThan(0);
+      expect((scene.terrainProgram?.maximumElevationFeet ?? 0) - (scene.terrainProgram?.minimumElevationFeet ?? 0)).toBeGreaterThanOrEqual(sample.minimumRange);
+      expect(scene.diagnostics.metrics.terrainAdaptedBuildings ?? 0).toBeGreaterThan(0);
+      expect(scene.diagnostics.valid, `${sample.kind}: ${scene.diagnostics.warnings.join(" | ")}`).toBe(true);
+    }
+  });
+
+  it("realizes semantic settlement requirements as terrain-owned geometry", () => {
+    const caldera = generateScene({ ...request("terrain-owned-caldera", "medium", 0.64), prompt: "火山口村庄，熔岩沟、三条环壁坡道、链桥和高处祭坛" }, "adaptive");
+    const underdark = generateScene({ ...request("terrain-owned-underdark", "medium", 0.64), prompt: "幽暗地域村庄，裂谷、地下湖、两座桥、菌林与石屋" }, "adaptive");
+    const tower = generateScene({ ...request("terrain-owned-tower", "medium", 0.64), prompt: "塔楼城市，巨型塔楼结构、三层环形平台、吊桥、楼梯和塔顶神殿" }, "adaptive");
+    expect(caldera.primitives.some((primitive) => primitive.tags?.includes("lava-flow") || primitive.tags?.includes("lava"))).toBe(true);
+    expect(caldera.primitives.filter((primitive) => primitive.tags?.includes("crater-ramp")).length).toBe(3);
+    expect(hasTag(caldera, "chain-bridge")).toBe(true);
+    expect(hasTag(caldera, "high-altar")).toBe(true);
+    expect(hasTag(underdark, "underground-lake")).toBe(true);
+    expect(underdark.primitives.filter((primitive) => primitive.tags?.includes("ravine-bridge")).length).toBe(2);
+    expect(hasTag(underdark, "cavern-wall")).toBe(true);
+    expect(hasTag(tower, "tower-core")).toBe(true);
+    expect(tower.primitives.filter((primitive) => primitive.tags?.includes("ring-route")).length).toBeGreaterThanOrEqual(30);
+    expect(tower.primitives.filter((primitive) => primitive.tags?.includes("vertical-route")).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("replays semantic terrain deterministically while different seeds reshape it", () => {
+    const prompt = "河道水城，弯曲主运河、三条支流、石桥、木桥、水上市集和前现代街巷";
+    const first = generateScene({ ...request("r14-water-replay-a", "medium", 0.72), prompt }, "adaptive");
+    const replay = generateScene({ ...request("r14-water-replay-a", "medium", 0.72), prompt }, "adaptive");
+    const variation = generateScene({ ...request("r14-water-replay-b", "medium", 0.72), prompt }, "adaptive");
+    const signature = (scene: GeneratedScene) => scene.primitives
+      .filter((primitive) => primitive.tags?.includes("terrain-program"))
+      .map((primitive) => [primitive.id, primitive.position.x, primitive.position.y, primitive.position.z]);
+    expect(signature(replay)).toEqual(signature(first));
+    expect(signature(variation)).not.toEqual(signature(first));
+    expect(replay.settlementAdaptation).toEqual(first.settlementAdaptation);
+  });
+
   it("supports vertical settlement platforms and connects their authored heights", () => {
     const scene = generateScene({ ...request("r13-supported-vertical", "medium", 0.7), prompt: "建在巨型桥墩之间的垂直贫民街区，有三层市场平台、吊桥、楼梯和桥下维修区" }, "adaptive");
     expect(scene.primitives.filter((primitive) => primitive.tags?.includes("platform-support")).length).toBeGreaterThanOrEqual(12);
+    expect(scene.terrainProgram?.kind).toBe("bridge-megastructure");
+    expect(scene.settlementAdaptation?.relocatedBuildings).toBeLessThanOrEqual(9);
+    expect(scene.settlementAdaptation?.verticalConnectionCount ?? 0).toBeGreaterThanOrEqual(3);
     expect(scene.routes.filter((route) => route.id.startsWith("vertical-slum-climb-route-")).length).toBe(3);
     expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("keeps coastal, fossil-swamp and wreck settlements under terrain adaptation", () => {
+    const samples = [
+      { seed: "r14-coastal-parent", prompt: "海崖港镇，四层悬崖、灯塔、栈桥和维护道路", kind: "coastal-cliff", tag: "coastal-cliff" },
+      { seed: "r14-bone-parent", prompt: "石化龙骨沼泽村庄，肋骨栈道、龙骨平台和地下骨髓祭坛", kind: "swamp-bone", tag: "spine-walkway" },
+      { seed: "r14-wreck-parent", prompt: "坠毁飞艇残骸中的矿业村庄，断裂船体、主龙骨、悬挂平台和货运隧道", kind: "wreck-field", tag: "airship-wreck" },
+    ] as const;
+    for (const sample of samples) {
+      const scene = generateScene({ ...request(sample.seed, "medium", 0.7), prompt: sample.prompt }, "adaptive");
+      expect(scene.sceneProgram?.domain).toBe("settlement");
+      expect(scene.terrainProgram?.kind).toBe(sample.kind);
+      expect(scene.settlementAdaptation?.terrainKind).toBe(sample.kind);
+      expect(scene.primitives.some((primitive) => primitive.tags?.includes(sample.tag))).toBe(true);
+      expect(scene.diagnostics.valid, `${sample.kind}: ${scene.diagnostics.warnings.join(" | ")}`).toBe(true);
+    }
   });
 
   it("keeps a hillside noble district under settlement planning", () => {

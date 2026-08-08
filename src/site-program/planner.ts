@@ -81,8 +81,14 @@ function requestedSiteFeatures(text: string): string[] {
   add("vertical-slum", ["垂直贫民", "巨型桥墩", "多层棚屋", "吊桥", "vertical slum", "bridge pier"]);
   add("colony-port", ["火星殖民", "气闸", "居住模块", "温室", "mars colony", "airlock"]);
   add("coastal-town", ["海滨小镇", "1920年代海滨", "coastal town", "seaside town"]);
+  add("coastal-cliff", ["海崖港镇", "分层海崖", "悬崖港镇", "sea-cliff port", "cliff port"]);
   add("fantasy-harbor", ["深水城港区", "奇幻港区", "deepwater harbor", "fantasy harbor"]);
   add("impact-crater-settlement", ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"]);
+  add("volcanic-settlement", ["火山口村", "火山村", "火山聚落", "破火山口聚落", "volcanic settlement", "volcano village", "caldera village"]);
+  add("underdark-settlement", ["幽暗地域村", "幽暗地域聚落", "地下聚落", "underdark village", "underdark settlement"]);
+  add("tower-city", ["巨塔城市", "巨型塔楼结构", "城市分布在巨型塔", "tower city", "megastructure city"]);
+  add("bone-swamp-settlement", ["石化龙骨", "肋骨栈道", "骨架高台", "dragonbone swamp", "fossil ribs"]);
+  add("airship-wreck-settlement", ["坠毁飞艇", "飞艇残骸", "残骸主梁", "crashed airship", "airship wreck"]);
   add("premodern-old-city", ["深水城", "旧城", "老城", "中世纪", "古城", "medieval", "old city"]);
   add("wooden-wall", ["木墙", "木栅", "palisade", "wooden wall"]);
   return features;
@@ -96,13 +102,13 @@ function inferMorphology(text: string, siteType: SiteType, features: readonly st
         : contains(text, ["远古", "古代", "ancient"]) ? "ancient"
           : contains(text, ["深水城", "中世纪", "奇幻", "城堡", "神殿", "medieval", "fantasy"]) ? "medieval"
             : "timeless";
-  const roadPattern: SettlementMorphologyProgram["roadPattern"] = features.includes("impact-crater-settlement") ? "radial-ring"
+  const roadPattern: SettlementMorphologyProgram["roadPattern"] = features.includes("impact-crater-settlement") || features.includes("volcanic-settlement") ? "radial-ring"
     : features.includes("water-city") ? "canal-banks"
       : features.includes("hillside-district") ? "contour"
         : siteType === "harbor-district" || features.includes("fantasy-harbor") ? "harbor-spine"
           : era === "modern" || era === "future" || features.includes("industrial-plant") ? "rectilinear"
             : "anchor-web";
-  const growth: SettlementMorphologyProgram["growth"] = features.includes("vertical-slum") ? "vertical"
+  const growth: SettlementMorphologyProgram["growth"] = features.includes("vertical-slum") || features.includes("tower-city") ? "vertical"
     : features.includes("gate-district") ? "military"
       : features.includes("industrial-plant") ? "industrial"
         : roadPattern === "rectilinear" ? "planned" : "organic";

@@ -111,6 +111,8 @@ const MATERIAL_STYLE: Record<
     color: 0x2d8ca3,
     roughness: 0.16,
     metalness: 0.26,
+    emissive: 0x0b3540,
+    emissiveIntensity: 0.38,
     opacity: 0.72,
     transparent: true,
   },
