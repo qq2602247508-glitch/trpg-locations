@@ -29,3 +29,24 @@ to a shell, floors were copied, and tower stairs were not spiral.
 All code checks pass after these changes. This report is not a completion claim;
 the next gate is multi-view visual regression plus stranger prompts and density
 comparison.
+
+## Round 04–06 observations
+
+- `round-04-dungeon/1f.png`, `2f.png`, and `3f.png` show visibly different
+  envelopes: a broad entry network, a tighter middle hazard graph, and a
+  separated deep objective arrangement. The floor selector now retains the
+  5-foot grid on each selected floor.
+- `round-05-asylum/small-overview.png` and `large-overview.png` confirm that
+  the same unfamiliar hospital composition changes footprint, room dimensions,
+  and fixture count between size bands. The earlier single-floor captures were
+  intentionally rejected as an invalid comparison because 3F remained selected
+  from the dungeon audit.
+- `round-06-fixed-buildings/police.png` visibly separates public arrival,
+  interview/records, evidence/detention, courtyard and rear secure circulation.
+- `round-06-fixed-buildings/temple.png` visibly separates the nave, sanctuary,
+  west/east prayer chambers, vestry, crypt descent and bell route. This is a
+  distinct cruciform composition, not the manor or dungeon shell.
+
+The remaining visual debt is explicit: some overview views still read better in
+floor-specific mode than in the all-floor cut, and the fortress wall walk and
+some institution-specific fixtures need a low-angle/close tactical pass.
