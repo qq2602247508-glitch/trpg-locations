@@ -132,23 +132,36 @@ export function generateDungeon(context: GeneratorContext): GeneratedScene {
 
   for (let level = 0; level < levels; level += 1) {
     const baseY = baseYs[level] ?? 0;
+    // Each level owns a different spatial envelope: the descent is broad and
+    // navigable, middle levels tighten into branching hazards, and the deep
+    // level opens into a larger objective chamber. This prevents a stacked
+    // copy of the same rectangle from masquerading as a multi-level dungeon.
+    const levelScale = level === 0 ? 1 : level === levels - 1 ? 0.78 : 0.9;
+    const levelWidth = width * levelScale;
+    const levelDepth = depth * levelScale;
+    const levelOffsetX = (width - levelWidth) / 2;
+    const levelOffsetZ = (depth - levelDepth) / 2;
     const floorRoomCount = level === 0
       ? Math.max(4, Math.min(roomsPerLevel + 2, 5 + Math.ceil(roomCount / levels)))
       : level === levels - 1
         ? Math.max(3, Math.min(roomsPerLevel - 1, 3 + Math.ceil(roomCount / levels * 0.72)))
         : Math.max(4, roomsPerLevel);
     for (let index = 0; index < floorRoomCount; index += 1) {
-      const { x, z, w, d } = roomLayout(style, index, floorRoomCount, width, depth, context.rng.fork(`layout-${level}-${index}`));
+      const layout = roomLayout(style, index, floorRoomCount, levelWidth, levelDepth, context.rng.fork(`layout-${level}-${index}`));
+      const x = layout.x + levelOffsetX;
+      const z = layout.z + levelOffsetZ;
+      const w = layout.w * (level === levels - 1 && index === floorRoomCount - 1 ? 1.22 : 1);
+      const d = layout.d * (level === levels - 1 && index === floorRoomCount - 1 ? 1.18 : 1);
       const hidden = index > 1 && (index + level) % 7 === 0;
       const id = `dungeon-room-${level}-${index}`;
       allRooms.push({ id, level, x, z, w, d, hidden });
       const floorRole = level === 0 ? (index < 2 ? "entry" : "service") : level === levels - 1 ? (index === floorRoomCount - 1 ? "boss" : "treasure") : (index % 3 === 0 ? "hazard" : "combat");
       const role = hidden ? "private" : index === floorRoomCount - 1 ? "combat" : index === 0 ? "public" : "natural";
-      const roomLabel = hidden ? "Hidden chamber" : level === 0 ? `${level + 1}F entrance ${style} chamber ${index + 1}` : level === levels - 1 ? `${level + 1}F core ${style} chamber ${index + 1}` : `${level + 1}F side ${style} chamber ${index + 1}`;
+      const roomLabel = hidden ? `${level + 1}F hidden ${style} chamber` : level === 0 ? `${level + 1}F entry ${style} chamber ${index + 1}` : level === levels - 1 ? `${level + 1}F deep ${style} objective ${index + 1}` : `${level + 1}F hazard gallery ${style} ${index + 1}`;
       scene.rooms.push(createRoom(id, roomLabel, role, level, x, z, w, d, baseY));
       const shellMaterial = level === levels - 1 ? "darkStone" : level === 0 ? "stone" : style === "arcane" ? "darkStone" : "rock";
       const height = feetToMeters((floorHeights[level] ?? 12) + (level === levels - 1 ? 5 : level === 0 ? -1 : 1)) - FLOOR_SLAB_METERS;
-      scene.primitives.push(...rectangularShell(`${id}-shell`, level, x, z, baseY, w, d, height, "stone", shellMaterial, ["dungeon", `dungeon-style:${style}`, `floor-role:${floorRole}`, hidden ? "secret-room" : "room", "door-frame"], {}));
+      scene.primitives.push(...rectangularShell(`${id}-shell`, level, x, z, baseY, w, d, height, "stone", shellMaterial, ["dungeon", `dungeon-style:${style}`, `level-band:${level === 0 ? "descent" : level === levels - 1 ? "core" : "hazard"}`, `floor-role:${floorRole}`, hidden ? "secret-room" : "room", "door-frame"], {}));
       const featureTags = style === "prison" ? ["bars", "cell"] : style === "temple" ? ["altar", "ritual"] : style === "lair" ? ["hoard", "bone-cover"] : style === "sewer" ? ["channel", "sluice"] : style === "arcane" ? ["arcane-node", "teleport-focus"] : style === "mine" ? ["ore-cart", "timber"] : ["sarcophagus", "grave-goods"];
       const featureHeight = level === levels - 1 ? 3.8 : level === 0 ? 1.8 : 2.5;
       scene.primitives.push(box(`${id}-feature`, level, x + context.rng.float(-w * 0.2, w * 0.2), baseY + FLOOR_SLAB_METERS, z + context.rng.float(-d * 0.2, d * 0.2), Math.max(1.2, w * (level === levels - 1 ? 0.3 : 0.22)), feetToMeters(hidden ? 5 : featureHeight), Math.max(1.2, d * (level === levels - 1 ? 0.28 : 0.2)), hidden ? "warmLight" : style === "mine" ? "wood" : style === "prison" ? "metal" : "darkStone", ["dungeon", hidden ? "secret" : "cover", `style:${style}`, `floor-role:${floorRole}`, ...featureTags]));
