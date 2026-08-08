@@ -621,6 +621,23 @@ describe("scene generators", () => {
       expect(hasTag(scene, tag)).toBe(true);
     }
     expect(hasTag(scene, "lava")).toBe(true);
+    const maintenanceDeck = scene.primitives.find((primitive) => primitive.tags?.includes("terrain-bound-maintenance-bridge") && primitive.tags?.includes("bridge-deck"));
+    expect(maintenanceDeck).toBeDefined();
+    expect(maintenanceDeck?.tags).toContain("crosses:lava");
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("terrain-bound-maintenance-bridge") && primitive.tags?.includes("grounded-support")).length).toBeGreaterThanOrEqual(4);
+    expect(scene.routes.some((route) => route.id === "terrain-maintenance-hazard-crossing")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("lava") && maintenanceDeck !== undefined
+      && Math.hypot(primitive.position.x - maintenanceDeck.position.x, primitive.position.z - maintenanceDeck.position.z) < 3)).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("binds flooded specialist modules to water owned by the parent terrain", () => {
+    const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、半淹档案库和水下温室";
+    const scene = generateScene({ ...request("functional-parent-water", "medium", 0.72), prompt }, "adaptive");
+    const waterAccess = scene.primitives.filter((primitive) => primitive.tags?.includes("terrain-bound-water-access"));
+    expect(waterAccess.some((primitive) => primitive.tags?.includes("standable"))).toBe(true);
+    expect(waterAccess.filter((primitive) => primitive.tags?.includes("grounded-support")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.routes.some((route) => route.id.startsWith("terrain-water-access-route-"))).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
   });
 

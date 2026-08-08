@@ -2,7 +2,7 @@ import type { GeneratedScene, GeneratorContext } from "../schema";
 import { planSettlementSite, summarizeSiteProgram, type RoadProgram } from "../site-program";
 import { instantiateBuildingModule } from "./buildingModule";
 import { classifySettlementArchetype } from "./settlement";
-import { compileSettlementTerrain, type SettlementTerrain } from "./settlementTerrain";
+import { compileSettlementTerrain, type SettlementTerrain, type TerrainCrossingCandidate } from "./settlementTerrain";
 import { FLOOR_SLAB_METERS, baseScene, box, connectRooms, corridor, createRoom, createRoute, cylinder, feetToMeters, primitive, stairConnection, stairs, tacticalFeature, water } from "./shared";
 
 function roadPieces(road: RoadProgram, terrain: SettlementTerrain) {
@@ -404,7 +404,78 @@ function addMiningValley(scene: GeneratedScene, width: number, depth: number): v
   );
 }
 
-function addIndustrialSite(scene: GeneratedScene, width: number, depth: number, features: readonly string[]): void {
+function addTerrainBoundMaintenanceBridge(scene: GeneratedScene, crossing: TerrainCrossingCandidate): void {
+  const dx = crossing.to.x - crossing.from.x;
+  const dz = crossing.to.z - crossing.from.z;
+  const span = Math.max(0.001, Math.hypot(dx, dz));
+  const normal = { x: -dz / span, z: dx / span };
+  const deckY = feetToMeters(crossing.deckElevationFeet) + FLOOR_SLAB_METERS;
+  const segmentCount = Math.max(5, Math.ceil(crossing.spanCells / 2.2));
+  const commonTags = ["conveyor-network", "maintenance-bridge", "terrain-bound-maintenance-bridge", "hazard-crossing", `crosses:${crossing.hazard}`, "standable", "high-ground", "site-program"];
+  for (let segment = 0; segment < segmentCount; segment += 1) {
+    const t0 = segment / segmentCount;
+    const t1 = (segment + 1) / segmentCount;
+    const from = { x: crossing.from.x + dx * t0, z: crossing.from.z + dz * t0 };
+    const to = { x: crossing.from.x + dx * t1, z: crossing.from.z + dz * t1 };
+    scene.primitives.push(
+      corridor(`terrain-maintenance-bridge-deck-${segment + 1}`, 1, from.x, from.z, to.x, to.z, deckY, 1.7, "metal", [...commonTags, "bridge-deck"]),
+      corridor(`terrain-maintenance-bridge-rail-a-${segment + 1}`, 1, from.x + normal.x * 0.72, from.z + normal.z * 0.72, to.x + normal.x * 0.72, to.z + normal.z * 0.72, deckY + feetToMeters(3.2), 0.12, "metal", [...commonTags, "guardrail"]),
+      corridor(`terrain-maintenance-bridge-rail-b-${segment + 1}`, 1, from.x - normal.x * 0.72, from.z - normal.z * 0.72, to.x - normal.x * 0.72, to.z - normal.z * 0.72, deckY + feetToMeters(3.2), 0.12, "metal", [...commonTags, "guardrail"]),
+    );
+  }
+  for (const [side, point] of [["a", crossing.from], ["b", crossing.to]] as const) {
+    const groundY = feetToMeters(point.elevationFeet);
+    const supportHeight = Math.max(feetToMeters(5), deckY + feetToMeters(5) - groundY);
+    for (const lateral of [-0.66, 0.66]) {
+      scene.primitives.push(cylinder(
+        `terrain-maintenance-bridge-gantry-${side}-${lateral < 0 ? "left" : "right"}`,
+        1,
+        point.x + normal.x * lateral,
+        groundY,
+        point.z + normal.z * lateral,
+        0.34,
+        supportHeight,
+        "metal",
+        [...commonTags, "bridge-anchor", "support", "grounded-support"],
+      ));
+    }
+    scene.primitives.push(corridor(
+      `terrain-maintenance-bridge-gantry-beam-${side}`,
+      1,
+      point.x + normal.x * 0.9,
+      point.z + normal.z * 0.9,
+      point.x - normal.x * 0.9,
+      point.z - normal.z * 0.9,
+      deckY + feetToMeters(5),
+      0.28,
+      "metal",
+      [...commonTags, "gantry-beam"],
+    ));
+  }
+  scene.primitives.push(corridor(
+    "terrain-maintenance-bridge-service-pipe",
+    1,
+    crossing.from.x,
+    crossing.from.z,
+    crossing.to.x,
+    crossing.to.z,
+    deckY - feetToMeters(2.2),
+    0.28,
+    "hazard",
+    [...commonTags, "service-pipe", "connected-equipment"],
+  ));
+  scene.routes.push(createRoute("terrain-maintenance-hazard-crossing", "alternate", [
+    { x: crossing.from.x, z: crossing.from.z, y: deckY },
+    { x: crossing.midpoint.x, z: crossing.midpoint.z, y: deckY },
+    { x: crossing.to.x, z: crossing.to.z, y: deckY },
+  ], { purpose: "service", traffic: 0.42, schedule: "all" }));
+  scene.tactical.push(
+    tacticalFeature("terrain-maintenance-bridge-chokepoint", "chokepoint", crossing.midpoint.x, crossing.midpoint.z, deckY, 2, `The supported maintenance bridge is the exposed crossing over ${crossing.hazard}.`),
+    tacticalFeature("terrain-maintenance-bridge-overwatch", "highGround", crossing.midpoint.x, crossing.midpoint.z, deckY, 2, "The gantry deck overlooks both hazard banks but offers little lateral escape."),
+  );
+}
+
+function addIndustrialSite(scene: GeneratedScene, width: number, depth: number, features: readonly string[], terrainCrossing?: TerrainCrossingCandidate): void {
   const yardZ = depth * 0.78;
   for (let track = 0; track < 3; track += 1) {
     scene.primitives.push(corridor(`industrial-rail-${track + 1}`, 0, 2, yardZ + track * 2.2, width - 2, yardZ + track * 2.2, FLOOR_SLAB_METERS + 0.08, 0.32, "metal", ["rail-yard", "rail-track", "industrial-route", "site-program"]));
@@ -413,19 +484,23 @@ function addIndustrialSite(scene: GeneratedScene, width: number, depth: number, 
     box("industrial-freight-platform", 0, width * 0.46, FLOOR_SLAB_METERS, yardZ - 2, width * 0.38, feetToMeters(3), 3.2, "darkStone", ["rail-yard", "loading-platform", "cover", "site-program"]),
     cylinder("industrial-storage-tank-1", 0, width * 0.78, FLOOR_SLAB_METERS, depth * 0.22, 5.2, feetToMeters(18), "metal", ["industrial-plant", "storage-tank", "cover", "site-program"]),
     cylinder("industrial-storage-tank-2", 0, width * 0.84, FLOOR_SLAB_METERS, depth * 0.27, 4.2, feetToMeters(14), "metal", ["industrial-plant", "storage-tank", "cover", "site-program"]),
-    corridor("industrial-conveyor-bridge", 2, width * 0.22, depth * 0.3, width * 0.62, depth * 0.52, feetToMeters(16), 1.6, "metal", ["conveyor-network", "conveyor-bridge", "catwalk", "high-ground", "standable", "site-program"]),
     box("industrial-maintenance-level", 3, width * 0.5, -feetToMeters(10), depth * 0.5, width * 0.36, FLOOR_SLAB_METERS, depth * 0.22, "darkStone", ["floor", "underground-maintenance", "underground", "standable", "site-program"]),
     stairs("industrial-maintenance-stair", 3, width * 0.5, -feetToMeters(10), depth * 0.4, 1.8, feetToMeters(10), 5.4, "metal", ["underground-maintenance", "vertical-opening", "site-program"]),
   );
   scene.routes.push(
     createRoute("industrial-freight-route", "alternate", [{ x: 2, z: yardZ }, { x: width * 0.46, z: yardZ }, { x: width - 2, z: yardZ }], { purpose: "service", traffic: 0.88, schedule: "all" }),
-    createRoute("industrial-catwalk-route", "alternate", [{ x: width * 0.22, z: depth * 0.3, y: feetToMeters(16) }, { x: width * 0.42, z: depth * 0.41, y: feetToMeters(16) }, { x: width * 0.62, z: depth * 0.52, y: feetToMeters(16) }], { purpose: "escape", traffic: 0.38, schedule: "all" }),
     createRoute("industrial-maintenance-route", "vertical", [{ x: width * 0.5, z: depth * 0.4, y: 0 }, { x: width * 0.5, z: depth * 0.5, y: -feetToMeters(10) }], { purpose: "service", traffic: 0.46, schedule: "all" }),
   );
   scene.tactical.push(
     tacticalFeature("industrial-yard-killzone", "hazard", width * 0.5, yardZ, 0, 5, "The open freight yard exposes movement between the factories and worker housing."),
-    tacticalFeature("industrial-conveyor-overwatch", "highGround", width * 0.42, depth * 0.41, feetToMeters(16), 3, "The conveyor bridge provides an exposed elevated route across the district."),
   );
+  if (terrainCrossing !== undefined) {
+    addTerrainBoundMaintenanceBridge(scene, terrainCrossing);
+  } else {
+    scene.primitives.push(corridor("industrial-conveyor-bridge", 2, width * 0.22, depth * 0.3, width * 0.62, depth * 0.52, feetToMeters(16), 1.6, "metal", ["conveyor-network", "conveyor-bridge", "catwalk", "high-ground", "standable", "site-program"]));
+    scene.routes.push(createRoute("industrial-catwalk-route", "alternate", [{ x: width * 0.22, z: depth * 0.3, y: feetToMeters(16) }, { x: width * 0.42, z: depth * 0.41, y: feetToMeters(16) }, { x: width * 0.62, z: depth * 0.52, y: feetToMeters(16) }], { purpose: "escape", traffic: 0.38, schedule: "all" }));
+    scene.tactical.push(tacticalFeature("industrial-conveyor-overwatch", "highGround", width * 0.42, depth * 0.41, feetToMeters(16), 3, "The conveyor bridge provides an exposed elevated route across the district."));
+  }
   if (!features.includes("underground-maintenance")) return;
   scene.rooms.push(createRoom("industrial-underground-room", "Underground maintenance and cable level", "service", 3, width * 0.5, depth * 0.5, width * 0.36, depth * 0.22, -feetToMeters(10)));
 }
@@ -672,7 +747,10 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     scene.primitives.push(corridor("mining-cart-track", 0, 1, program.bounds.z * 0.28, program.bounds.x - 2, program.bounds.z * 0.72, FLOOR_SLAB_METERS + 0.08, 1.4, "metal", ["mine-cart-track", "industrial-route", "site-program"]));
     scene.primitives.push(box("mining-waste-slope", 0, program.bounds.x * 0.82, feetToMeters(5), program.bounds.z * 0.2, 9, feetToMeters(10), 8, "rock", ["waste-rock", "slope", "high-ground", "site-program"]));
   }
-  if (program.requiredFeatures.includes("industrial-plant") || program.requiredFeatures.includes("rail-yard")) addIndustrialSite(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
+  const requestedTerrainCrossing = program.requiredFeatures.includes("conveyor-network")
+    ? terrain.crossingCandidates[0]
+    : undefined;
+  if (program.requiredFeatures.includes("industrial-plant") || program.requiredFeatures.includes("rail-yard")) addIndustrialSite(scene, program.bounds.x, program.bounds.z, program.requiredFeatures, requestedTerrainCrossing);
   if (isFlooded) addFloodedSite(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("elevated-rail")) addElevatedRailMarket(scene, program.bounds.x, program.bounds.z);
   // Water, impact, volcanic, underdark and megastructure parents are now
@@ -749,6 +827,31 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       state: parcel.state,
       functionalModules: parcel.functionalModules,
     }, context.rng.fork(parcel.buildingSeed));
+    const requiresParentWater = parcel.functionalModules?.some((module) => module.requiresWater) ?? false;
+    if (requiresParentWater) {
+      const waterPoint = terrain.nearestSurfacePoint(placement.x, placement.z, ["water"], Math.max(10, Math.min(program.bounds.x, program.bounds.z) * 0.22));
+      if (waterPoint !== undefined) {
+        const dx = waterPoint.x - placement.x;
+        const dz = waterPoint.z - placement.z;
+        const distance = Math.max(0.001, Math.hypot(dx, dz));
+        const shore = {
+          x: waterPoint.x - (dx / distance) * 1.2,
+          z: waterPoint.z - (dz / distance) * 1.2,
+        };
+        const deckY = siteElevation + FLOOR_SLAB_METERS + 0.1;
+        scene.primitives.push(
+          corridor(`terrain-water-access-${parcel.id}`, 0, placement.x, placement.z, shore.x, shore.z, deckY, 0.9, "wood", ["terrain-bound-water-access", "water-access", "standable", `parcel:${parcel.id}`, "site-program"]),
+          cylinder(`terrain-water-access-pile-${parcel.id}-a`, 0, shore.x, feetToMeters(waterPoint.elevationFeet), shore.z, 0.32, Math.max(feetToMeters(3), deckY - feetToMeters(waterPoint.elevationFeet)), "wood", ["terrain-bound-water-access", "support", "grounded-support", `parcel:${parcel.id}`, "site-program"]),
+          cylinder(`terrain-water-access-pile-${parcel.id}-b`, 0, waterPoint.x, feetToMeters(waterPoint.elevationFeet), waterPoint.z, 0.32, Math.max(feetToMeters(3), deckY - feetToMeters(waterPoint.elevationFeet)), "wood", ["terrain-bound-water-access", "support", "grounded-support", `parcel:${parcel.id}`, "site-program"]),
+        );
+        scene.routes.push(createRoute(`terrain-water-access-route-${parcel.id}`, "alternate", [
+          { x: placement.x, z: placement.z, y: deckY },
+          { x: shore.x, z: shore.z, y: deckY },
+          { x: waterPoint.x, z: waterPoint.z, y: deckY },
+        ], { purpose: "service", traffic: 0.28, schedule: "all" }));
+        scene.tactical.push(tacticalFeature(`terrain-water-access-hazard-${parcel.id}`, "hazard", waterPoint.x, waterPoint.z, feetToMeters(waterPoint.elevationFeet), 1, "The functional module is physically tied to parent-scene water through a supported access deck."));
+      }
+    }
     if (isMangrovePort && siteElevation > 0.2) {
       for (const [pierIndex, dx, dz] of [[0, -0.31, -0.31], [1, 0.31, -0.31], [2, -0.31, 0.31], [3, 0.31, 0.31]] as const) {
         scene.primitives.push(cylinder(

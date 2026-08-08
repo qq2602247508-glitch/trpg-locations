@@ -5,6 +5,16 @@ import { FLOOR_SLAB_METERS, box, corridor, createRoute, cylinder, feetToMeters, 
 
 export type TerrainSurface = "ground" | "rock" | "water" | "lava" | "void" | "platform";
 
+export interface TerrainCrossingCandidate {
+  id: string;
+  hazard: Extract<TerrainSurface, "water" | "lava" | "void">;
+  from: { x: number; z: number; elevationFeet: number };
+  to: { x: number; z: number; elevationFeet: number };
+  midpoint: { x: number; z: number; elevationFeet: number };
+  deckElevationFeet: number;
+  spanCells: number;
+}
+
 interface TerrainCell {
   elevationFeet: number;
   surface: TerrainSurface;
@@ -19,6 +29,8 @@ export interface SettlementTerrain {
   elevationFeetAt(x: number, z: number): number;
   buildableAt(x: number, z: number, clearance?: number): boolean;
   surfaceAt(x: number, z: number): TerrainSurface;
+  crossingCandidates: readonly TerrainCrossingCandidate[];
+  nearestSurfacePoint(x: number, z: number, surfaces: readonly TerrainSurface[], radius?: number): { x: number; z: number; elevationFeet: number; surface: TerrainSurface } | undefined;
   placementFor(index: number, total: number, requested: { x: number; z: number }, clearance?: number): { x: number; z: number; elevationFeet?: number } | undefined;
   render(scene: GeneratedScene): void;
 }
@@ -149,7 +161,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
       }
       const outletAngle = breachAngles[0] ?? breachAngle;
       const outletDelta = Math.abs(Math.atan2(Math.sin(angle - outletAngle), Math.cos(angle - outletAngle)));
-      if (kind === "caldera" && outletDelta < 0.065 && radial < 1.45) {
+      if (kind === "caldera" && outletDelta < 0.12 && radial < 1.45) {
         elevationFeet = radial < 0.3 ? -5 : radial < 0.75 ? 0 : 5;
         surface = "lava";
         buildable = false;
@@ -299,6 +311,53 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
     bridgeCandidates: kind === "river" ? 3 : kind === "underdark" ? 2 : 0,
     supportSurfaces: kind === "megastructure" ? 3 : 1,
   };
+  const crossingCandidates: TerrainCrossingCandidate[] = [];
+  const addCrossing = (
+    id: string,
+    hazard: TerrainCrossingCandidate["hazard"],
+    from: { x: number; z: number },
+    to: { x: number; z: number },
+    deckClearanceFeet = 5,
+  ): void => {
+    const midpoint = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 };
+    const fromElevation = cellAt(from.x, from.z).elevationFeet;
+    const toElevation = cellAt(to.x, to.z).elevationFeet;
+    const midpointElevation = cellAt(midpoint.x, midpoint.z).elevationFeet;
+    crossingCandidates.push({
+      id,
+      hazard,
+      from: { ...from, elevationFeet: fromElevation },
+      to: { ...to, elevationFeet: toElevation },
+      midpoint: { ...midpoint, elevationFeet: midpointElevation },
+      deckElevationFeet: Math.max(fromElevation, toElevation) + deckClearanceFeet,
+      spanCells: Math.hypot(to.x - from.x, to.z - from.z),
+    });
+  };
+  if (kind === "caldera") {
+    const outlet = breachAngles[0] ?? breachAngle;
+    const crossingRadius = craterRadius * 0.49;
+    addCrossing(
+      "caldera-lava-outlet",
+      "lava",
+      { x: craterCx + Math.cos(outlet + 0.3) * crossingRadius, z: craterCz + Math.sin(outlet + 0.3) * crossingRadius },
+      { x: craterCx + Math.cos(outlet - 0.3) * crossingRadius, z: craterCz + Math.sin(outlet - 0.3) * crossingRadius },
+      7,
+    );
+  } else if (kind === "river") {
+    for (const [index, row] of [depth * 0.28, depth * 0.56, depth * 0.81].entries()) {
+      const center = warpedRiverX(row, width, depth, phase);
+      addCrossing(`river-channel-${index + 1}`, "water", { x: center - 5.2, z: row }, { x: center + 5.2, z: row }, 3);
+    }
+  } else if (kind === "ice-crevasse") {
+    for (const [index, row] of [depth * 0.28, depth * 0.57, depth * 0.82].entries()) {
+      const center = crevasseAt(row);
+      addCrossing(`ice-crevasse-${index + 1}`, "void", { x: center - crevasseHalfGap - 2, z: row }, { x: center + crevasseHalfGap + 2, z: row }, 4);
+    }
+  } else if (kind === "underdark") {
+    for (const [index, row] of [depth * 0.3, depth * 0.72].entries()) {
+      addCrossing(`underdark-ravine-${index + 1}`, "void", { x: ravineX - 4, z: row }, { x: ravineX + 4, z: row }, 4);
+    }
+  }
 
   return {
     summary,
@@ -306,6 +365,25 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
     elevationFeetAt: (x, z) => cellAt(x, z).elevationFeet,
     buildableAt: clearanceBuildable,
     surfaceAt: (x, z) => cellAt(x, z).surface,
+    crossingCandidates,
+    nearestSurfacePoint(x, z, surfaces, radius = 16) {
+      const allowed = new Set(surfaces);
+      let nearest: { x: number; z: number; elevationFeet: number; surface: TerrainSurface; distance: number } | undefined;
+      const searchRadius = Math.max(1, Math.ceil(radius));
+      for (let dz = -searchRadius; dz <= searchRadius; dz += 1) for (let dx = -searchRadius; dx <= searchRadius; dx += 1) {
+        const px = x + dx;
+        const pz = z + dz;
+        if (px < 0 || pz < 0 || px >= width || pz >= depth) continue;
+        const cell = cellAt(px, pz);
+        if (!allowed.has(cell.surface)) continue;
+        const distance = Math.hypot(dx, dz);
+        if (nearest !== undefined && nearest.distance <= distance) continue;
+        nearest = { x: Math.floor(px) + 0.5, z: Math.floor(pz) + 0.5, elevationFeet: cell.elevationFeet, surface: cell.surface, distance };
+      }
+      if (nearest === undefined) return undefined;
+      const { distance: _distance, ...point } = nearest;
+      return point;
+    },
     placementFor(index, total, requested, clearance = 0) {
       if (kind === "megastructure") {
         if (isSaltCrystal) {
@@ -398,7 +476,10 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         const cell = cellAt(x, z);
         if (cell.surface === "void") continue;
         const height = feetToMeters(cell.elevationFeet - bottomFeet);
-        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `elevation:${cell.elevationFeet}`, ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(kind === "ice-crevasse" ? ["ice-crevasse", "rift-bank"] : []), ...(kind === "ice-crevasse" && cell.elevationFeet <= -10 ? ["rift-bottom"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
+        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `surface:${cell.surface}`, `elevation:${cell.elevationFeet}`, ...(cell.surface === "lava" ? ["lava", "lava-flow"] : []), ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(kind === "ice-crevasse" ? ["ice-crevasse", "rift-bank"] : []), ...(kind === "ice-crevasse" && cell.elevationFeet <= -10 ? ["rift-bottom"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
+        if (cell.surface === "lava") {
+          scene.primitives.push(box(`terrain-lava-surface-${x}-${z}`, 0, x + 0.5, feetToMeters(cell.elevationFeet) + 0.08, z + 0.5, 0.94, 0.12, 0.94, "warmLight", ["lava", "lava-flow", "lava-surface", "hazard", "terrain-program"]));
+        }
         if (cell.surface === "water") {
           const mainDistance = Math.abs(x + 0.5 - warpedRiverX(z + 0.5, width, depth, phase));
           scene.primitives.push(water(`terrain-water-${x}-${z}`, 0, x + 0.5, feetToMeters(cell.elevationFeet + (kind === "river" ? 7.5 : 0.5)), z + 0.5, 0.98, 0.12, 0.98, kind === "river"

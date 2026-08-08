@@ -289,6 +289,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     elements.seed.focus();
   });
   elements.density.addEventListener("input", () => updateDensityLabel(elements));
+  elements.density.addEventListener("change", () => updateDensityLabel(elements));
   elements.floor.addEventListener("change", () => {
     const raw = elements.floor.value;
     renderer.setFloorView(raw === "cut" || raw === "roof" ? raw : Number(raw));
@@ -377,6 +378,9 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       size: elements.size.value as GenerationRequest["size"],
       density: Number(elements.density.value) / 100,
     };
+    // Keep the visible control synchronized even when an accessibility
+    // client changes the range value before submitting the form.
+    updateDensityLabel(elements);
     const kind = elements.kind.value as SceneKind;
     elements.seed.value = request.seed;
     elements.generate.disabled = true;

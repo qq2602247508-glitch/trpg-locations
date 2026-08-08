@@ -780,6 +780,7 @@ export class SceneRenderer {
     const focusedBuilding = this.focusedBuildingId ? scene.buildingInstances?.find((building) => building.id === this.focusedBuildingId) : undefined;
     const focusCenter = focusedBuilding ? new THREE.Vector2(focusedBuilding.positionCells.x * GRID_METERS, focusedBuilding.positionCells.z * GRID_METERS) : undefined;
     const focusRadius = focusedBuilding ? Math.max(focusedBuilding.footprintCells.x, focusedBuilding.footprintCells.z, 7) * GRID_METERS * 2.4 : Number.POSITIVE_INFINITY;
+    const focusedParcelTag = focusedBuilding?.parcelId ? `parcel:${focusedBuilding.parcelId}` : undefined;
     for (let level = 0; level <= maxLevel; level += 1) this.createFloorLayer(level);
 
     for (const primitive of scene.primitives) {
@@ -795,7 +796,21 @@ export class SceneRenderer {
         // The parent site's giant terrain slab used to remain visible during
         // building focus and read as a ceiling slicing through the room.
         if (!primitiveBuildingId && primitive.id === "site-terrain-base") continue;
-        if (!primitiveBuildingId && focusCenter && Math.hypot(primitive.position.x - focusCenter.x, primitive.position.z - focusCenter.y) > focusRadius) continue;
+        if (!primitiveBuildingId) {
+          const ownedParcelContext = focusedParcelTag !== undefined
+            && primitive.tags?.includes(focusedParcelTag) === true
+            && primitive.tags?.some((tag) => [
+              "parcel-access",
+              "entrance-route",
+              "stilt-foundation",
+              "stilt-stair",
+              "terrain-bound-water-access",
+              "grounded-support",
+              "root-boardwalk",
+            ].includes(tag)) === true;
+          if (!ownedParcelContext) continue;
+          if (focusCenter && Math.hypot(primitive.position.x - focusCenter.x, primitive.position.z - focusCenter.y) > focusRadius) continue;
+        }
       }
       // A reachable roof deck is authored as ordinary stone/wood so it can
       // carry a tactical grid.  It is still part of the roof inspection
