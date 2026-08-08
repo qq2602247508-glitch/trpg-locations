@@ -272,6 +272,8 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   const program = suppliedProgram ?? planSceneProgramLocally(normalized.prompt, kind);
   let primary = kind === "adaptive" ? program.primaryKind : kind;
   const programText = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const explicitBuildingNouns = ["精神病院", "医院", "警察局", "警局", "博物馆", "酒店", "旅店", "教堂", "神殿", "庄园", "宅邸", "堡垒", "要塞", "发电站", "修道院", "学院", "火车站", "hospital", "sanatorium", "police station", "museum", "hotel", "church", "temple", "manor", "fortress", "power station", "monastery", "academy", "railway station"];
+  if (kind === "adaptive" && primary !== "dungeon" && explicitBuildingNouns.some((term) => programText.includes(term))) primary = "building";
   // Multi-storey hospitality prompts need the same auditable room graph as
   // institutions: cellar, attic, service stair and roof pursuit cannot be
   // represented by the compact encounter-only tavern grammar.

@@ -204,10 +204,10 @@ export class SceneRenderer {
 
   private timeOfDay: "day" | "night" = "day";
 
-  // Architecture is authored for tactical inspection: walls and structural
-  // shells start in ghost mode so rooms, openings and vertical routes are
-  // visible in the first screenshot instead of being hidden behind slabs.
-  private buildingTransparency = true;
+  // Start in a solid exterior mode that agrees with the UI toggle. Interior
+  // inspection is explicit: enabling it rebuilds wall batches as ghosted
+  // shells, while numeric floor views expose the requested tactical layer.
+  private buildingTransparency = false;
 
   private ambientLight?: THREE.AmbientLight;
 
