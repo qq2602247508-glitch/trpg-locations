@@ -203,33 +203,32 @@ function addHollowTreeCity(scene: GeneratedScene, width: number, depth: number):
 
 function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: number): void {
   const channelZ = depth * 0.52;
-  const tidalSpine = [
-    [width * 0.08, depth * 0.63],
-    [width * 0.25, depth * 0.48],
-    [width * 0.43, depth * 0.58],
-    [width * 0.62, depth * 0.43],
-    [width * 0.81, depth * 0.54],
-    [width * 0.95, depth * 0.4],
+  const tidalBranches = [
+    [[width * 0.08, depth * 0.63], [width * 0.25, depth * 0.48], [width * 0.42, depth * 0.58]],
+    [[width * 0.58, depth * 0.43], [width * 0.78, depth * 0.55], [width * 0.95, depth * 0.4]],
   ] as const;
-  for (let segment = 1; segment < tidalSpine.length; segment += 1) {
-    const from = tidalSpine[segment - 1]!;
-    const to = tidalSpine[segment]!;
-    const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
-    const rotation = Math.atan2(to[1] - from[1], to[0] - from[0]);
-    scene.primitives.push(water(
-      `mangrove-main-channel-${segment}`,
-      0,
-      (from[0] + to[0]) / 2,
-      -0.2,
-      (from[1] + to[1]) / 2,
-      length + 4,
-      0.34,
-      8.2,
-      ["mangrove", "tidal-channel", "watercourse", "hazard", "site-program"],
-      rotation,
-    ));
+  for (const [branchIndex, branch] of tidalBranches.entries()) {
+    for (let segment = 1; segment < branch.length; segment += 1) {
+      const from = branch[segment - 1]!;
+      const to = branch[segment]!;
+      const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+      const rotation = Math.atan2(to[1] - from[1], to[0] - from[0]);
+      scene.primitives.push(water(
+        `mangrove-tidal-branch-${branchIndex + 1}-${segment}`,
+        0,
+        (from[0] + to[0]) / 2,
+        -0.2,
+        (from[1] + to[1]) / 2,
+        length + 4,
+        0.34,
+        8.2,
+        ["mangrove", "tidal-channel", "watercourse", "hazard", "site-program"],
+        rotation,
+      ));
+    }
   }
   scene.primitives.push(
+    water("mangrove-central-tidal-bay", 0, width * 0.5, -0.24, channelZ, width * 0.24, 0.28, depth * 0.22, ["mangrove", "tidal-channel", "tidal-bay", "watercourse", "hazard", "site-program"]),
     water("mangrove-tidal-branch-west", 0, width * 0.22, -0.16, depth * 0.27, 3.4, 0.25, depth * 0.42, ["mangrove", "tidal-channel", "watercourse", "site-program"]),
     water("mangrove-tidal-branch-east", 0, width * 0.78, -0.16, depth * 0.72, 3.8, 0.25, depth * 0.38, ["mangrove", "tidal-channel", "watercourse", "site-program"]),
   );
