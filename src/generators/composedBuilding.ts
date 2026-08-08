@@ -76,18 +76,22 @@ function programFor(context: GeneratorContext): BuildingProgram {
     const mirrored = context.rng.fork("academy-variant").bool();
     const westX = mirrored ? 33 : 8;
     const eastX = mirrored ? 8 : 33;
+    const westTowerZ = mirrored ? 13 : 8;
+    const eastTowerZ = mirrored ? 8 : 13;
+    const alchemyTower = mirrored ? "east-tower" : "west-tower";
+    const libraryTower = mirrored ? "west-tower" : "east-tower";
     const rooms: ProgramRoom[] = [
       room("lecture", "Central arcane lecture hall", 0, 20.5, 10, 15, 10, "public", ["entrance", "lecture-hall", "main-block"]),
-      room("alchemy", "Alchemy laboratory wing", 0, westX, 20, 9, 13, "service", ["alchemy-lab", "wing"]),
-      room("library", "Restricted spell library", 0, eastX, 20, 9, 13, "private", ["library", "wing"]),
+      room("alchemy", "Alchemy laboratory wing", 0, westX, mirrored ? 22 : 19, mirrored ? 11 : 8, mirrored ? 10 : 15, "service", ["alchemy-lab", "wing"]),
+      room("library", "Restricted spell library", 0, eastX, mirrored ? 19 : 22, mirrored ? 8 : 11, mirrored ? 15 : 10, "private", ["library", "wing"]),
       { ...room("court", "Arcane demonstration court", 0, 20.5, 22, 9, 8, "combat", ["courtyard", "ritual-circle"]), openAir: true },
-      room("west-tower", "West research tower", 1, 7, 10, 7, 7, "private", ["research-tower", "high-ground"]),
-      room("east-tower", "East research tower", 1, 34, 10, 7, 7, "private", ["research-tower", "high-ground"]),
+      room("west-tower", "West research tower", 1, 7, westTowerZ, 7, 7, "private", ["research-tower", "high-ground"]),
+      room("east-tower", "East research tower", 1, 34, eastTowerZ, 7, 7, "private", ["research-tower", "high-ground"]),
       room("professor", "Secret professor passage", 1, 20.5, 17, 4, 15, "service", ["secret-passage"]),
       { ...room("roof-bridge", "Roof bridge and duel route", 2, 20.5, 10, 22, 3.5, "combat", ["roof-platform", "roof-bridge", "high-ground"]), openAir: true },
       { ...room("summoning", "Underground summoning chamber", 3, 20.5, 27, 12, 10, "combat", ["underground", "summoning-circle", "ritual-core"]), absoluteElevationFeet: -18 },
     ];
-    return { id: "mage-academy", title: "The Collegium of Twin Stars", description: "A non-rectangular arcane campus with a public lecture block, two research towers, split laboratory and library wings, a concealed professor route, roof bridge, and buried summoning hall.", archetype: "school", seed: context.request.seed, bounds: { x: 43, z: 38 }, floorHeights: [16, 14, 10, 12], floorLabels: ["1F", "2F研究塔", "屋顶连桥", "B1"], rooms, connections: [link("lecture-court", "lecture", "court"), link("court-alchemy", "court", "alchemy"), link("court-library", "court", "library"), link("alchemy-west-tower", "alchemy", "west-tower", "stair"), link("library-east-tower", "library", "east-tower", "stair"), link("tower-secret", "west-tower", "professor", "secret"), link("secret-east", "professor", "east-tower", "secret"), link("west-bridge", "west-tower", "roof-bridge", "stair"), link("east-bridge", "east-tower", "roof-bridge", "stair"), link("lecture-summoning", "lecture", "summoning", "secret")], requiredFeatures: ["lecture-hall", "research-tower", "alchemy-lab", "library", "summoning-circle", "roof-bridge", "secret-passage"], detailCount: Math.round(10 + context.request.density * 18), floorMaterial: "stone", wallMaterial: "plaster", states, exteriorStyle: "academy-court", facadeStyle: "academic" };
+    return { id: "mage-academy", title: "The Collegium of Twin Stars", description: "A non-rectangular arcane campus with a public lecture block, two research towers, split laboratory and library wings, a concealed professor route, roof bridge, and buried summoning hall.", archetype: "school", seed: context.request.seed, bounds: { x: 43, z: 38 }, floorHeights: [16, 14, 10, 12], floorLabels: ["1F", "2F研究塔", "屋顶连桥", "B1"], rooms, connections: [link("lecture-court", "lecture", "court"), link("court-alchemy", "court", "alchemy"), link("court-library", "court", "library"), link("alchemy-tower", "alchemy", alchemyTower, "stair"), link("library-tower", "library", libraryTower, "stair"), link("tower-secret", "west-tower", "professor", "secret"), link("secret-east", "professor", "east-tower", "secret"), link("west-bridge", "west-tower", "roof-bridge", "stair"), link("east-bridge", "east-tower", "roof-bridge", "stair"), link("lecture-summoning", "lecture", "summoning", "secret")], requiredFeatures: ["lecture-hall", "research-tower", "alchemy-lab", "library", "summoning-circle", "roof-bridge", "secret-passage"], detailCount: Math.round(10 + context.request.density * 18), floorMaterial: "stone", wallMaterial: "plaster", states, exteriorStyle: "academy-court", facadeStyle: "academic" };
   }
 
   const stationAlchemy = has(text, ["火车站", "railway station", "train station"]) && has(text, ["炼金", "alchemy", "alchemical"]);
@@ -122,27 +126,34 @@ function programFor(context: GeneratorContext): BuildingProgram {
   if (hotelOrTavern) {
     const tavern = has(text, ["酒馆", "tavern", "inn"]);
     const serviceOnEast = context.rng.fork("hospitality-wing-variant").bool();
-    const diningX = serviceOnEast ? 8 : 28;
-    const ballroomX = serviceOnEast ? 28 : 8;
-    const serviceX = serviceOnEast ? 31 : 7;
+    const diningX = tavern ? (serviceOnEast ? 6 : 24) : serviceOnEast ? 8 : 30;
+    const ballroomX = tavern ? (serviceOnEast ? 23 : 7) : serviceOnEast ? 31 : 7;
+    const serviceX = tavern ? (serviceOnEast ? 25 : 6) : serviceOnEast ? 35 : 5;
+    const lobbyX = tavern ? 15 : 20;
+    const guestStartX = tavern ? 7 : 6;
+    const guestStepX = tavern ? 11 : 9.5;
+    const guestColumns = tavern ? 2 : 4;
     const roomCount = context.request.size === "large" ? 7 : context.request.size === "small" ? 3 : 5;
     const rooms: ProgramRoom[] = [
-      room("lobby", tavern ? "Public taproom" : "Grand lobby", 0, 18, 7, 15, 9, "public", ["entrance", tavern ? "taproom" : "lobby"]),
-      room("dining", tavern ? "Dining alcove and stage" : "Restaurant", 0, diningX, 17, 9, 10, "public", ["dining"]),
-      room("ballroom", tavern ? "Private guild hall" : "Ballroom", 0, ballroomX, 18, 12, 11, "combat", ["ballroom"]),
-      room("kitchen", "Kitchen and scullery", 0, serviceX, 26, 9, 7, "service", ["kitchen", "service-route"]),
-      room("staff-stair", "Staff stair and linen room", 0, serviceX, 33, 6, 6, "service", ["service-stair"]),
-      ...Array.from({ length: roomCount }, (_, index) => room(`guest-2-${index}`, `Second-floor guest room ${index + 1}`, 1, 7 + (index % 3) * 10.5, 8 + Math.floor(index / 3) * 10, 7.5, 7, "private", ["guest-room"])),
-      ...Array.from({ length: Math.max(2, roomCount - 2) }, (_, index) => room(`guest-3-${index}`, tavern ? `Attic chamber ${index + 1}` : `Third-floor suite ${index + 1}`, 2, 10 + (index % 3) * 9, 10 + Math.floor(index / 3) * 9, 7, 6.5, "private", [tavern ? "attic" : "suite"])),
-      { ...room("roof-chase", "Broken roof chase route", 3, 19, 9, 17, 5, "combat", ["roof-platform", "roof-route", "high-ground"]), openAir: true },
-      { ...room("cellar", tavern ? "Wine cellar" : "Boiler room and wine cellar", 4, 20, 26, 12, 8, "service", ["underground", tavern ? "wine-cellar" : "boiler"]), absoluteElevationFeet: -13 },
-      { ...room("stable", tavern ? "Rear courtyard stable" : "Rear delivery garage", 0, serviceX, 37, 8, 7, "service", [tavern ? "stable" : "garage", "rear-entrance"]), openAir: true },
+      room("lobby", tavern ? "Public taproom" : "Grand lobby", 0, lobbyX, tavern ? 7 : 6, tavern ? 16 : 13, tavern ? 10 : 8, "public", ["entrance", tavern ? "taproom" : "lobby"]),
+      room("dining", tavern ? "Dining alcove and stage" : "Restaurant", 0, diningX, tavern ? 17 : 15, tavern ? 8 : 10, tavern ? 8 : 12, "public", ["dining"]),
+      room("ballroom", tavern ? "Private guild hall" : "Ballroom", 0, ballroomX, tavern ? 18 : 17, tavern ? 10 : 14, tavern ? 9 : 13, "combat", ["ballroom"]),
+      room("kitchen", "Kitchen and scullery", 0, serviceX, tavern ? 27 : 25, tavern ? 8 : 10, 7, "service", ["kitchen", "service-route"]),
+      room("staff-stair", "Staff stair and linen room", 0, serviceX, tavern ? 34 : 33, 6, 6, "service", ["service-stair"]),
+      ...Array.from({ length: roomCount }, (_, index) => room(`guest-2-${index}`, `Second-floor guest room ${index + 1}`, 1, guestStartX + (index % guestColumns) * guestStepX, 8 + Math.floor(index / guestColumns) * (tavern ? 9 : 10), tavern ? 8 : 7.2, 7, "private", ["guest-room"])),
+      ...Array.from({ length: Math.max(2, roomCount - 2) }, (_, index) => room(`guest-3-${index}`, tavern ? `Attic chamber ${index + 1}` : `Third-floor suite ${index + 1}`, 2, (tavern ? 10 : 8) + (index % (tavern ? 2 : 3)) * (tavern ? 10 : 11), 10 + Math.floor(index / (tavern ? 2 : 3)) * 9, tavern ? 7 : 8.5, tavern ? 6.5 : 7.5, "private", [tavern ? "attic" : "suite"])),
+      { ...room("roof-chase", tavern ? "Broken gable chase route" : "Grand roof pursuit circuit", 3, tavern ? 15 : 20, 9, tavern ? 14 : 24, 5, "combat", ["roof-platform", "roof-route", "high-ground"]), openAir: true },
+      { ...room("cellar", tavern ? "Wine cellar" : "Boiler room and wine cellar", 4, tavern ? 20 : 29, tavern ? 27 : 31, tavern ? 11 : 14, 8, "service", ["underground", tavern ? "wine-cellar" : "boiler"]), absoluteElevationFeet: -13 },
+      { ...room("stable", tavern ? "Rear courtyard stable" : "Rear delivery garage", 0, tavern ? (serviceOnEast ? 7 : 24) : serviceX, tavern ? 36 : 38, tavern ? 10 : 9, tavern ? 8 : 8, "service", [tavern ? "stable" : "garage", "rear-entrance"]), openAir: true },
     ];
     const upperCount = Math.max(2, roomCount - 2);
-    const upperLinks = Array.from({ length: upperCount - 1 }, (_, index) => index).filter((index) => index % 3 !== 2).map((index) => link(`guest3-${index}`, `guest-3-${index}`, `guest-3-${index + 1}`, "corridor"));
-    if (upperCount > 3) upperLinks.push(link("guest3-row-link", "guest-3-0", "guest-3-3", "corridor"));
-    const connections: ProgramConnection[] = [link("lobby-dining", "lobby", "dining"), link("lobby-ballroom", "lobby", "ballroom"), link("ballroom-kitchen", "ballroom", "kitchen", "service"), link("kitchen-staff", "kitchen", "staff-stair", "service"), link("staff-stable", "staff-stair", "stable", "service"), link("lobby-upper", "lobby", "guest-2-0", "stair"), link("staff-upper", "staff-stair", `guest-2-${roomCount - 1}`, "stair"), ...Array.from({ length: roomCount - 1 }, (_, index) => link(`guest2-${index}`, `guest-2-${index}`, `guest-2-${index + 1}`, "corridor")), link("upper-attic", "guest-2-0", "guest-3-0", "stair"), ...upperLinks, link("attic-roof", "guest-3-0", "roof-chase", "stair"), link("kitchen-cellar", "kitchen", "cellar", "stair")];
-    return { id: tavern ? "tavern-inn" : "hotel", title: tavern ? "The Copper Griffin Inn" : "The Grand Meridian Hotel", description: "A hospitality building with independent public rooms, a service spine, changing guest-floor footprints, basement plant space, rear deliveries, and an accessible roof pursuit route.", archetype: "hotel", seed: context.request.seed, bounds: { x: 41, z: 38 }, floorHeights: [12, 11, 9, 9, 10], floorLabels: ["1F", "2F", "3F", "屋顶", "B1"], rooms, connections, requiredFeatures: ["lobby", "dining", "kitchen", "service-route", "guest-room", "underground", "roof-route", tavern ? "stable" : "garage"], detailCount: Math.round(14 + context.request.density * 22), floorMaterial: "wood", wallMaterial: "plaster", states, exteriorStyle: "institutional-street", facadeStyle: "domestic" };
+    const secondLinks = Array.from({ length: roomCount - 1 }, (_, index) => index).filter((index) => index % guestColumns !== guestColumns - 1).map((index) => link(`guest2-${index}`, `guest-2-${index}`, `guest-2-${index + 1}`, "corridor"));
+    if (roomCount > guestColumns) secondLinks.push(link("guest2-row-link", "guest-2-0", `guest-2-${guestColumns}`, "corridor"));
+    const thirdColumns = tavern ? 2 : 3;
+    const upperLinks = Array.from({ length: upperCount - 1 }, (_, index) => index).filter((index) => index % thirdColumns !== thirdColumns - 1).map((index) => link(`guest3-${index}`, `guest-3-${index}`, `guest-3-${index + 1}`, "corridor"));
+    if (upperCount > thirdColumns) upperLinks.push(link("guest3-row-link", "guest-3-0", `guest-3-${thirdColumns}`, "corridor"));
+    const connections: ProgramConnection[] = [link("lobby-dining", "lobby", "dining"), link("lobby-ballroom", "lobby", "ballroom"), link("ballroom-kitchen", "ballroom", "kitchen", "service"), link("kitchen-staff", "kitchen", "staff-stair", "service"), link("staff-stable", "staff-stair", "stable", "service"), link("lobby-upper", "lobby", "guest-2-0", "stair"), link("staff-upper", "staff-stair", `guest-2-${roomCount - 1}`, "stair"), ...secondLinks, link("upper-attic", "guest-2-0", "guest-3-0", "stair"), ...upperLinks, link("attic-roof", "guest-3-0", "roof-chase", "stair"), link("kitchen-cellar", "kitchen", "cellar", "stair")];
+    return { id: tavern ? "tavern-inn" : "hotel", title: tavern ? "The Copper Griffin Inn" : "The Grand Meridian Hotel", description: tavern ? "An irregular timber inn grows around a taproom, guild chamber, rear kitchen court and stable, with compact guest rooms and a broken attic chase." : "A broad urban hotel separates its lobby, restaurant and ballroom from a rear service spine, long guest-room floors, boiler cellar and roof pursuit circuit.", archetype: "hotel", seed: context.request.seed, bounds: tavern ? { x: 32, z: 41 } : { x: 44, z: 42 }, floorHeights: [12, 11, 9, 9, 10], floorLabels: ["1F", "2F", "3F", "屋顶", "B1"], rooms, connections, requiredFeatures: ["lobby", "dining", "kitchen", "service-route", "guest-room", "underground", "roof-route", tavern ? "stable" : "garage"], detailCount: Math.round(14 + context.request.density * 22), floorMaterial: "wood", wallMaterial: "plaster", states, exteriorStyle: "institutional-street", facadeStyle: "domestic" };
   }
 
   const police = has(text, ["警察局", "警局", "police", "precinct"]);
@@ -152,6 +163,7 @@ function programFor(context: GeneratorContext): BuildingProgram {
   const radioWeather = has(text, ["无线电", "气象", "radio", "weather", "meteorological"]);
   const bunker = has(text, ["防空洞", "掩体", "bunker", "air-raid shelter"]);
   const antenna = has(text, ["天线", "antenna", "aerial"]);
+  const policeSecureEast = context.rng.fork("police-secure-wing").bool();
   const label = police ? "Police precinct" : hospital ? "Coastal sanatorium" : museum ? "Gothic museum" : monastery ? "Weather monastery" : "Civic institution";
   const frontName = police ? "Public desk and waiting" : hospital ? "Reception and admissions" : museum ? "Grand entrance gallery" : monastery ? "Chapel gate and refectory" : "Public reception";
   const westName = police ? "Interview and records wing" : hospital ? "West clinical wing" : museum ? "West exhibition wing" : monastery ? "Cloister and archive wing" : "West functional wing";
@@ -162,18 +174,22 @@ function programFor(context: GeneratorContext): BuildingProgram {
   let rooms: ProgramRoom[];
   let connections: ProgramConnection[];
   if (police) {
+    const recordsX = policeSecureEast ? 7 : 29;
+    const secureX = policeSecureEast ? 29 : 7;
+    const sallyX = policeSecureEast ? 30 : 6;
+    const garageX = policeSecureEast ? 37 : 3;
     rooms = [
       room("front", "Public front desk and waiting", 0, 18 + jitter("front"), 5, 12, 6, "public", ["entrance", "front-desk", ...partitionTags]),
       room("open-office", "Open squad office", 0, 18, 12.5, 12, 7, "public", ["open-office", ...partitionTags]),
-      room("records", "Records room", 0, 7, 12, 8, 8, "private", ["records", "west-wing", ...partitionTags]),
-      room("interview", "Interview room", 0, 7, 22, 8, 6, "private", ["interview", "west-wing", ...partitionTags]),
-      room("detention", "Cell block and detention", 0, 29, 14, 8, 12, "private", ["detention", "east-wing", ...partitionTags]),
+      room("records", "Records room", 0, recordsX, 12, 8, 8, "private", ["records", policeSecureEast ? "west-wing" : "east-wing", ...partitionTags]),
+      room("interview", "Interview room", 0, recordsX, 22, 8, 6, "private", ["interview", policeSecureEast ? "west-wing" : "east-wing", ...partitionTags]),
+      room("detention", "Cell block and detention", 0, secureX, 14, 8, 12, "private", ["detention", policeSecureEast ? "east-wing" : "west-wing", ...partitionTags]),
       room("booking", "Secure booking room", 0, 18, 28.5, 12, 6, "service", ["booking", "rear-core", ...partitionTags]),
-      room("sally-port", "Rear alley prisoner sally port", 0, 30, 29, 7, 6, "service", ["rear-entrance", "sally-port", ...partitionTags]),
-      room("garage", "Patrol garage", 0, 37, 24, 8, 10, "service", ["garage", "rear-entrance", ...partitionTags]),
+      room("sally-port", "Rear alley prisoner sally port", 0, sallyX, 29, 7, 6, "service", ["rear-entrance", "sally-port", ...partitionTags]),
+      room("garage", "Patrol garage", 0, garageX, 24, 8, 10, "service", ["garage", "rear-entrance", ...partitionTags]),
       room("chief-office", "Chief's private office", 1, 18, 8, 8, 7, "private", ["chief-office", ...partitionTags]),
-      room("upper-archives", "Case archives", 1, 9, 14, 10, 12, "private", ["archives", "upper-west", ...partitionTags]),
-      room("upper-interrogation", "Interrogation room", 1, 27, 15, 9, 11, "private", ["interrogation", "upper-east", ...partitionTags]),
+      room("upper-archives", "Case archives", 1, recordsX + (recordsX < 18 ? 2 : -2), 14, 10, 12, "private", ["archives", policeSecureEast ? "upper-west" : "upper-east", ...partitionTags]),
+      room("upper-interrogation", "Interrogation room", 1, secureX + (secureX < 18 ? 2 : -2), 15, 9, 11, "private", ["interrogation", policeSecureEast ? "upper-east" : "upper-west", ...partitionTags]),
       { ...room("basement", "Evidence vault", 3, 13, 27, 9, 8, "service", ["underground", "evidence", ...partitionTags]), absoluteElevationFeet: -16 },
       { ...room("sealed-store", "Sealed evidence annex", 3, 25, 27, 8, 7, "private", ["underground", "evidence", "sealed", ...partitionTags]), absoluteElevationFeet: -16 },
       { ...room("roof", "Roof service and escape platform", 2, 18, 8, 12, 6, "combat", ["roof-platform", "high-ground"]), openAir: true },

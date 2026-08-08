@@ -36,6 +36,7 @@ interface AppElements {
   time: HTMLSelectElement;
   exportScene: HTMLButtonElement;
   transparencyToggle: HTMLButtonElement;
+  cameraToggle: HTMLButtonElement;
   routesToggle: HTMLButtonElement;
   tacticalToggle: HTMLButtonElement;
   metrics: HTMLElement;
@@ -193,6 +194,11 @@ export async function mountApp(root: HTMLElement): Promise<void> {
               <span><strong>建筑半透明</strong><small>查看墙体、楼板与内部战斗关系</small></span>
               <i aria-hidden="true"></i>
             </button>
+            <button class="toggle-button" data-role="camera-toggle" type="button" aria-pressed="false">
+              <span class="toggle-glyph" aria-hidden="true">◲</span>
+              <span><strong>低角度体量</strong><small>检查高差、立面与悬空</small></span>
+              <i aria-hidden="true"></i>
+            </button>
           </section>
 
           <section class="inspector-section metrics-section">
@@ -284,6 +290,11 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     renderer.setBuildingTransparency(enabled);
     setToggle(elements.transparencyToggle, enabled);
   });
+  elements.cameraToggle.addEventListener("click", () => {
+    const enabled = elements.cameraToggle.getAttribute("aria-pressed") !== "true";
+    renderer.setCameraPreset(enabled ? "low" : "overview");
+    setToggle(elements.cameraToggle, enabled);
+  });
   elements.routesToggle.addEventListener("click", () => {
     routeDebug = !routeDebug;
     renderer.setRouteVisibility(routeDebug);
@@ -330,6 +341,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       };
       activeScene = scene;
       renderer.setScene(scene);
+      setToggle(elements.cameraToggle, false);
       renderer.setRouteVisibility(routeDebug);
       renderer.setTacticalVisibility(tacticalDebug);
       renderSceneDetails(elements, scene, lastStats);
@@ -374,6 +386,7 @@ function getElements(root: HTMLElement): AppElements {
     time: query(root, '[data-role="time"]'),
     exportScene: query(root, '[data-role="export-scene"]'),
     transparencyToggle: query(root, '[data-role="transparency-toggle"]'),
+    cameraToggle: query(root, '[data-role="camera-toggle"]'),
     routesToggle: query(root, '[data-role="routes-toggle"]'),
     tacticalToggle: query(root, '[data-role="tactical-toggle"]'),
     metrics: query(root, '[data-role="metrics"]'),

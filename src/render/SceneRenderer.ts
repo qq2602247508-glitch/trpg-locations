@@ -339,6 +339,18 @@ export class SceneRenderer {
     this.setFloorView(this.activeFloorView);
   }
 
+  setCameraPreset(preset: "overview" | "low"): void {
+    if (preset === "overview") {
+      this.recenterCameraForFloor(this.activeFloorView);
+      return;
+    }
+    const span = Math.max(this.worldBounds.maxX - this.worldBounds.minX, this.worldBounds.maxZ - this.worldBounds.minZ, 5);
+    const target = this.controls.target.clone();
+    this.camera.position.set(target.x + span * 1.18, target.y + Math.max(6, span * 0.42), target.z + span * 0.96);
+    this.camera.lookAt(target);
+    this.controls.update();
+  }
+
   setTimeOfDay(time: "day" | "night"): void {
     this.timeOfDay = time;
     this.scene.background = new THREE.Color(time === "night" ? 0x071315 : 0x10201f);

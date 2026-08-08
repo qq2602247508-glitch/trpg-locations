@@ -408,6 +408,18 @@ export function compileBuildingProgram(program: BuildingProgram): GeneratedScene
     if (target.tags.includes("garage")) {
       scene.primitives.push(box(`${target.id}-vehicle`, target.level, target.x, y + 0.22, target.z, target.width * 0.58, feetToMeters(4.5), target.depth * 0.48, "metal", ["vehicle", "garage", "cover", `room:${target.id}`]));
     }
+    if (target.tags.includes("nave")) {
+      for (let row = 0; row < 5; row += 1) for (const side of [-1, 1]) scene.primitives.push(box(`${target.id}-pew-${row}-${side}`, target.level, target.x + side * target.width * 0.22, y, target.z - target.depth * 0.3 + row * target.depth * 0.14, target.width * 0.34, feetToMeters(2.8), 0.8, "wood", ["pew", "cover", "sacred", `room:${target.id}`]));
+    }
+    if (target.tags.includes("altar")) {
+      scene.primitives.push(box(`${target.id}-altar`, target.level, target.x, y + feetToMeters(1.2), target.z, Math.max(3, target.width * 0.5), feetToMeters(3.6), 1.6, "stone", ["altar", "objective", "cover", `room:${target.id}`]));
+    }
+    if (target.tags.includes("crypt")) {
+      for (let index = 0; index < 6; index += 1) scene.primitives.push(box(`${target.id}-coffin-${index}`, target.level, target.x - target.width * 0.28 + (index % 3) * target.width * 0.28, y, target.z - target.depth * 0.22 + Math.floor(index / 3) * target.depth * 0.42, 2.1, feetToMeters(2.6), 3.5, "stone", ["coffin", "crypt", "cover", `room:${target.id}`]));
+    }
+    if (target.tags.includes("research-tower")) {
+      scene.primitives.push(cylinder(`${target.id}-arcane-instrument`, target.level, target.x, y, target.z, 2.4, feetToMeters(7), "metal", ["arcane-instrument", "research", "landmark", `room:${target.id}`]));
+    }
   }
   if (program.archetype === "hospital") {
     for (const target of program.rooms.filter((room) => /clinical|treatment|patient ward/i.test(room.name))) {
