@@ -7,6 +7,7 @@ import {
   corridor,
   createRoom,
   createRoute,
+  cylinder,
   feetToMeters,
   rectangularShell,
   stairConnection,
@@ -160,6 +161,18 @@ export function compileBuildingProgram(program: BuildingProgram): GeneratedScene
     if (!target) continue;
     const column = index % 3;
     scene.primitives.push(box(`${program.id}-functional-fixture-${index}`, target.level, target.x + (column - 1) * Math.min(1.4, target.width * 0.16), baseY(program, target.level) + FLOOR_SLAB_METERS, target.z, 0.7, 1.25, 1.4, target.tags.includes("underground") ? "metal" : "wood", ["functional-fixture", `room:${target.id}`, "cover"]));
+  }
+  if (program.archetype === "hospital") {
+    for (const target of program.rooms.filter((room) => /clinical|treatment|patient ward/i.test(room.name))) {
+      for (let index = 0; index < Math.max(2, Math.floor(target.depth / 3)); index += 1) {
+        scene.primitives.push(box(`hospital-bed-${target.id}-${index}`, target.level, target.x - target.width * 0.22 + (index % 2) * target.width * 0.44, baseY(program, target.level) + FLOOR_SLAB_METERS, target.z - target.depth * 0.28 + Math.floor(index / 2) * 2.2, 1.8, 0.72, 3.2, "wood", ["hospital", "bed", "cover", `room:${target.id}`]));
+      }
+    }
+    const morgue = program.rooms.find((room) => /morgue/i.test(room.name));
+    if (morgue) scene.primitives.push(box("hospital-autopsy-table", morgue.level, morgue.x, baseY(program, morgue.level) + FLOOR_SLAB_METERS, morgue.z, 2, 0.95, 4, "metal", ["hospital", "morgue", "autopsy", "evidence"]));
+  }
+  if (program.archetype === "police") {
+    scene.primitives.push(box("police-evidence-cages", 0, 29, baseY(program, 0) + FLOOR_SLAB_METERS, 25, 4, 2.4, 4, "metal", ["police", "evidence", "room-partition", "cover"]));
   }
   for (const primitive of scene.primitives) {
     primitive.tags = [...new Set([...(primitive.tags ?? []), program.archetype])];
