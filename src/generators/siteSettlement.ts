@@ -688,8 +688,8 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
         return candidateDistance < bestDistance ? candidate : best;
       }, mangroveRootWaypoints[0]!);
       const midpoint = {
-        x: (rootAnchor[0] + placement.x) / 2 + Math.sin(adaptedBuildings * 1.4) * 1.2,
-        z: (rootAnchor[1] + placement.z) / 2 + Math.cos(adaptedBuildings * 1.4) * 1.2,
+        x: placement.x + Math.sin(adaptedBuildings * 1.4) * 0.8,
+        z: rootAnchor[1] + Math.cos(adaptedBuildings * 1.4) * 0.8,
       };
       const accessY = siteElevation + FLOOR_SLAB_METERS + 0.06;
       const accessTags = ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted", "root-boardwalk"];
