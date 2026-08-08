@@ -62,5 +62,13 @@ function programFor(context: GeneratorContext): BuildingProgram {
 }
 
 export function generateComposedBuilding(context: GeneratorContext) {
-  return compileBuildingProgram(programFor(context));
+  const source = programFor(context);
+  const scale = context.request.size === "small" ? 0.86 : context.request.size === "large" ? 1.18 : 1;
+  if (scale !== 1) {
+    const cx = source.bounds.x / 2;
+    const cz = source.bounds.z / 2;
+    source.bounds = { x: Math.round(source.bounds.x * scale), z: Math.round(source.bounds.z * scale) };
+    source.rooms = source.rooms.map((item) => ({ ...item, x: cx + (item.x - cx) * scale, z: cz + (item.z - cz) * scale, width: item.width * scale, depth: item.depth * scale }));
+  }
+  return compileBuildingProgram(source);
 }
