@@ -707,14 +707,14 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       scene.primitives.push(corridor(
         `parcel-access-${parcel.id}`,
         0,
-        placement.x - 1.4,
+        placement.x - (isMangrovePort ? 0.5 : 1.4),
         placement.z,
         placement.x,
         placement.z,
         siteElevation + FLOOR_SLAB_METERS + 0.06,
-        parcel.lod === "full-interior" ? 1.4 : 1,
-        program.siteType === "village" ? "earth" : "stone",
-        ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted"],
+        isMangrovePort ? 0.55 : parcel.lod === "full-interior" ? 1.4 : 1,
+        isMangrovePort ? "wood" : program.siteType === "village" ? "earth" : "stone",
+        ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted", ...(isMangrovePort ? ["root-boardwalk"] : [])],
       ));
     }
     if (isFlooded) {
