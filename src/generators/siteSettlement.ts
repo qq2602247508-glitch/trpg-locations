@@ -55,35 +55,131 @@ function addOpenSpaces(scene: GeneratedScene, program: ReturnType<typeof planSet
   }
 }
 
-function addFloatingIslandTerrain(scene: GeneratedScene, width: number, depth: number): (x: number, z: number) => number {
-  const band = width / 3;
-  const levels = [0, feetToMeters(10), feetToMeters(20)];
-  for (let index = 0; index < 3; index += 1) {
-    const x = band * (index + 0.5);
-    const y = levels[index] ?? 0;
-    const platformWidth = band - 2.4;
+function addFloatingIslandTerrain(scene: GeneratedScene, width: number, depth: number, saltCrystal = false): (x: number, z: number) => number {
+  const islands = [
+    { x: width * 0.22, z: depth * 0.68, y: 0, w: width * 0.3, d: depth * 0.32 },
+    { x: width * 0.52, z: depth * 0.3, y: feetToMeters(25), w: width * 0.28, d: depth * 0.29 },
+    { x: width * 0.82, z: depth * 0.64, y: feetToMeters(50), w: width * 0.25, d: depth * 0.26 },
+  ];
+  for (const [index, island] of islands.entries()) {
+    const material = saltCrystal ? "ice" : "darkStone";
     scene.primitives.push(
-      box(`floating-island-${index + 1}-top`, 0, x, y, depth / 2, platformWidth, FLOOR_SLAB_METERS, depth, "darkStone", ["floor", "terrain", "floating-island", "basalt", "standable", "site-program"]),
-      box(`floating-island-${index + 1}-lobe`, 0, x + (index === 1 ? 1.4 : -1.1), y, depth * (index === 2 ? 0.68 : 0.34), platformWidth * 0.78, FLOOR_SLAB_METERS, depth * 0.24, "darkStone", ["floor", "terrain", "floating-island", "basalt", "standable", "site-program"]),
-      primitive(`floating-island-${index + 1}-underside`, "cone", 0, x, y - feetToMeters(18), depth / 2, platformWidth * 0.84 * 1.524, feetToMeters(18), depth * 0.58 * 1.524, "rock", ["terrain", "floating-island", "basalt", "vertical-landmark", "site-program"]),
+      box(`floating-island-${index + 1}-top`, index, island.x, island.y, island.z, island.w, FLOOR_SLAB_METERS, island.d, material, ["floor", "terrain", "floating-island", saltCrystal ? "salt-crystal" : "basalt", "standable", "site-program"]),
+      primitive(`floating-island-${index + 1}-underside`, "cone", index, island.x, island.y - feetToMeters(saltCrystal ? 22 : 18), island.z, island.w * 0.38 * 1.524, feetToMeters(saltCrystal ? 22 : 18), island.d * 0.36 * 1.524, saltCrystal ? "rock" : "rock", ["terrain", "floating-island", saltCrystal ? "salt-crystal" : "basalt", "vertical-landmark", "site-program"]),
+    );
+    if (saltCrystal) {
+      for (let spike = 0; spike < 7; spike += 1) {
+        const angle = spike * 0.89 + index;
+        const radius = Math.min(island.w, island.d) * (0.28 + (spike % 3) * 0.09);
+        scene.primitives.push(primitive(`salt-crystal-${index + 1}-${spike + 1}`, "cone", index, island.x + Math.cos(angle) * radius, island.y + feetToMeters(1.5), island.z + Math.sin(angle) * radius, 0.45 + (spike % 3) * 0.18, feetToMeters(4 + spike % 4 * 2), 0.45 + (spike % 2) * 0.16, spike % 2 === 0 ? "ice" : "warmLight", ["salt-crystal", "vertical-landmark", "cover", "site-program"]));
+      }
+    }
+  }
+  const bridgeOne = { x: width * 0.41, z: depth * 0.5 };
+  const bridgeTwo = { x: width * 0.66, z: depth * 0.48 };
+  scene.primitives.push(
+    corridor("floating-suspension-bridge-1", 0, islands[0]!.x, islands[0]!.z, islands[1]!.x, islands[1]!.z, feetToMeters(13) + FLOOR_SLAB_METERS, 1.8, saltCrystal ? "ice" : "wood", ["bridge", "suspension-bridge", "vertical-route", "standable", "vertical-opening", "site-program"]),
+    corridor("floating-suspension-bridge-2", 0, islands[1]!.x, islands[1]!.z, islands[2]!.x, islands[2]!.z, feetToMeters(38) + FLOOR_SLAB_METERS, 1.8, saltCrystal ? "ice" : "wood", ["bridge", "suspension-bridge", "vertical-route", "standable", "vertical-opening", "site-program"]),
+    stairs("floating-rise-1", 0, bridgeOne.x, feetToMeters(1), bridgeOne.z, 1.8, feetToMeters(25), 7.4, saltCrystal ? "ice" : "wood", ["bridge", "vertical-opening", "site-program"], Math.PI / 2),
+    stairs("floating-rise-2", 0, bridgeTwo.x, feetToMeters(26), bridgeTwo.z, 1.8, feetToMeters(25), 7.4, saltCrystal ? "ice" : "wood", ["bridge", "vertical-opening", "site-program"], Math.PI / 2),
+  );
+  if (saltCrystal) {
+    scene.primitives.push(
+      water("salt-cavern-tide-pool", 3, width * 0.52, -feetToMeters(18), depth * 0.58, width * 0.5, 0.3, depth * 0.38, ["salt-crystal", "cavern-tide-pool", "watercourse", "hazard", "site-program"]),
+      primitive("salt-cavern-column-west", "cone", 3, width * 0.18, -feetToMeters(18), depth * 0.28, 3.8, feetToMeters(32), 3.8, "ice", ["salt-crystal", "cavern-column", "vertical-landmark", "site-program"]),
+      primitive("salt-cavern-column-east", "cone", 3, width * 0.86, -feetToMeters(18), depth * 0.34, 4.4, feetToMeters(38), 4.4, "ice", ["salt-crystal", "cavern-column", "vertical-landmark", "site-program"]),
     );
   }
-  const boundaryOne = band; const boundaryTwo = band * 2;
-  scene.primitives.push(
-    corridor("floating-suspension-bridge-1", 0, boundaryOne - 3.4, depth * 0.48, boundaryOne + 3.4, depth * 0.48, feetToMeters(10) + FLOOR_SLAB_METERS, 1.8, "wood", ["bridge", "suspension-bridge", "standable", "vertical-opening", "site-program"]),
-    corridor("floating-suspension-bridge-2", 0, boundaryTwo - 3.4, depth * 0.52, boundaryTwo + 3.4, depth * 0.52, feetToMeters(20) + FLOOR_SLAB_METERS, 1.8, "wood", ["bridge", "suspension-bridge", "standable", "vertical-opening", "site-program"]),
-    stairs("floating-rise-1", 0, boundaryOne - 1.4, FLOOR_SLAB_METERS, depth * 0.48, 1.8, feetToMeters(10), 5.8, "wood", ["bridge", "vertical-opening", "site-program"], Math.PI / 2),
-    stairs("floating-rise-2", 0, boundaryTwo - 1.4, feetToMeters(10) + FLOOR_SLAB_METERS, depth * 0.52, 1.8, feetToMeters(10), 5.8, "wood", ["bridge", "vertical-opening", "site-program"], Math.PI / 2),
-  );
   scene.routes.push(createRoute("floating-island-ascent", "vertical", [
-    { x: boundaryOne - 3, z: depth * 0.48, y: 0 }, { x: boundaryOne + 3, z: depth * 0.48, y: feetToMeters(10) },
-    { x: boundaryTwo - 3, z: depth * 0.52, y: feetToMeters(10) }, { x: boundaryTwo + 3, z: depth * 0.52, y: feetToMeters(20) },
+    { x: islands[0]!.x, z: islands[0]!.z, y: 0 }, { x: islands[1]!.x, z: islands[1]!.z, y: feetToMeters(25) },
+    { x: islands[1]!.x, z: islands[1]!.z, y: feetToMeters(25) }, { x: islands[2]!.x, z: islands[2]!.z, y: feetToMeters(50) },
   ], { purpose: "movement", traffic: 0.74, schedule: "all" }));
   scene.tactical.push(
-    tacticalFeature("floating-bridge-choke-1", "chokepoint", boundaryOne, depth * 0.48, feetToMeters(10), 2, "The first suspension bridge is the only direct ascent to the middle island."),
-    tacticalFeature("floating-radio-overwatch", "highGround", width * 0.84, depth * 0.5, feetToMeters(20), 4, "The highest basalt island dominates both lower approaches."),
+    tacticalFeature("floating-bridge-choke-1", "chokepoint", islands[1]!.x, islands[1]!.z, feetToMeters(25), 2, "The first suspension bridge is the only direct ascent to the middle island."),
+    tacticalFeature("floating-radio-overwatch", "highGround", islands[2]!.x, islands[2]!.z, feetToMeters(50), 4, saltCrystal ? "The highest salt-crystal island exposes the monastery bell tower and both bridge approaches." : "The highest basalt island dominates both lower approaches."),
   );
-  return (x: number) => x < band ? 0 : x < band * 2 ? feetToMeters(10) : feetToMeters(20);
+  return (x: number, z: number) => {
+    let nearest = islands[0]!;
+    let best = Number.POSITIVE_INFINITY;
+    for (const island of islands) {
+      const distance = Math.hypot(x - island.x, z - island.z);
+      if (distance < best) { best = distance; nearest = island; }
+    }
+    return nearest.y;
+  };
+}
+
+function addHollowTreeCity(scene: GeneratedScene, width: number, depth: number): void {
+  const cx = width * 0.5;
+  const cz = depth * 0.5;
+  const outer = Math.min(width, depth) * 0.4;
+  const inner = outer * 0.7;
+  const trunkHeight = feetToMeters(58);
+  for (let index = 0; index < 14; index += 1) {
+    const angle = (Math.PI * 2 * index) / 14;
+    const x = cx + Math.cos(angle) * (outer + 0.4);
+    const z = cz + Math.sin(angle) * (outer + 0.4);
+    scene.primitives.push(box(`hollow-tree-bark-${index + 1}`, 0, x, trunkHeight / 2, z, 1.8, trunkHeight, 3.2, "wood", ["hollow-tree", "bark-wall", "vertical-face", "cover", "site-program"], angle));
+    if (index % 2 === 0) scene.primitives.push(cylinder(`hollow-tree-root-${index + 1}`, 0, x, FLOOR_SLAB_METERS, z, 1.1, feetToMeters(8 + index % 3 * 3), "wood", ["hollow-tree", "root-buttress", "cover", "site-program"]));
+  }
+  for (const [level, yFeet] of [0, 15, 35, 55].entries()) {
+    const y = feetToMeters(yFeet) + FLOOR_SLAB_METERS;
+    const radius = inner * (level === 0 ? 0.84 : level === 1 ? 0.66 : level === 2 ? 0.5 : 0.34);
+    scene.primitives.push(corridor(`hollow-tree-ring-walk-${level + 1}`, level, cx - radius, cz, cx + radius, cz, y, 1.35, "wood", ["hollow-tree", "ring-walk", "standable", "site-program"]));
+    scene.routes.push(createRoute(`hollow-tree-ring-route-${level + 1}`, level === 0 ? "primary" : "alternate", [
+      { x: cx - radius, z: cz, y }, { x: cx, z: cz - radius * 0.72, y }, { x: cx + radius, z: cz, y },
+    ], { purpose: "movement", traffic: 0.62, schedule: "all" }));
+  }
+  for (let step = 0; step < 28; step += 1) {
+    const t = step / 27;
+    const angle = -Math.PI * 0.4 + t * Math.PI * 4.2;
+    const radius = inner * (0.72 - t * 0.22);
+    const y = feetToMeters(2 + t * 50) + FLOOR_SLAB_METERS;
+    scene.primitives.push(box(`hollow-tree-spiral-step-${step + 1}`, Math.floor(t * 4), cx + Math.cos(angle) * radius, y, cz + Math.sin(angle) * radius, 1.7, 0.22, 1.05, "wood", ["hollow-tree", "spiral-tree-street", "vertical-route", "standable", "site-program"], angle));
+  }
+  scene.routes.push(createRoute("hollow-tree-spiral-route", "vertical", [
+    { x: cx + Math.cos(-Math.PI * 0.4) * inner * 0.72, z: cz + Math.sin(-Math.PI * 0.4) * inner * 0.72, y: feetToMeters(2) },
+    { x: cx, z: cz - inner * 0.5, y: feetToMeters(27) },
+    { x: cx + Math.cos(Math.PI * 3.8) * inner * 0.5, z: cz + Math.sin(Math.PI * 3.8) * inner * 0.5, y: feetToMeters(52) },
+  ], { purpose: "movement", traffic: 0.72, schedule: "all" }));
+  scene.primitives.push(
+    primitive("hollow-tree-canopy-platform", "cylinder", 3, cx, feetToMeters(56), cz, inner * 0.33, 0.35, inner * 0.33, "moss", ["hollow-tree", "canopy-observatory", "high-ground", "standable", "site-program"]),
+    box("hollow-tree-root-archive", 3, cx, -feetToMeters(10), cz + outer * 0.45, inner * 0.46, FLOOR_SLAB_METERS, inner * 0.3, "wood", ["hollow-tree", "root-archive", "underground", "standable", "site-program"]),
+    stairs("hollow-tree-root-stairs", 4, cx, -feetToMeters(10), cz + outer * 0.28, 1.7, feetToMeters(10), 5.6, "wood", ["hollow-tree", "root-archive", "vertical-route", "vertical-opening", "shaft-access", "site-program"]),
+  );
+  scene.routes.push(createRoute("hollow-tree-root-descent", "vertical", [{ x: cx, z: cz, y: 0 }, { x: cx, z: cz + outer * 0.45, y: -feetToMeters(10) }], { purpose: "service", traffic: 0.34, schedule: "all" }));
+  scene.tactical.push(
+    tacticalFeature("hollow-tree-canopy-highground", "highGround", cx, cz, feetToMeters(56), 4, "The canopy observatory is the highest firing position inside the hollow trunk."),
+    tacticalFeature("hollow-tree-rotten-void", "hazard", cx + outer * 0.55, cz - outer * 0.22, feetToMeters(18), 3, "A rotten opening in the bark creates a vertical fall hazard and alternate sightline."),
+  );
+}
+
+function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: number): void {
+  const channelZ = depth * 0.52;
+  scene.primitives.push(water("mangrove-main-channel", 0, width * 0.5, -0.2, channelZ, width - 4, 0.28, 5.2, ["mangrove", "tidal-channel", "watercourse", "hazard", "site-program"]));
+  const boardwalks = [
+    [width * 0.12, depth * 0.18, width * 0.38, depth * 0.42],
+    [width * 0.42, depth * 0.62, width * 0.72, depth * 0.32],
+    [width * 0.68, depth * 0.2, width * 0.9, depth * 0.48],
+  ] as const;
+  for (const [index, [x0, z0, x1, z1]] of boardwalks.entries()) {
+    scene.primitives.push(corridor(`mangrove-root-boardwalk-${index + 1}`, 0, x0, z0, x1, z1, FLOOR_SLAB_METERS + 0.7, 1.35, "wood", ["mangrove", "root-boardwalk", "standable", "site-program"]));
+    scene.routes.push(createRoute(`mangrove-boardwalk-route-${index + 1}`, "alternate", [{ x: x0, z: z0, y: FLOOR_SLAB_METERS + 0.7 }, { x: x1, z: z1, y: FLOOR_SLAB_METERS + 0.7 }], { purpose: "service", traffic: 0.58, schedule: "all" }));
+  }
+  for (let index = 0; index < 16; index += 1) {
+    const x = width * (0.1 + ((index * 0.173) % 0.8));
+    const z = depth * (0.12 + ((index * 0.287) % 0.74));
+    scene.primitives.push(cylinder(`mangrove-root-pillar-${index + 1}`, 0, x, 0, z, 0.55 + (index % 3) * 0.18, feetToMeters(7 + index % 4 * 2), "wood", ["mangrove", "prop-root", "cover", "standable", "site-program"]));
+  }
+  scene.primitives.push(
+    corridor("mangrove-wreck-dock", 0, width * 0.72, channelZ, width * 0.72, depth * 0.88, FLOOR_SLAB_METERS + 0.9, 1.8, "wood", ["mangrove", "smuggler-dock", "wreck-field", "standable", "site-program"]),
+    box("mangrove-underwater-entry", 0, width * 0.2, -feetToMeters(4), channelZ, 3.4, feetToMeters(5), 2.2, "darkStone", ["mangrove", "underwater-entry", "portal", "hazard", "site-program"]),
+    cylinder("mangrove-patrol-tower", 1, width * 0.84, feetToMeters(9), depth * 0.3, 1.6, feetToMeters(18), "wood", ["mangrove", "patrol-tower", "high-ground", "site-program"]),
+  );
+  scene.tactical.push(
+    tacticalFeature("mangrove-channel-choke", "chokepoint", width * 0.5, channelZ, -0.2, 3, "The tidal channel divides the village and forces movement onto exposed root boardwalks."),
+    tacticalFeature("mangrove-tower-overwatch", "highGround", width * 0.84, depth * 0.3, feetToMeters(18), 2, "The patrol tower watches the smuggler dock and both boardwalk approaches."),
+  );
 }
 
 function addHarbor(scene: GeneratedScene, width: number, depth: number, features: readonly string[]): void {
@@ -373,14 +469,20 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
           : program.requiredFeatures.includes("tower-city") ? "The Many-Ring Tower City"
             : program.requiredFeatures.includes("vertical-slum") ? "The Pier-Hung Market"
               : program.requiredFeatures.includes("bone-swamp-settlement") ? "The Fossil-Marsh Village"
-                : program.requiredFeatures.includes("airship-wreck-settlement") ? "The Fallen Airframe Camp"
+        : program.requiredFeatures.includes("airship-wreck-settlement") ? "The Fallen Airframe Camp"
+      : program.requiredFeatures.includes("hollow-tree-city") ? "The Hollow-Heart Canopy"
+        : program.requiredFeatures.includes("mangrove-smuggler-port") ? "The Rootbound Smuggler Port"
+          : program.requiredFeatures.includes("salt-crystal-monastery") ? "The Salt-Crystal Ascendancy"
       : program.siteType === "harbor-district" ? "The Layered Quays"
         : program.siteType === "village" ? "The Living Crossroads"
           : program.siteType === "mining-settlement" ? "Orewater Camp"
             : program.morphology.growth === "organic" ? "The Accreted Ward" : "The Planned Ward";
-  const scene = baseScene("settlement", settlementTitle, `${program.siteType} compiled as a ${program.morphology.era} ${program.morphology.roadPattern} settlement from terrain constraints, districts, hierarchical roads, frontage parcels and independently seeded buildings.`, context.request.seed, program.bounds, 4, [12, 10, 8, 10]);
+  const authoredFloors = program.requiredFeatures.includes("hollow-tree-city") ? 5 : 4;
+  const scene = baseScene("settlement", settlementTitle, `${program.siteType} compiled as a ${program.morphology.era} ${program.morphology.roadPattern} settlement from terrain constraints, districts, hierarchical roads, frontage parcels and independently seeded buildings.`, context.request.seed, program.bounds, authoredFloors, program.requiredFeatures.includes("hollow-tree-city") ? [12, 10, 10, 10, 10] : [12, 10, 8, 10]);
   scene.archetype = archetype;
-  scene.floorLabels = ["地面/1F", "主要上层", "屋顶", "B1"];
+  scene.floorLabels = program.requiredFeatures.includes("hollow-tree-city")
+    ? ["根部/1F", "树干下层", "树干上层", "树冠", "根系档案库"]
+    : ["地面/1F", "主要上层", "屋顶", "B1"];
   const terrain = compileSettlementTerrain(program, context.request.prompt, context.rng.fork("settlement-terrain"));
   program.terrain.kind = terrain.summary.kind;
   program.terrain.buildableRatio = terrain.summary.buildableRatio;
@@ -388,16 +490,20 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   scene.siteProgram = summarizeSiteProgram(program);
   scene.terrainProgram = terrain.summary;
   const landDepth = program.siteType === "harbor-district" ? program.bounds.z - 8 : program.bounds.z;
-  const isFloating = context.sceneProgram?.morphology.includes("floating-islands") ?? false;
+  const isFloating = (context.sceneProgram?.morphology.includes("floating-islands") ?? false) || program.requiredFeatures.includes("salt-crystal-monastery");
+  const isHollowTree = program.requiredFeatures.includes("hollow-tree-city");
+  const isMangrovePort = program.requiredFeatures.includes("mangrove-smuggler-port");
   const isMountainMonastery = program.requiredFeatures.includes("mountain-monastery") || program.requiredFeatures.includes("hillside-district");
   const isFlooded = program.requiredFeatures.includes("flooded-site");
   const legacySpecialElevation = isFloating || isMountainMonastery;
-  const elevationAt = isFloating ? addFloatingIslandTerrain(scene, program.bounds.x, program.bounds.z) : isMountainMonastery ? addMountainTerraces(scene, program.bounds.x, program.bounds.z) : terrain.elevationAt;
+  const elevationAt = isFloating ? addFloatingIslandTerrain(scene, program.bounds.x, program.bounds.z, program.requiredFeatures.includes("salt-crystal-monastery")) : isMountainMonastery ? addMountainTerraces(scene, program.bounds.x, program.bounds.z) : terrain.elevationAt;
   if (!legacySpecialElevation) terrain.render(scene);
   else if (!isFloating) scene.primitives.push(box("site-terrain-base", 0, program.bounds.x / 2, 0, landDepth / 2, program.bounds.x, FLOOR_SLAB_METERS, landDepth, "earth", ["floor", "terrain", "site-program", `site:${program.siteType}`]));
+  if (isHollowTree) addHollowTreeCity(scene, program.bounds.x, program.bounds.z);
+  if (isMangrovePort) addMangroveSmugglerPort(scene, program.bounds.x, program.bounds.z);
   // Districts are planning ownership, not giant coloured floor decals. Their
   // identity is made legible by parcel use, landmarks and road hierarchy.
-  const semanticTerrain = ["river", "impact-crater", "caldera", "ice-crevasse", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind);
+  const semanticTerrain = ["river", "impact-crater", "caldera", "ice-crevasse", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind) || isFloating || isHollowTree || isMangrovePort;
   if (!semanticTerrain) addBlockAndParcelSurfaces(scene, program, elevationAt);
   if (!semanticTerrain) {
     for (const road of program.roads) scene.primitives.push(...roadPieces(road, legacySpecialElevation ? { ...terrain, elevationAt, surfaceAt: () => "ground" } : terrain));

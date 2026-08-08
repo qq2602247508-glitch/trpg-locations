@@ -55,6 +55,13 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   const hasWildernessBuilding = has(text, ["木屋", "小屋", "猎人屋", "cabin", "lodge", "hut", "cottage", "outpost"])
     && has(text, ["森林", "树林", "林间", "巨树", "树根", "山地", "河谷", "沼泽", "海岸", "forest", "woodland", "tree", "mountain", "valley", "swamp", "coast"]);
   if (hasWildernessBuilding) return { domain: "natural", primaryKind: "wilderness" };
+  const hasCompoundSettlement = has(text, [
+    "修道院群", "浮空修道院", "空心古树内部", "树内城市", "树上城市",
+    "红树林沼泽", "走私港村", "走私港", "港村",
+    "monastery cluster", "floating monastery", "hollow tree city",
+    "mangrove port", "smuggler port",
+  ]);
+  if (hasCompoundSettlement) return { domain: "settlement", primaryKind: "settlement" };
   const hasCompoundRoadSite = has(text, ["驿站", "road station", "coach stop"])
     && has(text, ["主路", "桥", "马厩", "收费岗", "仓库", "main road", "bridge", "stable", "toll", "warehouse"]);
   if (hasCompoundRoadSite) return { domain: "settlement", primaryKind: "settlement" };
@@ -63,7 +70,7 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   // A settlement is the parent site and named buildings are its children.
   // "港区有酒馆和神殿" must therefore plan a district, not collapse into
   // whichever child building noun appears last in the prompt.
-  const hasStrongSettlementSubject = has(text, ["城镇", "村庄", "村落", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇", "town", "village", "market village", "district", "harbor", "port town", "water city", "canal city", "tower city", "megastructure city", "settlement"])
+  const hasStrongSettlementSubject = has(text, ["城镇", "村庄", "村落", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "港村", "走私港", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇", "修道院群", "town", "village", "market village", "district", "harbor", "port town", "smuggler port", "water city", "canal city", "tower city", "megastructure city", "monastery cluster", "settlement"])
     || (has(text, ["工业区"]) && !has(text, ["废弃工业区", "工业遗址", "industrial ruin"]));
   const hasSettlementSubject = hasStrongSettlementSubject || (!hasBuildingSubject && has(text, ["城市", "city"]));
   if (hasSettlementSubject) return { domain: "settlement", primaryKind: "settlement" };

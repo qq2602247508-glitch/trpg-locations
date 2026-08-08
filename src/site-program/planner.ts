@@ -87,6 +87,9 @@ function requestedSiteFeatures(text: string): string[] {
   add("volcanic-settlement", ["火山口村", "火山村", "火山聚落", "破火山口聚落", "volcanic settlement", "volcano village", "caldera village"]);
   add("ice-crevasse-settlement", ["冰川裂隙", "冰川裂缝", "巨大裂隙", "冰隙聚落", "glacier crevasse", "crevasse settlement"]);
   add("underdark-settlement", ["幽暗地域村", "幽暗地域聚落", "地下聚落", "underdark village", "underdark settlement"]);
+  add("hollow-tree-city", ["空心古树", "古树内部", "树内城市", "树上城市", "hollow tree", "hollow-tree city"]);
+  add("mangrove-smuggler-port", ["红树林", "走私港", "港村", "红树林港", "mangrove", "smuggler port"]);
+  add("salt-crystal-monastery", ["盐晶", "盐晶洞窟", "浮空修道院", "修道院群", "salt crystal", "floating monastery", "monastery cluster"]);
   add("tower-city", ["巨塔城市", "巨型塔楼结构", "城市分布在巨型塔", "tower city", "megastructure city"]);
   add("bone-swamp-settlement", ["石化龙骨", "肋骨栈道", "骨架高台", "dragonbone swamp", "fossil ribs"]);
   add("airship-wreck-settlement", ["坠毁飞艇", "飞艇残骸", "残骸主梁", "crashed airship", "airship wreck"]);
@@ -132,7 +135,7 @@ function inferMorphology(text: string, siteType: SiteType, features: readonly st
           { id: "temple", kind: "sacred", point: { x: width * 0.78, z: depth * 0.2 } },
           { id: "works", kind: "industry", point: { x: width * 0.76, z: depth * 0.78 } },
         ];
-  return { era, growth, roadPattern, constraints: features.filter((feature) => ["water-city", "fantasy-harbor", "impact-crater-settlement", "hillside-district", "vertical-slum", "river-crossing"].includes(feature)), anchors };
+  return { era, growth, roadPattern, constraints: features.filter((feature) => ["water-city", "fantasy-harbor", "impact-crater-settlement", "hillside-district", "vertical-slum", "river-crossing", "hollow-tree-city", "mangrove-smuggler-port", "salt-crystal-monastery"].includes(feature)), anchors };
 }
 
 function roleSequence(siteType: SiteType, features: readonly string[]): readonly DistrictRole[] {

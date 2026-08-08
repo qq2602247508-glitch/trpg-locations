@@ -34,6 +34,29 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
   const text = normalized(prompt);
   const output: SemanticRequirement[] = [];
   const add = (id: string, phrase: string, tags: string[], importance: SemanticRequirement["importance"] = "major") => output.push({ id, sourcePhrase: phrase, requiredTags: tags, importance });
+  if (has(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) {
+    add("hollow-tree-shell", "空心古树承载结构", ["hollow-tree", "bark-wall"], "critical");
+    add("tree-spiral-street", "螺旋树干街道", ["spiral-tree-street", "vertical-route"], "critical");
+    add("tree-root-archive", "根系档案库", ["root-archive", "underground"], "major");
+    add("tree-canopy-platform", "树冠观测台", ["canopy-observatory", "high-ground"], "critical");
+    return output;
+  }
+  if (has(text, ["红树林", "走私港", "港村", "mangrove", "smuggler port"])) {
+    add("mangrove-core", "红树林潮汐地貌", ["mangrove", "tidal-channel"], "critical");
+    add("mangrove-boardwalk", "树根栈道", ["root-boardwalk", "standable"], "critical");
+    add("smuggler-dock", "沉船码头", ["smuggler-dock", "wreck-field"], "major");
+    add("underwater-entry", "水下秘密入口", ["underwater-entry", "portal"], "critical");
+    add("patrol-tower", "巡逻塔", ["patrol-tower", "high-ground"], "major");
+    return output;
+  }
+  if (has(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) {
+    add("salt-islands", "三层盐晶浮岛", ["salt-crystal", "floating-island"], "critical");
+    add("monastery-buildings", "修道院建筑群", ["shrine", "building"], "critical");
+    add("salt-bridges", "悬索桥", ["suspension-bridge", "vertical-route"], "critical");
+    add("salt-cavern-pool", "洞底潮池", ["cavern-tide-pool", "watercourse"], "major");
+    add("bell-tower", "钟塔", ["tower", "high-ground"], "major");
+    return output;
+  }
   if (domain === "forest") { add("forest-core", "森林", ["forest", "tree", "canopy"], "critical"); if (has(text, ["茂密", "封闭林冠", "dense", "closed canopy"])) add("dense-canopy", "封闭林冠", ["canopy", "tree-cluster"], "critical"); if (has(text, ["灌木", "林下", "undergrowth"])) add("undergrowth", "林下灌木", ["undergrowth"], "major"); if (has(text, ["空地", "clearing"])) add("clearings", "林间空地", ["clearing"], "major"); if (has(text, ["浅溪", "溪流", "stream"])) add("forest-stream", "浅溪", ["stream", "watercourse"], "major"); if (has(text, ["倒木", "fallen log"])) add("fallen-log", "倒木", ["fallen-log"], "major"); if (has(text, ["树冠战斗平台", "树冠平台", "canopy platform"])) add("canopy-platform", "树冠战斗平台", ["canopy-platform", "high-ground"], "critical"); }
   if (domain === "river") { add("river-core", "主河道", ["river", "watercourse"], "critical"); if (has(text, ["支流", "tributary"])) add("tributary", "支流", ["tributary"], "critical"); if (has(text, ["瀑布", "落差", "waterfall", "drop"])) add("waterfall", "瀑布落差", ["waterfall", "vertical-water"], "critical"); if (has(text, ["深潭", "deep pool"])) add("deep-pool", "深潭", ["deep-pool"], "major"); }
   if (domain === "volcanic") { add("volcano-core", "火山口", ["caldera", "lava"], "critical"); if (has(text, ["支流", "branch"])) add("lava-branches", "熔岩支流", ["lava-branch"], "critical"); if (has(text, ["黑曜石", "obsidian"])) add("obsidian", "黑曜石脊", ["obsidian-ridge"], "major"); if (has(text, ["玄武岩", "basalt"])) add("basalt", "玄武岩战术台地", ["basalt-platform", "high-ground"], "major"); }

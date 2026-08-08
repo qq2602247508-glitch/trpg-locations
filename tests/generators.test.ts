@@ -544,6 +544,32 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("composes unfamiliar settlements from parent terrain and independent building modules", () => {
+    const hollowTree = generateScene({ ...request("round16-hollow-tree-a", "medium", 0.62), prompt: "生长在一株巨大空心古树内部的魔法学者城市，有螺旋树干街道、枝干住宅、悬挂书库、树脂升降梯、根系档案库、树冠观测台和腐烂空洞危险区" }, "adaptive");
+    expect(hollowTree.title).toContain("Hollow-Heart");
+    expect(hasTag(hollowTree, "bark-wall")).toBe(true);
+    expect(hasTag(hollowTree, "spiral-tree-street")).toBe(true);
+    expect(hasTag(hollowTree, "root-archive")).toBe(true);
+    expect(hollowTree.buildingInstances?.length ?? 0).toBeGreaterThanOrEqual(8);
+
+    const mangrove = generateScene({ ...request("round16-mangrove-port-a", "medium", 0.62), prompt: "隐藏在红树林沼泽中的走私港村，有蜿蜒水道、树根栈道、吊脚仓库、伪装酒馆、沉船码头、巡逻塔和水下秘密入口" }, "adaptive");
+    expect(mangrove.title).toContain("Rootbound");
+    expect(hasTag(mangrove, "tidal-channel")).toBe(true);
+    expect(hasTag(mangrove, "root-boardwalk")).toBe(true);
+    expect(hasTag(mangrove, "underwater-entry")).toBe(true);
+    expect(mangrove.buildingInstances?.some((building) => building.archetype === "warehouse")).toBe(true);
+
+    const salt = generateScene({ ...request("round16-salt-monastery-a", "medium", 0.62), prompt: "漂浮在盐晶洞窟上方的修道院群，有三层盐晶浮岛、礼拜堂、僧侣居室、钟塔、悬索桥、盐雾花园和洞底潮池" }, "adaptive");
+    expect(salt.title).toContain("Salt-Crystal");
+    expect(hasTag(salt, "salt-crystal")).toBe(true);
+    expect(hasTag(salt, "cavern-tide-pool")).toBe(true);
+    expect(hasTag(salt, "suspension-bridge")).toBe(true);
+    expect(new Set(salt.primitives.filter((primitive) => primitive.tags?.includes("floating-island") && primitive.id.endsWith("-top")).map((primitive) => Math.round(primitive.position.y * 100))).size).toBe(3);
+    expect(hollowTree.diagnostics.valid).toBe(true);
+    expect(mangrove.diagnostics.valid).toBe(true);
+    expect(salt.diagnostics.valid).toBe(true);
+  });
+
   it("propagates requested density into settlement building count and adds city defenses", () => {
     const sparse = generateScene({ ...request("settlement-density", "large", 0), prompt: "大型城市街区" }, "settlement");
     const dense = generateScene({ ...request("settlement-density", "large", 1), prompt: "大型城市街区" }, "settlement");

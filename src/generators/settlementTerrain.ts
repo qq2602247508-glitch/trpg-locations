@@ -34,6 +34,9 @@ function terrainKind(program: SiteProgram, prompt: string): TerrainProgramSummar
   if (program.requiredFeatures.includes("volcanic-settlement") || includesAny(text, ["火山口村", "火山聚落", "volcanic settlement", "caldera village"])) return "caldera";
   if (program.requiredFeatures.includes("ice-crevasse-settlement") || includesAny(text, ["冰川裂隙", "冰川裂缝", "巨大裂隙", "冰隙聚落", "glacier crevasse", "crevasse settlement"])) return "ice-crevasse";
   if (program.requiredFeatures.includes("underdark-settlement") || includesAny(text, ["幽暗地域", "underdark", "地下聚落"])) return "underdark";
+  if (program.requiredFeatures.includes("hollow-tree-city") || includesAny(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) return "megastructure";
+  if (program.requiredFeatures.includes("mangrove-smuggler-port") || includesAny(text, ["红树林", "走私港", "港村", "mangrove", "smuggler port"])) return "swamp-bone";
+  if (program.requiredFeatures.includes("salt-crystal-monastery") || includesAny(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) return "megastructure";
   if (program.requiredFeatures.includes("tower-city") || includesAny(text, ["巨型塔楼结构", "巨塔城市", "tower city", "megastructure city"])) return "megastructure";
   if (program.requiredFeatures.includes("vertical-slum") || includesAny(text, ["桥墩之间", "垂直贫民", "bridge-pier settlement"])) return "bridge-megastructure";
   if (program.requiredFeatures.includes("coastal-cliff") || includesAny(text, ["海崖港镇", "分层海崖", "sea-cliff port", "cliff port"])) return "coastal-cliff";
@@ -83,6 +86,9 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
   const megaCx = width / 2;
   const megaCz = depth / 2;
   const megaRadius = Math.min(width, depth) * 0.42;
+  const isHollowTree = program.requiredFeatures.includes("hollow-tree-city");
+  const isMangrovePort = program.requiredFeatures.includes("mangrove-smuggler-port");
+  const isSaltCrystal = program.requiredFeatures.includes("salt-crystal-monastery");
   const cells: TerrainCell[] = [];
   const indexOf = (x: number, z: number): number => Math.max(0, Math.min(depth - 1, Math.floor(z))) * width + Math.max(0, Math.min(width - 1, Math.floor(x)));
 
@@ -235,12 +241,29 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
       }
     } else if (kind === "megastructure") {
       const radial = Math.hypot(x + 0.5 - megaCx, z + 0.5 - megaCz);
-      if (radial > megaRadius) {
+      if (isSaltCrystal) {
+        const islands = [
+          { x: width * 0.22, z: depth * 0.68, rx: width * 0.16, rz: depth * 0.18, y: 0 },
+          { x: width * 0.52, z: depth * 0.3, rx: width * 0.15, rz: depth * 0.16, y: 25 },
+          { x: width * 0.82, z: depth * 0.64, rx: width * 0.14, rz: depth * 0.15, y: 50 },
+        ];
+        const island = islands.find((candidate) => ((x + 0.5 - candidate.x) / candidate.rx) ** 2 + ((z + 0.5 - candidate.z) / candidate.rz) ** 2 < 1);
+        if (!island) {
+          surface = "void"; buildable = false; standable = false; hazard = true;
+        } else {
+          const edgeNoise = Math.sin((x + z) * 0.55 + phase) * 0.08;
+          elevationFeet = island.y + (edgeNoise > 0.02 ? 5 : 0);
+          surface = "platform";
+          buildable = true;
+        }
+      } else if (radial > megaRadius) {
         surface = "void"; buildable = false; standable = false;
       } else {
-        elevationFeet = radial < megaRadius * 0.3 ? 60 : radial < megaRadius * 0.56 ? 40 : radial < megaRadius * 0.78 ? 20 : 0;
+        elevationFeet = isHollowTree
+          ? radial < megaRadius * 0.26 ? 55 : radial < megaRadius * 0.52 ? 35 : radial < megaRadius * 0.78 ? 15 : 0
+          : radial < megaRadius * 0.3 ? 60 : radial < megaRadius * 0.56 ? 40 : radial < megaRadius * 0.78 ? 20 : 0;
         surface = "platform";
-        buildable = radial > megaRadius * 0.18;
+        buildable = isHollowTree ? radial > megaRadius * 0.12 : radial > megaRadius * 0.18;
       }
     } else {
       const rolling = Math.sin(x * 0.12 + phase) + Math.cos(z * 0.15 - phase * 0.4);
@@ -285,6 +308,17 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
     surfaceAt: (x, z) => cellAt(x, z).surface,
     placementFor(index, total, requested, clearance = 0) {
       if (kind === "megastructure") {
+        if (isSaltCrystal) {
+          const islands = [
+            { x: width * 0.22, z: depth * 0.68, y: 0 },
+            { x: width * 0.52, z: depth * 0.3, y: 25 },
+            { x: width * 0.82, z: depth * 0.64, y: 50 },
+          ];
+          const island = islands[index % islands.length]!;
+          const angle = phase + Math.floor(index / islands.length) * 1.91;
+          const radius = 2.4 + (index % 3) * 1.1;
+          return { x: island.x + Math.cos(angle) * radius, z: island.z + Math.sin(angle) * radius, elevationFeet: island.y };
+        }
         const ring = index % 3;
         const radii = [megaRadius * 0.69, megaRadius * 0.47, megaRadius * 0.25];
         const countOnRing = Math.max(1, Math.ceil((total - ring) / 3));
@@ -520,7 +554,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           scene.primitives.push(primitive(`settlement-fungus-${index}`, "cone", 0, x, feetToMeters(cellAt(x, z).elevationFeet), z, feetToMeters(1.2 + index % 3), feetToMeters(5 + index % 4), feetToMeters(1.2 + index % 3), index % 3 === 0 ? "warmLight" : "moss", ["underdark", "fungal-forest", "cover", "terrain-program"]));
         }
       }
-      if (kind === "megastructure") {
+      if (kind === "megastructure" && !isHollowTree && !isSaltCrystal) {
         scene.primitives.push(
           primitive("megastructure-central-core", "cylinder", 0, megaCx, feetToMeters(-30), megaCz, megaRadius * 0.32 * 1.524, feetToMeters(115), megaRadius * 0.32 * 1.524, "darkStone", ["megastructure", "tower-core", "support", "vertical-city", "terrain-program"]),
           primitive("megastructure-lower-ring", "cylinder", 0, megaCx, feetToMeters(0), megaCz, megaRadius * 1.95 * 1.524, FLOOR_SLAB_METERS, megaRadius * 1.95 * 1.524, "darkStone", ["floor", "platform", "standable", "megastructure", "lower-ring", "terrain-program"]),
