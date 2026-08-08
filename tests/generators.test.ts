@@ -558,6 +558,15 @@ describe("scene generators", () => {
     expect(hasTag(mangrove, "root-boardwalk")).toBe(true);
     expect(hasTag(mangrove, "underwater-entry")).toBe(true);
     expect(mangrove.buildingInstances?.some((building) => building.archetype === "warehouse")).toBe(true);
+    expect(mangrove.primitives.some((primitive) => primitive.id.startsWith("site-harbor-water") || primitive.id.startsWith("harbor-dock-"))).toBe(false);
+    expect(mangrove.primitives.filter((primitive) => primitive.id.startsWith("mangrove-root-boardwalk")).every((primitive) => {
+      const rotation = primitive.rotationY ?? 0;
+      const quarterTurns = Math.round(rotation / (Math.PI / 2));
+      return Math.abs(rotation - quarterTurns * (Math.PI / 2)) < 1e-6;
+    })).toBe(true);
+    expect(hasTag(mangrove, "stilt-foundation")).toBe(true);
+    expect(hasTag(mangrove, "stilt-stair")).toBe(true);
+    expect(new Set(mangrove.buildingInstances?.map((building) => Math.round((building.baseYMeters ?? 0) * 100))).size).toBeGreaterThanOrEqual(3);
 
     const salt = generateScene({ ...request("round16-salt-monastery-a", "medium", 0.62), prompt: "漂浮在盐晶洞窟上方的修道院群，有三层盐晶浮岛、礼拜堂、僧侣居室、钟塔、悬索桥、盐雾花园和洞底潮池" }, "adaptive");
     expect(salt.title).toContain("Salt-Crystal");

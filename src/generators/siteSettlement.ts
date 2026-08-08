@@ -55,6 +55,50 @@ function addOpenSpaces(scene: GeneratedScene, program: ReturnType<typeof planSet
   }
 }
 
+function orthogonalRelay(from: { x: number; z: number }, to: { x: number; z: number }, index: number): { x: number; z: number } {
+  // Parent-terrain access is a constructed boardwalk, not a sightline-spanning
+  // road.  Split diagonal links into two short orthogonal legs so the top view
+  // reads as local circulation around water/root obstacles.
+  const xFirst = (index + Math.round((from.x + to.z) * 10)) % 2 === 0;
+  return xFirst ? { x: to.x, z: from.z } : { x: from.x, z: to.z };
+}
+
+function addOrthogonalAccess(
+  scene: GeneratedScene,
+  id: string,
+  from: { x: number; z: number; y: number },
+  to: { x: number; z: number; y: number },
+  index: number,
+  width: number,
+  material: "wood" | "stone" | "earth" = "wood",
+  tags: string[] = [],
+): { x: number; z: number; y: number }[] {
+  const relay = orthogonalRelay(from, to, index);
+  const points = [
+    from,
+    { ...relay, y: from.y },
+    to,
+  ];
+  for (let segment = 1; segment < points.length; segment += 1) {
+    const previous = points[segment - 1]!;
+    const current = points[segment]!;
+    if (Math.hypot(current.x - previous.x, current.z - previous.z) < 0.05) continue;
+    scene.primitives.push(corridor(
+      `${id}-${segment}`,
+      0,
+      previous.x,
+      previous.z,
+      current.x,
+      current.z,
+      (previous.y + current.y) / 2,
+      width,
+      material,
+      [...tags, "orthogonal-relay"],
+    ));
+  }
+  return points;
+}
+
 function addFloatingIslandTerrain(scene: GeneratedScene, width: number, depth: number, saltCrystal = false): (x: number, z: number) => number {
   const islands = [
     { x: width * 0.2, z: depth * 0.7, y: 0, w: width * 0.31, d: depth * 0.34 },
@@ -238,18 +282,37 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
     [[width * 0.68, depth * 0.2], [width * 0.82, depth * 0.1], [width * 0.95, depth * 0.23], [width * 0.87, depth * 0.4], [width * 0.71, depth * 0.34], [width * 0.68, depth * 0.2]],
   ] as const;
   for (const [index, points] of boardwalks.entries()) {
+    const walkPoints: Array<{ x: number; z: number }> = [{ x: points[0]![0], z: points[0]![1] }];
     for (let segment = 1; segment < points.length; segment += 1) {
-      const from = points[segment - 1]!;
-      const to = points[segment]!;
-      scene.primitives.push(corridor(`mangrove-root-boardwalk-${index + 1}-${segment}`, 0, from[0], from[1], to[0], to[1], FLOOR_SLAB_METERS + 0.7, 1.2, "wood", ["mangrove", "root-boardwalk", "standable", "site-program"]));
+      const from = walkPoints[walkPoints.length - 1]!;
+      const to = { x: points[segment]![0], z: points[segment]![1] };
+      const relay = orthogonalRelay(from, to, index + segment);
+      // Keep the authored loop shape, but express every long turn as short
+      // supported legs. This prevents a single diagonal boardwalk from
+      // visually becoming the settlement's main axis in the top view.
+      walkPoints.push(relay, to);
     }
-    scene.routes.push(createRoute(`mangrove-boardwalk-route-${index + 1}`, "alternate", points.map(([x, z]) => ({ x, z, y: FLOOR_SLAB_METERS + 0.7 })), { purpose: "service", traffic: 0.58, schedule: "all" }));
+    for (let segment = 1; segment < walkPoints.length; segment += 1) {
+      const from = walkPoints[segment - 1]!;
+      const to = walkPoints[segment]!;
+      if (Math.hypot(to.x - from.x, to.z - from.z) < 0.05) continue;
+      scene.primitives.push(corridor(`mangrove-root-boardwalk-${index + 1}-${segment}`, 0, from.x, from.z, to.x, to.z, FLOOR_SLAB_METERS + 0.7, 1.2, "wood", ["mangrove", "root-boardwalk", "standable", "site-program", "orthogonal-relay"]));
+    }
+    scene.routes.push(createRoute(`mangrove-boardwalk-route-${index + 1}`, "alternate", walkPoints.map(({ x, z }) => ({ x, z, y: FLOOR_SLAB_METERS + 0.7 })), { purpose: "service", traffic: 0.58, schedule: "all" }));
   }
-  scene.primitives.push(corridor("mangrove-ferry-bridge-west", 0, width * 0.34, depth * 0.68, width * 0.28, depth * 0.4, FLOOR_SLAB_METERS + 0.7, 0.9, "wood", ["mangrove", "root-boardwalk", "bridge", "standable", "site-program"]));
-  scene.routes.push(createRoute("mangrove-ferry-route", "alternate", [
-    { x: width * 0.34, z: depth * 0.68, y: FLOOR_SLAB_METERS + 0.7 },
-    { x: width * 0.28, z: depth * 0.4, y: FLOOR_SLAB_METERS + 0.7 },
-  ], { purpose: "movement", traffic: 0.36, schedule: "all" }));
+  const ferryFrom = { x: width * 0.34, z: depth * 0.68 };
+  const ferryTo = { x: width * 0.28, z: depth * 0.4 };
+  const ferryPoints = addOrthogonalAccess(
+    scene,
+    "mangrove-ferry-bridge-west",
+    { ...ferryFrom, y: FLOOR_SLAB_METERS + 0.7 },
+    { ...ferryTo, y: FLOOR_SLAB_METERS + 0.7 },
+    17,
+    0.9,
+    "wood",
+    ["mangrove", "root-boardwalk", "bridge", "standable", "site-program"],
+  );
+  scene.routes.push(createRoute("mangrove-ferry-route", "alternate", ferryPoints, { purpose: "movement", traffic: 0.36, schedule: "all" }));
   for (let index = 0; index < 30; index += 1) {
     const x = width * (0.1 + ((index * 0.173) % 0.8));
     const z = depth * (0.12 + ((index * 0.287) % 0.74));
@@ -597,7 +660,11 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     addRoadJunctions(scene, program, elevationAt);
   }
   if (!semanticTerrain) addOpenSpaces(scene, program, elevationAt);
-  if (program.siteType === "harbor-district" && terrain.summary.kind !== "coastal-cliff") addHarbor(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
+  // A mangrove smuggler port owns its docks through tidal nodes and root
+  // boardwalks. Do not append the generic straight shoreline docks here:
+  // they create six diagonal city-scale axes that erase the parent wetland
+  // grammar and make the port look like a normal modern harbor.
+  if (program.siteType === "harbor-district" && terrain.summary.kind !== "coastal-cliff" && !isMangrovePort) addHarbor(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
   if (program.siteType === "village" && !semanticTerrain) addVillageLandmarks(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
   if (!isFloating && !semanticTerrain && (program.siteType === "city-district" || program.siteType === "town")) addUrbanDefences(scene, program.bounds.x, program.bounds.z);
   if (program.siteType === "mining-settlement" && !semanticTerrain) {
@@ -636,6 +703,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     [program.bounds.x * 0.78, program.bounds.z * 0.42],
     [program.bounds.x * 0.88, program.bounds.z * 0.56],
   ] as const;
+  const mangroveElevationFeet = [5, 10, 5, 15, 10, 5] as const;
   const mangroveRootWaypoints = [
     [program.bounds.x * 0.1, program.bounds.z * 0.18],
     [program.bounds.x * 0.24, program.bounds.z * 0.31],
@@ -658,6 +726,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     const mangrovePlacement: { x: number; z: number; elevationFeet?: number } | undefined = mangroveNode ? {
       x: mangroveNode[0] + mangroveSide * (2.7 + (adaptedBuildings % 3) * 0.8),
       z: mangroveNode[1] + Math.sin(adaptedBuildings * 1.7) * 1.2,
+      elevationFeet: mangroveElevationFeet[adaptedBuildings % mangroveElevationFeet.length],
     } : undefined;
     const placement = mangrovePlacement ?? semanticPlacement ?? nearestBuildable(parcel.center.x, parcel.center.z, clearance);
     if (!placement) continue;
@@ -679,6 +748,21 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       baseY: siteElevation + FLOOR_SLAB_METERS,
       state: parcel.state,
     }, context.rng.fork(parcel.buildingSeed));
+    if (isMangrovePort && siteElevation > 0.2) {
+      for (const [pierIndex, dx, dz] of [[0, -0.31, -0.31], [1, 0.31, -0.31], [2, -0.31, 0.31], [3, 0.31, 0.31]] as const) {
+        scene.primitives.push(cylinder(
+          `mangrove-building-pier-${parcel.id}-${pierIndex + 1}`,
+          0,
+          placement.x + parcel.buildingSize.x * dx,
+          0,
+          placement.z + parcel.buildingSize.z * dz,
+          0.48,
+          siteElevation + FLOOR_SLAB_METERS,
+          "wood",
+          ["mangrove", "stilt-foundation", "support", `parcel:${parcel.id}`, "site-program"],
+        ));
+      }
+    }
     adaptedBuildings += 1;
     const useParentRootAccess = isMangrovePort && (adaptedBuildings < 3 || (parcel.lod === "full-interior" && adaptedBuildings < 5));
     if (useParentRootAccess) {
@@ -687,21 +771,51 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
         const candidateDistance = Math.hypot(placement.x - candidate[0], placement.z - candidate[1]);
         return candidateDistance < bestDistance ? candidate : best;
       }, mangroveRootWaypoints[0]!);
-      const midpoint = {
-        x: placement.x + Math.sin(adaptedBuildings * 1.4) * 0.8,
-        z: rootAnchor[1] + Math.cos(adaptedBuildings * 1.4) * 0.8,
-      };
       const accessY = siteElevation + FLOOR_SLAB_METERS + 0.06;
+      const boardwalkY = FLOOR_SLAB_METERS + 0.7;
       const accessTags = ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted", "root-boardwalk"];
-      scene.primitives.push(
-        corridor(`parcel-access-${parcel.id}-root`, 0, rootAnchor[0], rootAnchor[1], midpoint.x, midpoint.z, FLOOR_SLAB_METERS + 0.7, 0.72, "wood", accessTags),
-        corridor(`parcel-access-${parcel.id}-door`, 0, midpoint.x, midpoint.z, placement.x, placement.z, accessY, 0.72, "wood", accessTags),
-      );
-      scene.routes.push(createRoute(`parcel-root-route-${parcel.id}`, "alternate", [
-        { x: rootAnchor[0], z: rootAnchor[1], y: FLOOR_SLAB_METERS + 0.7 },
-        { x: midpoint.x, z: midpoint.z, y: FLOOR_SLAB_METERS + 0.7 },
-        { x: placement.x, z: placement.z, y: accessY },
-      ], { purpose: "service", traffic: 0.46, schedule: "all" }));
+      let routePoints: { x: number; z: number; y: number }[];
+      if (accessY > boardwalkY + 0.3) {
+        const rootDx = rootAnchor[0] - placement.x;
+        const rootDz = rootAnchor[1] - placement.z;
+        const stairRun = Math.max(3.2, Math.min(6.5, (accessY - boardwalkY) / feetToMeters(1.2)));
+        const stairBottom = Math.abs(rootDx) >= Math.abs(rootDz)
+          ? { x: placement.x + Math.sign(rootDx || 1) * stairRun, z: placement.z, y: boardwalkY }
+          : { x: placement.x, z: placement.z + Math.sign(rootDz || 1) * stairRun, y: boardwalkY };
+        const rootLeg = addOrthogonalAccess(
+          scene,
+          `parcel-access-${parcel.id}-root`,
+          { x: rootAnchor[0], z: rootAnchor[1], y: boardwalkY },
+          stairBottom,
+          adaptedBuildings,
+          0.72,
+          "wood",
+          accessTags,
+        );
+        const climb = stairConnection(
+          `parcel-access-${parcel.id}-stair`,
+          0,
+          { xCells: stairBottom.x, zCells: stairBottom.z, yMeters: boardwalkY },
+          { xCells: placement.x, zCells: placement.z, yMeters: accessY },
+          0.82,
+          "wood",
+          [...accessTags, "stilt-stair"],
+        );
+        scene.primitives.push(climb.primitive);
+        routePoints = [...rootLeg, { x: climb.top.xCells, z: climb.top.zCells, y: climb.top.yMeters }];
+      } else {
+        routePoints = addOrthogonalAccess(
+          scene,
+          `parcel-access-${parcel.id}-root`,
+          { x: rootAnchor[0], z: rootAnchor[1], y: boardwalkY },
+          { x: placement.x, z: placement.z, y: accessY },
+          adaptedBuildings,
+          0.72,
+          "wood",
+          accessTags,
+        );
+      }
+      scene.routes.push(createRoute(`parcel-root-route-${parcel.id}`, "alternate", routePoints, { purpose: "service", traffic: 0.46, schedule: "all" }));
     } else {
       scene.primitives.push(corridor(
         `parcel-access-${parcel.id}`,

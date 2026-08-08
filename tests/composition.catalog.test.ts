@@ -41,4 +41,15 @@ describe("five-layer composition catalog", () => {
     expect(report.score).toBeGreaterThan(70);
     expect(scene.compositionProgram?.semanticCoverage?.score).toBe(report.score);
   });
+
+  it("selects compound motifs by prompt instead of loading every motif in a domain", () => {
+    const mangrove = compileSceneComposition({ prompt: "红树林走私港村", seed: "motif-mangrove", size: "medium", density: 0.62 });
+    expect(mangrove.motifIds).toContain("motif.mangrove-smuggler-port");
+    expect(mangrove.motifIds).not.toContain("motif.hollow-tree-city");
+    expect(new Set(mangrove.motifIds).size).toBe(mangrove.motifIds.length);
+
+    const hollowTree = compileSceneComposition({ prompt: "空心古树内部的学者城市", seed: "motif-tree", size: "medium", density: 0.62 });
+    expect(hollowTree.motifIds).toContain("motif.hollow-tree-city");
+    expect(hollowTree.motifIds).not.toContain("motif.mangrove-smuggler-port");
+  });
 });

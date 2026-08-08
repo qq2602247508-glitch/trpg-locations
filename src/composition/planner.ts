@@ -80,16 +80,25 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
 export function compileSceneComposition(request: GenerationRequest, source: SceneCompositionProgram["source"] = "local", retrievedCapabilityIds: string[] = []): SceneCompositionProgram {
   const domain = domainFor(request.prompt);
   const grammarId = COMPOSITION_GRAMMARS.find((entry) => entry.domain === domain)?.id ?? "grammar.generic-v1";
-  const motifIds = DESIGNER_MOTIFS.filter((entry) => entry.domain === domain).map((entry) => entry.id);
-  if (has(normalized(request.prompt), ["木屋", "小屋", "cabin", "lodge"])) motifIds.push("motif.embedded-building");
   const text = normalized(request.prompt);
+  const motifIds: string[] = [];
+  const domainMotif = {
+    forest: "motif.closed-canopy-clearings",
+    river: "motif.waterfall-valley",
+    volcanic: "motif.broken-caldera",
+    crater: "motif.impact-basin",
+    rift: "motif.rift-two-banks",
+  }[domain];
+  if (domainMotif) motifIds.push(domainMotif);
+  if (has(text, ["木屋", "小屋", "cabin", "lodge"])) motifIds.push("motif.embedded-building");
   if (has(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) motifIds.push("motif.hollow-tree-city");
   if (has(text, ["红树林", "走私港", "港村", "mangrove", "smuggler port"])) motifIds.push("motif.mangrove-smuggler-port");
   if (has(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) motifIds.push("motif.salt-crystal-monastery");
-  const moduleIds = new Set(motifIds.flatMap((id) => DESIGNER_MOTIFS.find((entry) => entry.id === id)?.moduleIds ?? []));
+  const selectedMotifIds = [...new Set(motifIds)];
+  const moduleIds = new Set(selectedMotifIds.flatMap((id) => DESIGNER_MOTIFS.find((entry) => entry.id === id)?.moduleIds ?? []));
   const capabilityIds = [...new Set([...FUNCTIONAL_MODULES.filter((entry) => moduleIds.has(entry.id)).flatMap((entry) => entry.capabilityIds), ...retrievedCapabilityIds])].filter((id) => CAPABILITY_CARDS.some((entry) => entry.id === id));
   const root = request.seed;
-  return { version: 1, source, primaryDomain: domain, grammarId, motifIds, capabilityIds, seeds: { root, macro: `${root}/macro`, meso: `${root}/meso`, tactical: `${root}/tactical`, building: `${root}/building`, ecology: `${root}/ecology`, micro: `${root}/micro`, style: `${root}/style` }, density: densityProfile(domain, request.density), style: styleFor(request.prompt, domain), requirements: semanticRequirements(request.prompt, domain) };
+  return { version: 1, source, primaryDomain: domain, grammarId, motifIds: selectedMotifIds, capabilityIds, seeds: { root, macro: `${root}/macro`, meso: `${root}/meso`, tactical: `${root}/tactical`, building: `${root}/building`, ecology: `${root}/ecology`, micro: `${root}/micro`, style: `${root}/style` }, density: densityProfile(domain, request.density), style: styleFor(request.prompt, domain), requirements: semanticRequirements(request.prompt, domain) };
 }
 
 export function auditSemanticCoverage(scene: GeneratedScene, program: SceneCompositionProgram): SemanticCoverageReport {

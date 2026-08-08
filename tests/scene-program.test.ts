@@ -64,6 +64,17 @@ describe("SceneProgram v1", () => {
     expect(first.regions.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("describes compound parent terrain in the local SceneProgram", () => {
+    const mangrove = planSceneProgramLocally("红树林走私港村，有潮汐水道和树根栈道", "adaptive");
+    expect(mangrove.domain).toBe("settlement");
+    expect(mangrove.morphology).toEqual(expect.arrayContaining(["channel-cut", "wetland-pools"]));
+    expect(mangrove.coverage).toEqual(expect.arrayContaining(["woodland", "dense"]));
+
+    const salt = planSceneProgramLocally("三层盐晶浮空修道院群", "adaptive");
+    expect(salt.morphology).toEqual(expect.arrayContaining(["floating-islands", "vertical-stack"]));
+    expect(salt.coverage).toContain("ice");
+  });
+
   it.each([
     ["陨石坑", "impact-crater", "impact-crater"],
     ["D&D 龙骨埋葬地", "burial-ground", "dragon-spine"],

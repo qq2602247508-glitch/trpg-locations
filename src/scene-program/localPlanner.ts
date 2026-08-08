@@ -89,6 +89,18 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
 function inferOperators(text: string): { morphology: MorphologyOperator[]; coverage: CoverageOperator[] } {
   const morphology: MorphologyOperator[] = [];
   const coverage: CoverageOperator[] = [];
+  if (has(text, ["红树林", "走私港", "港村", "mangrove", "smuggler port"])) {
+    morphology.push("channel-cut", "wetland-pools");
+    coverage.push("woodland", "dense");
+  }
+  if (has(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) {
+    morphology.push("vertical-stack");
+    coverage.push("woodland", "dense");
+  }
+  if (has(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) {
+    morphology.push("floating-islands", "vertical-stack");
+    coverage.push("ice");
+  }
   if (has(text, ["陨石", "流星", "撞击坑", "meteor", "impact crater"])) morphology.push("impact-crater", "radial-fractures", "basin");
   if (has(text, ["火山", "caldera", "volcano"])) morphology.push("caldera");
   if (has(text, ["熔岩", "岩浆", "lava", "magma", "阿弗纳斯", "地狱"])) morphology.push("lava-flow");
