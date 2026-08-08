@@ -632,6 +632,17 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     [program.bounds.x * 0.78, program.bounds.z * 0.42],
     [program.bounds.x * 0.88, program.bounds.z * 0.56],
   ] as const;
+  const mangroveRootWaypoints = [
+    [program.bounds.x * 0.1, program.bounds.z * 0.18],
+    [program.bounds.x * 0.24, program.bounds.z * 0.31],
+    [program.bounds.x * 0.36, program.bounds.z * 0.47],
+    [program.bounds.x * 0.39, program.bounds.z * 0.67],
+    [program.bounds.x * 0.54, program.bounds.z * 0.52],
+    [program.bounds.x * 0.7, program.bounds.z * 0.34],
+    [program.bounds.x * 0.66, program.bounds.z * 0.18],
+    [program.bounds.x * 0.78, program.bounds.z * 0.31],
+    [program.bounds.x * 0.91, program.bounds.z * 0.51],
+  ] as const;
   for (const parcel of program.parcels) {
     if (terrain.summary.kind === "bridge-megastructure" && adaptedBuildings >= 9) continue;
     if (isMangrovePort && adaptedBuildings >= Math.max(12, Math.round(program.parcels.length * 0.68))) continue;
@@ -665,18 +676,41 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       state: parcel.state,
     }, context.rng.fork(parcel.buildingSeed));
     adaptedBuildings += 1;
-    scene.primitives.push(corridor(
-      `parcel-access-${parcel.id}`,
-      0,
-      placement.x - (isMangrovePort ? 0.8 : 1.4),
-      placement.z,
-      placement.x,
-      placement.z,
-      siteElevation + FLOOR_SLAB_METERS + 0.06,
-      isMangrovePort ? 0.72 : parcel.lod === "full-interior" ? 1.4 : 1,
-      isMangrovePort ? "wood" : program.siteType === "village" ? "earth" : "stone",
-      ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted", ...(isMangrovePort ? ["root-boardwalk"] : [])],
-    ));
+    if (isMangrovePort) {
+      const rootAnchor = mangroveRootWaypoints.reduce((best, candidate) => {
+        const bestDistance = Math.hypot(placement.x - best[0], placement.z - best[1]);
+        const candidateDistance = Math.hypot(placement.x - candidate[0], placement.z - candidate[1]);
+        return candidateDistance < bestDistance ? candidate : best;
+      }, mangroveRootWaypoints[0]!);
+      const midpoint = {
+        x: (rootAnchor[0] + placement.x) / 2 + Math.sin(adaptedBuildings * 1.4) * 1.2,
+        z: (rootAnchor[1] + placement.z) / 2 + Math.cos(adaptedBuildings * 1.4) * 1.2,
+      };
+      const accessY = siteElevation + FLOOR_SLAB_METERS + 0.06;
+      const accessTags = ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted", "root-boardwalk"];
+      scene.primitives.push(
+        corridor(`parcel-access-${parcel.id}-root`, 0, rootAnchor[0], rootAnchor[1], midpoint.x, midpoint.z, FLOOR_SLAB_METERS + 0.7, 0.72, "wood", accessTags),
+        corridor(`parcel-access-${parcel.id}-door`, 0, midpoint.x, midpoint.z, placement.x, placement.z, accessY, 0.72, "wood", accessTags),
+      );
+      scene.routes.push(createRoute(`parcel-root-route-${parcel.id}`, "alternate", [
+        { x: rootAnchor[0], z: rootAnchor[1], y: FLOOR_SLAB_METERS + 0.7 },
+        { x: midpoint.x, z: midpoint.z, y: FLOOR_SLAB_METERS + 0.7 },
+        { x: placement.x, z: placement.z, y: accessY },
+      ], { purpose: "service", traffic: 0.46, schedule: "all" }));
+    } else {
+      scene.primitives.push(corridor(
+        `parcel-access-${parcel.id}`,
+        0,
+        placement.x - 1.4,
+        placement.z,
+        placement.x,
+        placement.z,
+        siteElevation + FLOOR_SLAB_METERS + 0.06,
+        parcel.lod === "full-interior" ? 1.4 : 1,
+        program.siteType === "village" ? "earth" : "stone",
+        ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted"],
+      ));
+    }
     if (isFlooded) {
       for (const [pierIndex, dx, dz] of [[0, -0.36, -0.36], [1, 0.36, -0.36], [2, -0.36, 0.36], [3, 0.36, 0.36]] as const) scene.primitives.push(cylinder(`flood-pier-${parcel.id}-${pierIndex}`, 0, parcel.center.x + parcel.size.x * dx, 0, parcel.center.z + parcel.size.z * dz, 0.55, siteElevation, "wood", ["stilt-foundation", "flooded-site", "site-program"]));
       scene.primitives.push(stairs(`flood-access-stair-${parcel.id}`, 0, parcel.entrance.x, 0, parcel.entrance.z, 1.2, siteElevation, 3.8, "wood", ["flooded-site", "vertical-opening", "site-program"], parcel.rotationY));
