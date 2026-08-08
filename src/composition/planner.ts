@@ -26,8 +26,19 @@ function densityProfile(domain: string, value: number): DomainDensityProfile {
 function styleFor(prompt: string, domain: string): StyleProgram {
   const text = normalized(prompt);
   const era = has(text, ["1920", "现代", "modern", "工业", "industrial"]) ? "historic" : has(text, ["d&d", "法师", "魔法", "中世纪", "medieval", "fantasy"]) ? "fantasy-medieval" : "timeless";
-  const materialFamily = domain === "volcanic" ? ["basalt", "obsidian", "lava"] : domain === "forest" ? ["wood", "moss", "earth", "stone"] : domain === "river" ? ["water", "rock", "earth", "moss"] : ["rock", "earth"];
-  return { era, climate: has(text, ["冰", "glacier", "snow"]) ? "cold" : domain === "volcanic" ? "hot-dry" : domain === "river" || domain === "forest" ? "temperate-wet" : "neutral", materialFamily, paletteTags: materialFamily, silhouetteTags: domain === "forest" ? ["layered-canopy", "irregular-clearings"] : domain === "river" ? ["incised-valley", "descending-water"] : domain === "volcanic" ? ["broken-rim", "radial-fractures"] : ["broken-rim"], forbiddenTags: domain === "volcanic" ? ["living-tree", "lush-grass"] : [] };
+  const materialFamily = has(text, ["盐晶", "salt crystal"]) ? ["salt-crystal", "ice", "rock", "water"]
+    : has(text, ["红树林", "mangrove"]) ? ["mangrove", "wood", "mud", "water"]
+      : has(text, ["空心古树", "古树内部", "hollow tree"]) ? ["bark", "wood", "root", "moss"]
+        : domain === "volcanic" ? ["basalt", "obsidian", "lava"] : domain === "forest" ? ["wood", "moss", "earth", "stone"] : domain === "river" ? ["water", "rock", "earth", "moss"] : ["rock", "earth"];
+  const climate = has(text, ["盐晶", "salt crystal"]) ? "cold-dry-cavern"
+    : has(text, ["红树林", "mangrove"]) ? "tropical-wet"
+      : has(text, ["冰", "glacier", "snow"]) ? "cold"
+        : domain === "volcanic" ? "hot-dry" : domain === "river" || domain === "forest" ? "temperate-wet" : "neutral";
+  const silhouetteTags = has(text, ["盐晶", "salt crystal"]) ? ["three-floating-levels", "crystal-spires", "cavern-void"]
+    : has(text, ["红树林", "mangrove"]) ? ["root-canopy", "tidal-channel", "boardwalks"]
+      : has(text, ["空心古树", "古树内部", "hollow tree"]) ? ["bark-shell", "spiral-cavity", "canopy-platform"]
+        : domain === "forest" ? ["layered-canopy", "irregular-clearings"] : domain === "river" ? ["incised-valley", "descending-water"] : domain === "volcanic" ? ["broken-rim", "radial-fractures"] : ["broken-rim"];
+  return { era, climate, materialFamily, paletteTags: materialFamily, silhouetteTags, forbiddenTags: domain === "volcanic" ? ["living-tree", "lush-grass"] : [] };
 }
 
 function semanticRequirements(prompt: string, domain: string): SemanticRequirement[] {
@@ -71,6 +82,10 @@ export function compileSceneComposition(request: GenerationRequest, source: Scen
   const grammarId = COMPOSITION_GRAMMARS.find((entry) => entry.domain === domain)?.id ?? "grammar.generic-v1";
   const motifIds = DESIGNER_MOTIFS.filter((entry) => entry.domain === domain).map((entry) => entry.id);
   if (has(normalized(request.prompt), ["木屋", "小屋", "cabin", "lodge"])) motifIds.push("motif.embedded-building");
+  const text = normalized(request.prompt);
+  if (has(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) motifIds.push("motif.hollow-tree-city");
+  if (has(text, ["红树林", "走私港", "港村", "mangrove", "smuggler port"])) motifIds.push("motif.mangrove-smuggler-port");
+  if (has(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) motifIds.push("motif.salt-crystal-monastery");
   const moduleIds = new Set(motifIds.flatMap((id) => DESIGNER_MOTIFS.find((entry) => entry.id === id)?.moduleIds ?? []));
   const capabilityIds = [...new Set([...FUNCTIONAL_MODULES.filter((entry) => moduleIds.has(entry.id)).flatMap((entry) => entry.capabilityIds), ...retrievedCapabilityIds])].filter((id) => CAPABILITY_CARDS.some((entry) => entry.id === id));
   const root = request.seed;
