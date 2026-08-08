@@ -106,10 +106,12 @@ function addFloatingIslandTerrain(scene: GeneratedScene, width: number, depth: n
   }
   if (saltCrystal) {
     scene.primitives.push(
-      water("salt-cavern-tide-pool", 3, width * 0.52, -feetToMeters(28), depth * 0.58, width * 0.72, 0.3, depth * 0.58, ["salt-crystal", "cavern-tide-pool", "watercourse", "hazard", "site-program"]),
-      primitive("salt-cavern-column-west", "cone", 3, width * 0.12, -feetToMeters(28), depth * 0.25, 5.8, feetToMeters(54), 5.8, "ice", ["salt-crystal", "cavern-column", "vertical-landmark", "site-program"]),
-      primitive("salt-cavern-column-east", "cone", 3, width * 0.9, -feetToMeters(28), depth * 0.36, 6.4, feetToMeters(62), 6.4, "ice", ["salt-crystal", "cavern-column", "vertical-landmark", "site-program"]),
-      primitive("salt-cavern-column-north", "cone", 3, width * 0.55, -feetToMeters(28), depth * 0.05, 4.6, feetToMeters(48), 4.6, "rock", ["salt-crystal", "cavern-column", "vertical-landmark", "site-program"]),
+      water("salt-cavern-tide-pool", 3, width * 0.52, -feetToMeters(12), depth * 0.58, width * 0.72, 0.3, depth * 0.58, ["salt-crystal", "cavern-tide-pool", "watercourse", "hazard", "site-program"]),
+      primitive("salt-cavern-column-west", "cone", 3, width * 0.12, -feetToMeters(16), depth * 0.25, 5.8, feetToMeters(54), 5.8, "ice", ["salt-crystal", "cavern-column", "vertical-landmark", "site-program"]),
+      primitive("salt-cavern-column-east", "cone", 3, width * 0.9, -feetToMeters(16), depth * 0.36, 6.4, feetToMeters(62), 6.4, "ice", ["salt-crystal", "cavern-column", "vertical-landmark", "site-program"]),
+      primitive("salt-cavern-column-north", "cone", 3, width * 0.55, -feetToMeters(16), depth * 0.05, 4.6, feetToMeters(48), 4.6, "rock", ["salt-crystal", "cavern-column", "vertical-landmark", "site-program"]),
+      box("salt-cavern-pool-rim-west", 3, width * 0.18, -feetToMeters(10), depth * 0.58, 1.4, feetToMeters(5), depth * 0.42, "rock", ["salt-crystal", "cavern-tide-pool", "vertical-face", "site-program"]),
+      box("salt-cavern-pool-rim-east", 3, width * 0.86, -feetToMeters(10), depth * 0.58, 1.4, feetToMeters(5), depth * 0.42, "rock", ["salt-crystal", "cavern-tide-pool", "vertical-face", "site-program"]),
     );
   }
   scene.routes.push(createRoute("floating-island-ascent", "vertical", [
@@ -201,8 +203,33 @@ function addHollowTreeCity(scene: GeneratedScene, width: number, depth: number):
 
 function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: number): void {
   const channelZ = depth * 0.52;
+  const tidalSpine = [
+    [width * 0.08, depth * 0.63],
+    [width * 0.25, depth * 0.48],
+    [width * 0.43, depth * 0.58],
+    [width * 0.62, depth * 0.43],
+    [width * 0.81, depth * 0.54],
+    [width * 0.95, depth * 0.4],
+  ] as const;
+  for (let segment = 1; segment < tidalSpine.length; segment += 1) {
+    const from = tidalSpine[segment - 1]!;
+    const to = tidalSpine[segment]!;
+    const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    const rotation = Math.atan2(to[1] - from[1], to[0] - from[0]);
+    scene.primitives.push(water(
+      `mangrove-main-channel-${segment}`,
+      0,
+      (from[0] + to[0]) / 2,
+      -0.2,
+      (from[1] + to[1]) / 2,
+      length + 4,
+      0.34,
+      8.2,
+      ["mangrove", "tidal-channel", "watercourse", "hazard", "site-program"],
+      rotation,
+    ));
+  }
   scene.primitives.push(
-    water("mangrove-main-channel", 0, width * 0.5, -0.2, channelZ, width - 4, 0.34, 8.2, ["mangrove", "tidal-channel", "watercourse", "hazard", "site-program"]),
     water("mangrove-tidal-branch-west", 0, width * 0.22, -0.16, depth * 0.27, 3.4, 0.25, depth * 0.42, ["mangrove", "tidal-channel", "watercourse", "site-program"]),
     water("mangrove-tidal-branch-east", 0, width * 0.78, -0.16, depth * 0.72, 3.8, 0.25, depth * 0.38, ["mangrove", "tidal-channel", "watercourse", "site-program"]),
   );
@@ -624,7 +651,18 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       state: parcel.state,
     }, context.rng.fork(parcel.buildingSeed));
     adaptedBuildings += 1;
-    scene.primitives.push(corridor(`parcel-access-${parcel.id}`, 0, placement.x - 1.4, placement.z, placement.x, placement.z, siteElevation + FLOOR_SLAB_METERS + 0.06, parcel.lod === "full-interior" ? 1.4 : 1, program.siteType === "village" ? "earth" : "stone", ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted"]));
+    scene.primitives.push(corridor(
+      `parcel-access-${parcel.id}`,
+      0,
+      placement.x - (isMangrovePort ? 0.8 : 1.4),
+      placement.z,
+      placement.x,
+      placement.z,
+      siteElevation + FLOOR_SLAB_METERS + 0.06,
+      isMangrovePort ? 0.72 : parcel.lod === "full-interior" ? 1.4 : 1,
+      isMangrovePort ? "wood" : program.siteType === "village" ? "earth" : "stone",
+      ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable", "terrain-adapted", ...(isMangrovePort ? ["root-boardwalk"] : [])],
+    ));
     if (isFlooded) {
       for (const [pierIndex, dx, dz] of [[0, -0.36, -0.36], [1, 0.36, -0.36], [2, -0.36, 0.36], [3, 0.36, 0.36]] as const) scene.primitives.push(cylinder(`flood-pier-${parcel.id}-${pierIndex}`, 0, parcel.center.x + parcel.size.x * dx, 0, parcel.center.z + parcel.size.z * dz, 0.55, siteElevation, "wood", ["stilt-foundation", "flooded-site", "site-program"]));
       scene.primitives.push(stairs(`flood-access-stair-${parcel.id}`, 0, parcel.entrance.x, 0, parcel.entrance.z, 1.2, siteElevation, 3.8, "wood", ["flooded-site", "vertical-opening", "site-program"], parcel.rotationY));
