@@ -1,4 +1,4 @@
-import type { GeneratedScene, MaterialKey, Room } from "../schema";
+import type { BuildingProgramSummary, GeneratedScene, MaterialKey, Room } from "../schema";
 import {
   FLOOR_SLAB_METERS,
   baseScene,
@@ -91,6 +91,8 @@ function boundaryPoint(from: ProgramRoom, to: ProgramRoom): { x: number; z: numb
 export function compileBuildingProgram(program: BuildingProgram): GeneratedScene {
   const scene = baseScene("building", program.title, program.description, program.seed, program.bounds, program.floorHeights.length, program.floorHeights);
   scene.archetype = program.archetype;
+  const topology: BuildingProgramSummary["topology"] = program.archetype === "manor" ? "courtyard" : program.archetype === "fortress" ? "defensive" : program.archetype === "hospital" || program.archetype === "police" || program.archetype === "museum" ? "institutional" : "composite";
+  scene.buildingProgram = { archetype: program.archetype, requiredFeatures: [...program.requiredFeatures], roomCount: program.rooms.length, connectionCount: program.connections.length, levels: program.floorHeights.length, topology };
   const roomsById = new Map(program.rooms.map((room) => [room.id, room]));
   const openings = new Map<string, RectangularShellOpenings>();
 

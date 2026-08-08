@@ -97,6 +97,16 @@ export interface BuildingInstance {
   detailLevel: "exterior-proxy" | "full-interior";
 }
 
+/** Auditable room-graph contract used before building geometry is compiled. */
+export interface BuildingProgramSummary {
+  archetype: string;
+  requiredFeatures: string[];
+  roomCount: number;
+  connectionCount: number;
+  levels: number;
+  topology: "courtyard" | "winged" | "vertical" | "defensive" | "institutional" | "composite";
+}
+
 export interface GeneratedScene {
   version: 1;
   kind: SceneKind;
@@ -122,6 +132,7 @@ export interface GeneratedScene {
   };
   /** Auditable semantic plan compiled into this deterministic scene. */
   sceneProgram?: SceneProgramSummary;
+  buildingProgram?: BuildingProgramSummary;
 }
 
 export interface GenerationRequest {
