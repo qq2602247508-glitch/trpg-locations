@@ -1,0 +1,75 @@
+import type { GeneratedScene, GenerationRequest } from "../schema";
+import { CAPABILITY_CARDS, COMPOSITION_GRAMMARS, DESIGNER_MOTIFS, FUNCTIONAL_MODULES } from "./catalog";
+import type { DomainDensityProfile, SceneCompositionProgram, SceneCompositionProgramSummary, SemanticCoverageReport, SemanticRequirement, StyleProgram } from "./schema";
+
+const normalized = (text: string) => text.normalize("NFKC").toLocaleLowerCase("en-US");
+const has = (text: string, terms: readonly string[]) => terms.some((term) => text.includes(term));
+
+function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
+  const text = normalized(prompt);
+  if (has(text, ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"])) return "crater";
+  if (has(text, ["裂谷", "裂缝", "裂隙", "深渊", "rift", "crevasse", "chasm", "ravine"])) return "rift";
+  if (has(text, ["火山", "熔岩", "岩浆", "volcano", "volcanic", "caldera", "lava"])) return "volcanic";
+  if (has(text, ["河谷", "河流", "溪流", "瀑布", "river", "stream", "waterfall", "valley"])) return "river";
+  if (has(text, ["森林", "林地", "树林", "巨树", "树冠", "forest", "woodland", "canopy"])) return "forest";
+  return "generic";
+}
+
+function densityProfile(domain: string, value: number): DomainDensityProfile {
+  const density = Math.max(0, Math.min(1, value));
+  if (domain === "forest") return { domain, normalized: density, structuralComplexity: 0.35 + density * 0.55, routeComplexity: 0.25 + density * 0.35, hazardFrequency: 0.15 + density * 0.35, ecologicalCoverage: 0.22 + density * 0.73, landmarkFrequency: 0.15 + density * 0.45, detailFrequency: 0.2 + density * 0.75 };
+  if (domain === "river") return { domain, normalized: density, structuralComplexity: 0.35 + density * 0.5, routeComplexity: 0.3 + density * 0.45, hazardFrequency: 0.2 + density * 0.55, ecologicalCoverage: 0.2 + density * 0.55, landmarkFrequency: 0.2 + density * 0.45, detailFrequency: 0.15 + density * 0.7 };
+  if (domain === "volcanic" || domain === "crater" || domain === "rift") return { domain, normalized: density, structuralComplexity: 0.4 + density * 0.55, routeComplexity: 0.25 + density * 0.45, hazardFrequency: 0.3 + density * 0.65, ecologicalCoverage: 0.02, landmarkFrequency: 0.25 + density * 0.55, detailFrequency: 0.2 + density * 0.75 };
+  return { domain: "generic", normalized: density, structuralComplexity: 0.25 + density * 0.45, routeComplexity: 0.25 + density * 0.35, hazardFrequency: 0.15 + density * 0.35, ecologicalCoverage: 0.15 + density * 0.45, landmarkFrequency: 0.15 + density * 0.35, detailFrequency: 0.2 + density * 0.65 };
+}
+
+function styleFor(prompt: string, domain: string): StyleProgram {
+  const text = normalized(prompt);
+  const era = has(text, ["1920", "现代", "modern", "工业", "industrial"]) ? "historic" : has(text, ["d&d", "法师", "魔法", "中世纪", "medieval", "fantasy"]) ? "fantasy-medieval" : "timeless";
+  const materialFamily = domain === "volcanic" ? ["basalt", "obsidian", "lava"] : domain === "forest" ? ["wood", "moss", "earth", "stone"] : domain === "river" ? ["water", "rock", "earth", "moss"] : ["rock", "earth"];
+  return { era, climate: has(text, ["冰", "glacier", "snow"]) ? "cold" : domain === "volcanic" ? "hot-dry" : domain === "river" || domain === "forest" ? "temperate-wet" : "neutral", materialFamily, paletteTags: materialFamily, silhouetteTags: domain === "forest" ? ["layered-canopy", "irregular-clearings"] : domain === "river" ? ["incised-valley", "descending-water"] : domain === "volcanic" ? ["broken-rim", "radial-fractures"] : ["broken-rim"], forbiddenTags: domain === "volcanic" ? ["living-tree", "lush-grass"] : [] };
+}
+
+function semanticRequirements(prompt: string, domain: string): SemanticRequirement[] {
+  const text = normalized(prompt);
+  const output: SemanticRequirement[] = [];
+  const add = (id: string, phrase: string, tags: string[], importance: SemanticRequirement["importance"] = "major") => output.push({ id, sourcePhrase: phrase, requiredTags: tags, importance });
+  if (domain === "forest") { add("forest-core", "森林", ["forest", "tree", "canopy"], "critical"); if (has(text, ["茂密", "封闭林冠", "dense", "closed canopy"])) add("dense-canopy", "封闭林冠", ["canopy", "tree-cluster"], "critical"); if (has(text, ["灌木", "林下", "undergrowth"])) add("undergrowth", "林下灌木", ["undergrowth"], "major"); if (has(text, ["空地", "clearing"])) add("clearings", "林间空地", ["clearing"], "major"); if (has(text, ["浅溪", "溪流", "stream"])) add("forest-stream", "浅溪", ["stream", "watercourse"], "major"); if (has(text, ["倒木", "fallen log"])) add("fallen-log", "倒木", ["fallen-log"], "major"); if (has(text, ["树冠战斗平台", "树冠平台", "canopy platform"])) add("canopy-platform", "树冠战斗平台", ["canopy-platform", "high-ground"], "critical"); }
+  if (domain === "river") { add("river-core", "主河道", ["river", "watercourse"], "critical"); if (has(text, ["支流", "tributary"])) add("tributary", "支流", ["tributary"], "critical"); if (has(text, ["瀑布", "落差", "waterfall", "drop"])) add("waterfall", "瀑布落差", ["waterfall", "vertical-water"], "critical"); if (has(text, ["深潭", "deep pool"])) add("deep-pool", "深潭", ["deep-pool"], "major"); }
+  if (domain === "volcanic") { add("volcano-core", "火山口", ["caldera", "lava"], "critical"); if (has(text, ["支流", "branch"])) add("lava-branches", "熔岩支流", ["lava-branch"], "critical"); if (has(text, ["黑曜石", "obsidian"])) add("obsidian", "黑曜石脊", ["obsidian-ridge"], "major"); if (has(text, ["玄武岩", "basalt"])) add("basalt", "玄武岩战术台地", ["basalt-platform", "high-ground"], "major"); }
+  if (domain === "crater") { add("crater-core", "陨石坑", ["impact-crater", "crater-rim"], "critical"); if (has(text, ["裂缝", "fracture"])) add("crater-fracture", "放射裂缝", ["radial-fracture"], "major"); }
+  if (domain === "rift") { add("rift-core", "裂谷双岸", ["rift", "crevasse", "rift-bank"], "critical"); if (has(text, ["裂谷底", "底部", "rift floor", "bottom"])) add("rift-bottom", "深层裂谷底", ["rift-bottom"], "critical"); if (has(text, ["桥", "bridge"])) add("rift-crossing", "跨谷桥", ["bridge", "rift-crossing"], "critical"); if (has(text, ["下降", "梯", "descent", "ladder"])) add("rift-descent", "贴崖下降交通", ["cliff-descent", "vertical-route"], "major"); }
+  if (has(text, ["木屋", "小屋", "cabin", "lodge"])) add("embedded-building", "场地建筑", ["building", "interior", "foundation"], "critical");
+  return output;
+}
+
+export function compileSceneComposition(request: GenerationRequest, source: SceneCompositionProgram["source"] = "local", retrievedCapabilityIds: string[] = []): SceneCompositionProgram {
+  const domain = domainFor(request.prompt);
+  const grammarId = COMPOSITION_GRAMMARS.find((entry) => entry.domain === domain)?.id ?? "grammar.generic-v1";
+  const motifIds = DESIGNER_MOTIFS.filter((entry) => entry.domain === domain).map((entry) => entry.id);
+  if (has(normalized(request.prompt), ["木屋", "小屋", "cabin", "lodge"])) motifIds.push("motif.embedded-building");
+  const moduleIds = new Set(motifIds.flatMap((id) => DESIGNER_MOTIFS.find((entry) => entry.id === id)?.moduleIds ?? []));
+  const capabilityIds = [...new Set([...FUNCTIONAL_MODULES.filter((entry) => moduleIds.has(entry.id)).flatMap((entry) => entry.capabilityIds), ...retrievedCapabilityIds])].filter((id) => CAPABILITY_CARDS.some((entry) => entry.id === id));
+  const root = request.seed;
+  return { version: 1, source, primaryDomain: domain, grammarId, motifIds, capabilityIds, seeds: { root, macro: `${root}/macro`, meso: `${root}/meso`, tactical: `${root}/tactical`, building: `${root}/building`, ecology: `${root}/ecology`, micro: `${root}/micro`, style: `${root}/style` }, density: densityProfile(domain, request.density), style: styleFor(request.prompt, domain), requirements: semanticRequirements(request.prompt, domain) };
+}
+
+export function auditSemanticCoverage(scene: GeneratedScene, program: SceneCompositionProgram): SemanticCoverageReport {
+  const tags = new Set<string>();
+  for (const primitive of scene.primitives) for (const tag of primitive.tags ?? []) tags.add(tag);
+  for (const feature of scene.tactical) { tags.add(feature.kind); tags.add(feature.note.toLocaleLowerCase("en-US")); }
+  for (const room of scene.rooms) { tags.add(room.id); tags.add(room.name.toLocaleLowerCase("en-US")); }
+  const items = program.requirements.map((requirement) => {
+    const realizedTags = requirement.requiredTags.filter((tag) => [...tags].some((candidate) => candidate.includes(tag)));
+    const coverageRatio = requirement.requiredTags.length > 0 ? realizedTags.length / requirement.requiredTags.length : 1;
+    const capabilityIds = CAPABILITY_CARDS.filter((card) => card.tags.some((tag) => requirement.requiredTags.some((required) => tag.includes(required) || required.includes(tag)))).map((card) => card.id);
+    const threshold = requirement.importance === "critical" ? 1 : requirement.importance === "major" ? 0.5 : 0.34;
+    return { ...requirement, realizedTags, capabilityIds, coverageRatio, lowConfidence: coverageRatio > 0 && coverageRatio < 1, covered: coverageRatio >= threshold };
+  });
+  const weight = (importance: SemanticRequirement["importance"]) => importance === "critical" ? 4 : importance === "major" ? 2 : 1;
+  const possible = items.reduce((sum, item) => sum + weight(item.importance), 0) || 1;
+  const achieved = items.reduce((sum, item) => sum + weight(item.importance) * item.coverageRatio, 0);
+  return { score: Math.round((achieved / possible) * 100), coveredCritical: items.filter((item) => item.importance === "critical" && item.covered).length, totalCritical: items.filter((item) => item.importance === "critical").length, items, missing: items.filter((item) => !item.covered).map((item) => item.sourcePhrase), lowConfidence: items.filter((item) => item.lowConfidence).map((item) => item.sourcePhrase), degraded: [] };
+}
+
+export function summarizeComposition(program: SceneCompositionProgram, semanticCoverage?: SemanticCoverageReport): SceneCompositionProgramSummary { return { version: 1, source: program.source, primaryDomain: program.primaryDomain, grammarId: program.grammarId, motifIds: program.motifIds, capabilityIds: program.capabilityIds, density: program.density, style: program.style, ...(semanticCoverage ? { semanticCoverage } : {}) }; }

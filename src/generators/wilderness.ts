@@ -157,21 +157,39 @@ function buildRiverValley(scene: GeneratedScene, width: number, depth: number, r
   addCover(scene, rng, "river", width * 0.22, depth * 0.24, 0, 3);
 }
 
-function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const cols = Math.floor(width);
   const rows = Math.floor(depth);
   const channel = rows * rng.float(0.46, 0.55);
+  const phaseA = rng.float(-Math.PI, Math.PI);
+  const phaseB = rng.float(-Math.PI, Math.PI);
+  const channelHalfWidth = 1.65 + density * 1.45;
+  const riverLineAt = (x: number) => channel + Math.sin(x * (0.12 + density * 0.055) + phaseA) * (2.2 + density * 2.5) + Math.sin(x * 0.041 + phaseB) * (2.2 + density * 1.5);
+  const tributaryCount = 1 + Math.floor(density * 2.6);
+  const tributaries = Array.from({ length: tributaryCount }, (_, index) => {
+    const joinX = cols * (0.3 + (index + 1) / (tributaryCount + 2) * 0.5) + rng.float(-2.5, 2.5);
+    const fromNorth = index % 2 === 0;
+    const startZ = fromNorth ? rows * rng.float(0.08, 0.18) : rows * rng.float(0.82, 0.92);
+    const joinZ = riverLineAt(joinX);
+    return { joinX, startZ, joinZ, fromNorth, width: 0.9 + density * 0.75 };
+  });
   const heights: Array<number | undefined> = [];
   const at = (x: number, z: number) => (x < 0 || z < 0 || x >= cols || z >= rows ? undefined : heights[z * cols + x]);
   for (let z = 0; z < rows; z += 1) {
     for (let x = 0; x < cols; x += 1) {
-      const riverLine = channel + Math.sin(x * 0.16) * 2.8 + Math.sin(x * 0.045) * 3;
+      const riverLine = riverLineAt(x);
       const distance = Math.abs(z - riverLine);
       const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
-      const inWater = distance <= 2.1;
-      const tributary = x > cols * 0.62 && x < cols * 0.69 && z < riverLine - 3 && Math.abs(z - (rows * 0.12 + (x - cols * 0.62) * 2.2)) < 1.5;
-      const erodedPocket = distance > 7 && Math.sin(x * 0.27 + z * 0.19) > 0.91 && Math.cos(x * 0.08 - z * 0.12) > 0.15;
-      if (edge === 0 || inWater || tributary || erodedPocket) heights.push(undefined);
+      const inWater = distance <= channelHalfWidth;
+      const inTributary = tributaries.some((branch) => {
+        const dx = branch.joinX - (branch.fromNorth ? cols * 0.08 : cols * 0.92);
+        const startX = branch.fromNorth ? cols * 0.08 : cols * 0.92;
+        const t = Math.max(0, Math.min(1, (x - startX) / (Math.abs(dx) < 0.01 ? 1 : dx)));
+        const lineZ = branch.startZ + (branch.joinZ - branch.startZ) * t + Math.sin(t * Math.PI * 2 + phaseB) * 1.2;
+        return t > 0 && t < 1 && Math.abs(z - lineZ) <= branch.width;
+      });
+      const erodedPocket = distance > 7 && Math.sin(x * 0.27 + z * 0.19 + phaseA) > 0.94 - density * 0.08 && Math.cos(x * 0.08 - z * 0.12) > 0.15;
+      if (edge === 0 || inWater || inTributary || erodedPocket) heights.push(undefined);
       else {
         const distanceBand = distance < 5 ? 0 : distance < 9 ? 1 : distance < 15 ? 2 : 3;
         const ridgeLift = z < riverLine && distance > 13 && Math.sin(x * 0.095) + Math.cos(z * 0.12) > 0.65 ? 1 : 0;
@@ -180,6 +198,13 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
     }
   }
   const yOf = (level: number) => feetToMeters(level * 10) + FLOOR_SLAB_METERS;
+  const nearestWalkable = (targetX: number, targetZ: number): { x: number; z: number; level: number } => {
+    for (let radius = 0; radius < 8; radius += 1) for (let dz = -radius; dz <= radius; dz += 1) for (let dx = -radius; dx <= radius; dx += 1) {
+      const x = Math.max(1, Math.min(cols - 2, Math.round(targetX + dx))); const z = Math.max(1, Math.min(rows - 2, Math.round(targetZ + dz))); const level = at(x, z);
+      if (level !== undefined) return { x: x + 0.5, z: z + 0.5, level };
+    }
+    return { x: Math.max(1, Math.min(cols - 2, targetX)), z: Math.max(1, Math.min(rows - 2, targetZ)), level: 0 };
+  };
   let cliffCount = 0;
   for (let z = 0; z < rows; z += 1) {
     for (let x = 0; x < cols; x += 1) {
@@ -195,8 +220,10 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
       }
     }
   }
-  const riverLineAt = (x: number) => channel + Math.sin(x * 0.16) * 2.8 + Math.sin(x * 0.045) * 3;
-  const waterSegments = 14;
+  const waterSegments = 14 + Math.round(density * 12);
+  const waterfallX = cols * rng.float(0.62, 0.74);
+  const upperWaterY = feetToMeters(3);
+  const lowerWaterY = feetToMeters(-4);
   for (let index = 0; index < waterSegments; index += 1) {
     const fromX = 1 + ((cols - 2) * index) / waterSegments;
     const toX = 1 + ((cols - 2) * (index + 1)) / waterSegments;
@@ -204,42 +231,69 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
     const toZ = riverLineAt(toX);
     const dx = toX - fromX;
     const dz = toZ - fromZ;
-    scene.primitives.push(water(`river-semantic-channel-${index}`, 0, (fromX + toX) / 2, feetToMeters(1), (fromZ + toZ) / 2, 4.1, 0.34, Math.hypot(dx, dz) + 0.8, ["river", "watercourse", "terrain", "meandering-channel"], Math.atan2(dx, dz)));
+    const waterY = (fromX + toX) / 2 < waterfallX ? upperWaterY : lowerWaterY;
+    scene.primitives.push(water(`river-semantic-channel-${index}`, 0, (fromX + toX) / 2, waterY, (fromZ + toZ) / 2, channelHalfWidth * 2, 0.34, Math.hypot(dx, dz) + 0.8, ["river", "watercourse", "terrain", "meandering-channel", waterY === upperWaterY ? "upper-water" : "lower-water"], Math.atan2(dx, dz)));
   }
-  const crossingX = cols * rng.float(0.42, 0.62);
+  for (const [branchIndex, branch] of tributaries.entries()) {
+    const startX = branch.fromNorth ? cols * 0.08 : cols * 0.92;
+    const pieces = 6 + Math.round(density * 4);
+    for (let index = 0; index < pieces; index += 1) {
+      const t1 = index / pieces; const t2 = (index + 1) / pieces;
+      const x1 = startX + (branch.joinX - startX) * t1; const x2 = startX + (branch.joinX - startX) * t2;
+      const z1 = branch.startZ + (branch.joinZ - branch.startZ) * t1 + Math.sin(t1 * Math.PI * 2 + phaseB) * 1.2;
+      const z2 = branch.startZ + (branch.joinZ - branch.startZ) * t2 + Math.sin(t2 * Math.PI * 2 + phaseB) * 1.2;
+      scene.primitives.push(water(`river-tributary-${branchIndex}-${index}`, 0, (x1 + x2) / 2, upperWaterY + feetToMeters(1.5), (z1 + z2) / 2, branch.width * 2, 0.26, Math.hypot(x2 - x1, z2 - z1) + 0.55, ["river", "tributary", "watercourse", "waterflow"], Math.atan2(x2 - x1, z2 - z1)));
+    }
+  }
+  const fallsZ = riverLineAt(waterfallX);
+  const fallsHeight = upperWaterY - lowerWaterY;
+  scene.primitives.push(box("river-waterfall-face", 0, waterfallX, lowerWaterY, fallsZ, 0.32, fallsHeight, channelHalfWidth * 2.25, "water", ["river", "waterfall", "vertical-water", "hazard"]));
+  scene.primitives.push(water("river-deep-pool", 0, waterfallX + 2.4, lowerWaterY - 0.18, riverLineAt(waterfallX + 2.4), channelHalfWidth * 3.4, 0.62, 5.8, ["river", "deep-pool", "waterfall-basin", "hazard"]));
+  const crossingX = cols * rng.float(0.36, 0.52);
   const crossingZ = riverLineAt(crossingX);
   scene.primitives.push(corridor("river-semantic-old-bridge", 0, crossingX, crossingZ - 4, crossingX, crossingZ + 4, yOf(1), 2.4, "stone", ["bridge", "semantic-grid", "old-bridge"]));
-  const fordX = cols * 0.2;
+  const fordX = cols * rng.float(0.16, 0.25);
   const fordZ = riverLineAt(fordX);
   scene.primitives.push(corridor("river-semantic-shallow-ford", 0, fordX, fordZ - 3.5, fordX, fordZ + 3.5, yOf(0), 2.2, "earth", ["terrain", "semantic-grid", "shallow-ford"]));
-  scene.rooms.push(createRoom("river-upper-ridge", "Upper ridge", "natural", 0, cols * 0.5, rows * 0.2, cols - 6, rows * 0.25, yOf(3)), createRoom("river-floodplain", "River floodplain", "natural", 0, cols * 0.5, channel, cols - 6, 8, yOf(1)), createRoom("river-falls-basin", "Waterfall basin", "combat", 0, cols * 0.7, rows * 0.76, cols * 0.3, rows * 0.22, yOf(1)));
+  scene.rooms.push(createRoom("river-upper-ridge", "Upper ridge", "natural", 0, cols * 0.5, rows * 0.2, cols - 6, rows * 0.25, yOf(3)), createRoom("river-floodplain", "River floodplain", "natural", 0, cols * 0.5, channel, cols - 6, 8, yOf(1)), createRoom("river-falls-basin", "Waterfall basin", "combat", 0, waterfallX + 2.4, fallsZ, cols * 0.26, rows * 0.22, lowerWaterY));
   connectRooms(scene.rooms, "river-upper-ridge", "river-floodplain");
   connectRooms(scene.rooms, "river-floodplain", "river-falls-basin");
-  scene.routes.push(createRoute("river-ridge-route", "primary", [{ x: 2, z: rows * 0.18, y: yOf(3) }, { x: cols * 0.32, z: rows * 0.32, y: yOf(2) }, { x: crossingX, z: crossingZ - 4, y: yOf(1) }, { x: cols - 2, z: rows * 0.76, y: yOf(2) }]));
+  const ridgeRoute = [nearestWalkable(2, rows * 0.18), nearestWalkable(cols * 0.32, rows * 0.32), nearestWalkable(crossingX, crossingZ - 4), nearestWalkable(cols - 2, rows * 0.76)];
+  scene.routes.push(createRoute("river-ridge-route", "primary", ridgeRoute.map((point) => ({ x: point.x, z: point.z, y: yOf(point.level) }))));
   scene.routes.push(createRoute("river-shallow-ford", "alternate", [{ x: fordX, z: fordZ - 4, y: yOf(1) }, { x: fordX, z: fordZ, y: yOf(0) }, { x: fordX, z: fordZ + 4, y: yOf(1) }]));
-  scene.routes.push(createRoute("river-downstream", "waterflow", Array.from({ length: 7 }, (_, index) => { const x = 2 + ((cols - 4) * index) / 6; return { x, z: riverLineAt(x), y: feetToMeters(1 - index * 0.12) }; })));
-  scene.tactical.push(tacticalFeature("river-semantic-entrance", "entrance", 2, rows * 0.18, yOf(3), 2, "The high ridge is the main approach into the valley."), tacticalFeature("river-ford", "chokepoint", fordX, fordZ, yOf(0), 2, "A shallow ford is a legal crossing but exposes anyone in the channel."), tacticalFeature("river-falls", "hazard", cols * 0.7, rows * 0.76, yOf(1), 3, "The waterfall basin drops below the floodplain and hides a side route."));
-  scene.description = `River-valley semantic grid with ${cliffCount} bank cliff segments, continuous high ridge, floodplain, waterfall basin, old bridge, shallow ford, and downhill waterflow.`;
+  scene.routes.push(createRoute("river-downstream", "waterflow", Array.from({ length: 9 }, (_, index) => { const x = 2 + ((cols - 4) * index) / 8; return { x, z: riverLineAt(x), y: x < waterfallX ? upperWaterY : lowerWaterY }; })));
+  scene.tactical.push(tacticalFeature("river-semantic-entrance", "entrance", 2, rows * 0.18, yOf(3), 2, "The high ridge is the main approach into the valley."), tacticalFeature("river-ford", "chokepoint", fordX, fordZ, yOf(0), 2, "A shallow ford is a legal crossing but exposes anyone in the channel."), tacticalFeature("river-falls", "hazard", waterfallX, fallsZ, lowerWaterY, 3, "A seven-foot vertical waterfall drops into a deep pool and divides the water levels."));
+  scene.description = `River-valley grammar with ${cliffCount} bank cliff segments, ${tributaryCount} tributaries, a ${Math.round(fallsHeight / 0.3048)}-foot waterfall, deep pool, old bridge, shallow ford, and density-driven channel width.`;
   scene.floorHeightFeet = [Math.ceil((yOf(3) + feetToMeters(12)) / 0.3048)];
 }
 
-function buildRift(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
-  const gap = Math.max(7, Math.round(width * 0.24));
-  const left = (width - gap) / 2;
-  const right = width - left;
-  scene.primitives.push(box("rift-west-shelf", 0, left / 2, 0, depth / 2, left, FLOOR_SLAB_METERS, depth - 2, "rock", ["floor", "terrain", "rift-shelf"]), box("rift-east-shelf", 0, right + left / 2, feetToMeters(3), depth / 2, left, FLOOR_SLAB_METERS, depth - 2, "rock", ["floor", "terrain", "rift-shelf"]));
-  const bridgeZ = depth * 0.46;
-  scene.primitives.push(corridor("rift-bridge", 0, left - 1, bridgeZ, right + 1, bridgeZ, feetToMeters(3.15), 2.2, "wood", ["bridge"]));
-  const rampBottom = { xCells: 3, zCells: depth * 0.78, yMeters: FLOOR_SLAB_METERS };
-  const rampTop = { xCells: 7, zCells: depth * 0.78, yMeters: feetToMeters(3) + FLOOR_SLAB_METERS };
-  const ramp = stairConnection("rift-east-ramp", 0, rampBottom, rampTop, 2, "rock", ["natural-ramp", "rift-access"]);
-  scene.primitives.push(ramp.primitive);
-  scene.rooms.push(createRoom("rift-west-room", "West shelf", "natural", 0, left / 2, depth / 2, left - 2, depth - 4), createRoom("rift-east-room", "East shelf", "natural", 0, right + left / 2, depth / 2, left - 2, depth - 4), createRoom("rift-bridge-room", "Rift bridge", "circulation", 0, width / 2, bridgeZ, gap + 2, 3));
-  connectRooms(scene.rooms, "rift-west-room", "rift-bridge-room");
-  connectRooms(scene.rooms, "rift-east-room", "rift-bridge-room");
-  scene.routes.push(createRoute("rift-primary-route", "primary", [{ x: 1, z: bridgeZ }, { x: left, z: bridgeZ, y: 0 }, { x: right, z: bridgeZ, y: feetToMeters(3.15) }, { x: width - 1, z: bridgeZ, y: feetToMeters(3.15) }]), stairRoute("rift-ramp-route", ramp));
-  scene.tactical.push(tacticalFeature("rift-entrance", "entrance", 1, bridgeZ, 0, 2, "A broken trail enters the west shelf."), tacticalFeature("rift-bridge-choke", "chokepoint", width / 2, bridgeZ, feetToMeters(3.15), 2, "The narrow bridge concentrates every attack across the gap."), tacticalFeature("rift-void-hazard", "hazard", width / 2, depth / 2, -1, 3, "Falling into the rift removes a combatant from the fight."));
-  addCover(scene, rng, "rift", left * 0.55, depth * 0.28, 0, 4);
+function buildRift(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const cols = Math.max(32, Math.floor(width)); const rows = Math.max(28, Math.floor(depth));
+  const phase = rng.float(-Math.PI, Math.PI); const halfGap = 3.4 + density * 3.2; const bottomHalf = 1.15 + density * 0.45;
+  const riftAt = (z: number) => cols * 0.5 + Math.sin(z * (0.12 + density * 0.035) + phase) * (2.4 + density * 3.2) + Math.sin(z * 0.037 - phase) * 2;
+  const heights: Array<number | undefined> = [];
+  for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z); const distance = Math.abs(x - riftAt(z));
+    const sideFracture = distance > halfGap + 2 && distance < halfGap + 7 && Math.sin(x * 0.41 + z * 0.27 + phase) > 0.95 - density * 0.08;
+    if (edge === 0 || sideFracture || (distance > bottomHalf && distance < halfGap)) heights.push(undefined);
+    else if (distance <= bottomHalf) heights.push(0);
+    else { const high = x < riftAt(z) ? 5 : 4; heights.push(Math.min(6, high + (Math.sin(z * 0.17 + (x < riftAt(z) ? 0 : 1.4)) > 0.72 ? 1 : 0))); }
+  }
+  const rendered = renderMorphologyField(scene, { prefix: "rift", cols, rows, heights, stepFeet: 5, materialFor: (level) => level === 0 ? "darkStone" : level >= 5 ? "rock" : "earth", tagsFor: (level) => ["rift", "crevasse", level === 0 ? "rift-bottom" : "rift-bank", level >= 5 ? "high-ground" : "standable"] });
+  const westEdge = (z: number) => riftAt(z) - halfGap - 0.4; const eastEdge = (z: number) => riftAt(z) + halfGap + 0.4;
+  const bridgeRows = [rows * 0.28, rows * 0.72];
+  for (const [index, z] of bridgeRows.entries()) scene.primitives.push(corridor(`rift-bridge-${index}`, 0, westEdge(z), z, eastEdge(z), z, rendered.yOf(index === 0 ? 5 : 4), index === 0 ? 1.8 : 1.35, index === 0 ? "rock" : "wood", ["bridge", index === 0 ? "natural-bridge" : "rope-bridge", "supported", "rift-crossing"]));
+  const descentZ = rows * 0.5; const bottomX = riftAt(descentZ); const descent = stairConnection("rift-bottom-descent", 0, { xCells: bottomX, zCells: descentZ + 2.2, yMeters: rendered.yOf(0) }, { xCells: westEdge(descentZ) - 1, zCells: descentZ, yMeters: rendered.yOf(5) }, 1.4, "rock", ["vertical-route", "vertical-opening", "cliff-descent", "supported", "rift"]);
+  scene.primitives.push(descent.primitive); scene.routes.push(stairRoute("rift-bottom-route", descent));
+  const westRoom = createRoom("rift-west-room", "Western broken bank", "natural", 0, cols * 0.23, rows * 0.5, cols * 0.34, rows - 5, rendered.yOf(5));
+  const eastRoom = createRoom("rift-east-room", "Eastern high bank", "natural", 0, cols * 0.77, rows * 0.5, cols * 0.34, rows - 5, rendered.yOf(4));
+  const bottomRoom = createRoom("rift-bottom-room", "Deep rift floor", "combat", 0, bottomX, rows * 0.5, bottomHalf * 2, rows - 6, rendered.yOf(0));
+  const bridgeRoom = createRoom("rift-bridge-room", "Two-bank crossings", "circulation", 0, cols * 0.5, rows * 0.5, halfGap * 2 + 4, rows * 0.52, rendered.yOf(5));
+  scene.rooms.push(westRoom, eastRoom, bottomRoom, bridgeRoom); connectRooms(scene.rooms, westRoom.id, bridgeRoom.id); connectRooms(scene.rooms, eastRoom.id, bridgeRoom.id); connectRooms(scene.rooms, westRoom.id, bottomRoom.id);
+  scene.routes.push(createRoute("rift-primary-route", "primary", [{ x: 2, z: bridgeRows[0]!, y: rendered.yOf(5) }, { x: westEdge(bridgeRows[0]!), z: bridgeRows[0]!, y: rendered.yOf(5) }, { x: eastEdge(bridgeRows[0]!), z: bridgeRows[0]!, y: rendered.yOf(5) }, { x: cols - 2, z: bridgeRows[0]!, y: rendered.yOf(4) }]), createRoute("rift-alternate-route", "alternate", [{ x: 2, z: bridgeRows[1]!, y: rendered.yOf(5) }, { x: westEdge(bridgeRows[1]!), z: bridgeRows[1]!, y: rendered.yOf(4) }, { x: eastEdge(bridgeRows[1]!), z: bridgeRows[1]!, y: rendered.yOf(4) }, { x: cols - 2, z: bridgeRows[1]!, y: rendered.yOf(4) }]));
+  scene.tactical.push(tacticalFeature("rift-entrance", "entrance", 2, bridgeRows[0]!, rendered.yOf(5), 2, "A fractured shelf approaches the upper natural bridge."), tacticalFeature("rift-bridge-choke", "chokepoint", riftAt(bridgeRows[0]!), bridgeRows[0]!, rendered.yOf(5), 2, "The upper bridge is exposed to both banks."), tacticalFeature("rift-void-hazard", "hazard", riftAt(rows * 0.5), rows * 0.5, rendered.yOf(0), Math.ceil(halfGap), "The winding void separates both banks and exposes a deep playable floor."), tacticalFeature("rift-bank-highground", "highGround", cols * 0.24, rows * 0.48, rendered.yOf(6), 3, "The western bank overlooks both crossings and the rift bottom."));
+  scene.description = `Rift grammar with a winding ${Math.round(halfGap * 2)}-cell fracture, explicit cliff faces, two distinct bank crossings, a deep floor, and a supported descent route.`;
+  scene.floorHeightFeet = [48];
 }
 
 /** A semantic underdark map: connected walkable cells are shaped first, then
@@ -671,7 +725,7 @@ function buildImpactCrater(scene: GeneratedScene, width: number, depth: number, 
     rows,
     heights,
     materialFor: (level, x, z) => Math.hypot(x - cx, z - cz) < radius * 0.24 ? "metal" : level >= 5 ? "darkStone" : level <= 1 ? "earth" : "rock",
-    tagsFor: (level, x, z) => [level >= 5 ? "impact-rim" : Math.hypot(x - cx, z - cz) < radius * 0.48 ? "crater-basin" : "ejecta-field"],
+    tagsFor: (level, x, z) => ["impact-crater", level >= 5 ? "crater-rim" : Math.hypot(x - cx, z - cz) < radius * 0.48 ? "crater-basin" : "ejecta-field", level >= 5 ? "impact-rim" : "impact-basin"],
   });
   scene.primitives.push(
     primitive("impact-meteor-core", "sphere", 0, cx, rendered.yOf(0), cz, feetToMeters(9), feetToMeters(7), feetToMeters(9), "metal", ["meteor-core", "impact-landmark", "cover"]),
@@ -683,6 +737,10 @@ function buildImpactCrater(scene: GeneratedScene, width: number, depth: number, 
     const x = cx + Math.cos(angle) * distance;
     const z = cz + Math.sin(angle) * distance;
     scene.primitives.push(primitive(`impact-ejecta-${index}`, index % 3 === 0 ? "cone" : "sphere", 0, x, rendered.yOf(2), z, feetToMeters(rng.float(2, 6)), feetToMeters(rng.float(2, 8)), feetToMeters(rng.float(2, 6)), index % 5 === 0 ? "metal" : "rock", ["ejecta", "cover", "impact-crater"]));
+  }
+  for (const [index, angle] of rayAngles.entries()) {
+    const inner = radius * 0.34; const outer = radius * 1.25;
+    scene.primitives.push(corridor(`impact-radial-fracture-marker-${index}`, 0, cx + Math.cos(angle) * inner, cz + Math.sin(angle) * inner, cx + Math.cos(angle) * outer, cz + Math.sin(angle) * outer, rendered.yOf(0) + 0.03, 0.45 + density * 0.35, "darkStone", ["impact-crater", "radial-fracture", "hazard", "morphology-operator"]));
   }
   scene.rooms.push(createRoom("impact-approach", "Ejecta approach", "natural", 0, cols * 0.16, rows * 0.72, cols * 0.24, rows * 0.28, rendered.yOf(2)), createRoom("impact-rim", "Broken impact rim", "combat", 0, cx, cz, radius * 2, radius * 2, rendered.yOf(6)), createRoom("impact-basin", "Crater basin", "natural", 0, cx, cz, radius * 0.9, radius * 0.9, rendered.yOf(1)), createRoom("impact-core", "Meteor core", "combat", 0, cx, cz, radius * 0.35, radius * 0.35, rendered.yOf(0)));
   connectRooms(scene.rooms, "impact-approach", "impact-rim");
@@ -726,6 +784,8 @@ function buildVolcanic(scene: GeneratedScene, width: number, depth: number, dens
   const cz = rows * rng.float(0.42, 0.54);
   const radius = Math.min(cols, rows) * rng.float(0.3, 0.36);
   const outletAngle = rng.float(-0.45, 0.45);
+  const lavaBranchCount = 2 + Math.round(density * 3);
+  const lavaAngles = Array.from({ length: lavaBranchCount }, (_, index) => outletAngle + (index - (lavaBranchCount - 1) / 2) * rng.float(0.32, 0.55));
   const heights: Array<number | undefined> = [];
   for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
     const dx = x - cx;
@@ -735,8 +795,9 @@ function buildVolcanic(scene: GeneratedScene, width: number, depth: number, dens
     const warped = distance / (radius * (1 + Math.sin(angle * 3 + 0.8) * 0.1 + Math.sin(angle * 5) * 0.05));
     const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
     const outlet = Math.abs(angle - outletAngle) < 0.12 + density * 0.04 && dx > 0 && warped < 1.45;
+    const lavaBranch = lavaAngles.some((branchAngle) => Math.abs(Math.atan2(Math.sin(angle - branchAngle), Math.cos(angle - branchAngle))) < 0.045 + density * 0.026) && warped > 0.14 && warped < 1.38;
     const brokenRim = warped > 0.72 && warped < 1.06 && Math.sin(x * 0.43 + z * 0.29) > 0.94 - density * 0.08;
-    if (edge === 0 || warped < 0.2 || outlet || brokenRim) heights.push(undefined);
+    if (edge === 0 || warped < 0.2 || outlet || lavaBranch || brokenRim) heights.push(undefined);
     else if (warped < 0.36) heights.push(1);
     else if (warped < 0.58) heights.push(6);
     else if (warped < 0.8) heights.push(5);
@@ -749,14 +810,32 @@ function buildVolcanic(scene: GeneratedScene, width: number, depth: number, dens
     rows,
     heights,
     materialFor: (level, x, z) => Math.hypot(x - cx, z - cz) < radius * 0.38 ? "hazard" : level >= 5 ? "darkStone" : "rock",
-    tagsFor: (level) => [level >= 5 ? "caldera-rim" : level <= 1 ? "crater-floor" : "volcanic-slope"],
+    tagsFor: (level) => ["caldera", "volcanic", level >= 5 ? "caldera-rim" : level <= 1 ? "crater-floor" : "volcanic-slope"],
     stepFeet: 5,
   });
+  const levelAt = (x: number, z: number) => heights[Math.max(0, Math.min(rows - 1, Math.round(z))) * cols + Math.max(0, Math.min(cols - 1, Math.round(x)))] ?? 0;
   scene.primitives.push(
     primitive("volcanic-crater-lava", "cylinder", 0, cx, -0.35, cz, radius * 0.32 * CELL, 0.45, radius * 0.32 * CELL, "hazard", ["lava", "crater", "hazard", "morphology-operator"]),
     corridor("volcanic-lava-outlet", 0, cx + radius * 0.15, cz, cols - 1, cz + Math.tan(outletAngle) * (cols - cx), -0.28, 2.8 + density * 2.2, "hazard", ["lava", "lava-flow", "hazard", "morphology-operator"]),
     corridor("volcanic-basalt-bridge", 0, cx + radius * 0.54, cz - 3.5, cx + radius * 0.54, cz + 3.5, rendered.yOf(5), 1.8, "darkStone", ["bridge", "basalt-bridge", "semantic-grid"]),
   );
+  for (let index = 0; index < lavaBranchCount; index += 1) {
+    const angle = lavaAngles[index]!;
+    const inner = radius * rng.float(0.12, 0.24); const outer = radius * rng.float(1.05, 1.45);
+    scene.primitives.push(corridor(`volcanic-lava-branch-${index}`, 0, cx + Math.cos(angle) * inner, cz + Math.sin(angle) * inner, cx + Math.cos(angle) * outer, cz + Math.sin(angle) * outer, -0.24, 1.6 + density * 1.8, "hazard", ["lava", "lava-flow", "lava-branch", "hazard", "morphology-operator"]));
+  }
+  const obsidianRidges = 2 + Math.round(density * 4);
+  for (let index = 0; index < obsidianRidges; index += 1) {
+    const angle = outletAngle + Math.PI * (0.55 + index / Math.max(1, obsidianRidges - 1) * 0.9) + rng.float(-0.18, 0.18);
+    const distance = radius * rng.float(0.72, 1.18); const x = cx + Math.cos(angle) * distance; const z = cz + Math.sin(angle) * distance;
+    scene.primitives.push(box(`volcanic-obsidian-ridge-${index}`, 0, x, rendered.yOf(levelAt(x, z)), z, rng.float(1.1, 2.2), feetToMeters(rng.float(6, 14)), rng.float(4, 8), "darkStone", ["volcanic", "obsidian-ridge", "cover", "vertical-face", "supported"], angle));
+  }
+  const basaltPlatforms = 2 + Math.round(density * 2);
+  for (let index = 0; index < basaltPlatforms; index += 1) {
+    const angle = outletAngle + Math.PI * (0.85 + index * 0.38); const distance = radius * rng.float(0.48, 0.72); const x = cx + Math.cos(angle) * distance; const z = cz + Math.sin(angle) * distance; const y = rendered.yOf(levelAt(x, z));
+    scene.primitives.push(cylinder(`volcanic-basalt-platform-${index}`, 0, x, y, z, rng.float(2.4, 3.8), feetToMeters(rng.float(2, 5)), "darkStone", ["volcanic", "basalt-platform", "platform", "high-ground", "standable"]));
+    scene.tactical.push(tacticalFeature(`volcanic-platform-highground-${index}`, "highGround", x, z, y, 2, "A basalt shelf provides a reachable firing position above branching lava."));
+  }
   const fumaroles = Math.round(5 + density * 12);
   for (let index = 0; index < fumaroles; index += 1) {
     const angle = rng.float(0, Math.PI * 2);
@@ -770,7 +849,7 @@ function buildVolcanic(scene: GeneratedScene, width: number, depth: number, dens
   connectRooms(scene.rooms, "volcanic-rim", "volcanic-crater");
   scene.routes.push(createRoute("volcanic-switchback", "primary", [{ x: 2, z: rows * 0.72, y: rendered.yOf(1) }, { x: cols * 0.28, z: rows * 0.64, y: rendered.yOf(3) }, { x: cx - radius * 0.65, z: cz + radius * 0.35, y: rendered.yOf(5) }, { x: cx + radius * 0.54, z: cz, y: rendered.yOf(5) }]), createRoute("volcanic-rim-escape", "alternate", [{ x: cx - radius * 0.65, z: cz + radius * 0.35, y: rendered.yOf(5) }, { x: cx, z: cz - radius * 0.7, y: rendered.yOf(6) }, { x: cx + radius * 0.62, z: cz - radius * 0.2, y: rendered.yOf(5) }]));
   scene.tactical.push(tacticalFeature("volcanic-entrance", "entrance", 2, rows * 0.72, rendered.yOf(1), 2, "An ash-choked switchback climbs toward the caldera."), tacticalFeature("volcanic-crater-hazard", "hazard", cx, cz, -0.2, Math.ceil(radius * 0.25), "The crater and its lava outlet divide the battlefield."), tacticalFeature("volcanic-rim-highground", "highGround", cx - radius * 0.55, cz, rendered.yOf(6), 4, "The irregular caldera rim dominates the crater floor and basalt crossing."));
-  scene.description = `Volcanic morphology with an irregular caldera, ${rendered.cliffs} exposed basalt faces, crater lava, a downhill outlet, fumarole cover, and a rim combat route.`;
+  scene.description = `Volcanic grammar with an irregular broken caldera, ${rendered.cliffs} exposed faces, ${lavaBranchCount} lava branches, ${obsidianRidges} obsidian ridges, ${basaltPlatforms} tactical basalt shelves, fumaroles, and a rim combat route.`;
   scene.floorHeightFeet = [48];
 }
 
@@ -952,27 +1031,110 @@ function buildUndergroundLake(scene: GeneratedScene, width: number, depth: numbe
   addCover(scene, rng, "lake", width * 0.2, depth * 0.3, 0, 3);
 }
 
-function buildForest(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
-  scene.primitives.push(box("forest-floor", 0, width / 2, 0, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "moss", ["floor", "terrain", "forest"]));
-  const clearX = width * 0.52;
-  const clearZ = depth * 0.5;
-  scene.primitives.push(box("forest-clearing", 0, clearX, FLOOR_SLAB_METERS, clearZ, width * 0.3, FLOOR_SLAB_METERS, depth * 0.24, "earth", ["floor", "platform", "clearing"]));
-  for (let index = 0; index < 28; index += 1) {
-    const x = rng.float(2, width - 2);
-    const z = rng.float(2, depth - 2);
-    if (Math.abs(x - clearX) < width * 0.2 && Math.abs(z - clearZ) < depth * 0.16) continue;
-    const trunk = rng.float(0.35, 0.8);
-    const height = feetToMeters(rng.int(8, 18));
-    scene.primitives.push(cylinder(`forest-tree-${index}`, 0, x, FLOOR_SLAB_METERS, z, trunk, height, "darkStone", ["forest", "natural-cover", "cover"]));
-    scene.primitives.push(primitive(`forest-canopy-${index}`, "cone", 0, x, FLOOR_SLAB_METERS + height, z, trunk * 3.4 * 1.524, height * 0.42, trunk * 3.4 * 1.524, "moss", ["forest", "canopy", "cover"]));
-    if (index % 4 === 0) scene.tactical.push(tacticalFeature(`forest-tree-cover-${index}`, "cover", x, z, 0, 1, "Dense trunks create alternating sight-line breaks."));
+function buildForest(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"], prompt: string): void {
+  const cols = Math.max(30, Math.floor(width));
+  const rows = Math.max(26, Math.floor(depth));
+  const macro = rng.fork("macro-terrain");
+  const ecology = rng.fork("ecology");
+  const micro = rng.fork("micro");
+  const phaseA = macro.float(-Math.PI, Math.PI);
+  const phaseB = macro.float(-Math.PI, Math.PI);
+  const clearings = [
+    { x: cols * macro.float(0.27, 0.35), z: rows * macro.float(0.27, 0.36), rx: cols * 0.105, rz: rows * 0.11 },
+    { x: cols * macro.float(0.58, 0.68), z: rows * macro.float(0.43, 0.54), rx: cols * 0.12, rz: rows * 0.1 },
+    { x: cols * macro.float(0.32, 0.44), z: rows * macro.float(0.7, 0.8), rx: cols * 0.1, rz: rows * 0.09 },
+  ];
+  const streamWanted = ["浅溪", "溪流", "小溪", "stream", "creek"].some((term) => prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term));
+  const streamAt = (x: number) => rows * 0.61 + Math.sin(x * 0.14 + phaseB) * rows * 0.055 + Math.sin(x * 0.043 - phaseA) * rows * 0.04;
+  const clearingAt = (x: number, z: number) => clearings.findIndex((clearing, index) => {
+    const warp = Math.sin(x * (0.36 + index * 0.04) + z * 0.21 + phaseA) * 0.16;
+    return ((x - clearing.x) / clearing.rx) ** 2 + ((z - clearing.z) / clearing.rz) ** 2 < 1 + warp;
+  });
+  const heights: Array<number | undefined> = [];
+  for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+    if (edge === 0 || (streamWanted && Math.abs(z - streamAt(x)) < 1.25)) { heights.push(undefined); continue; }
+    const broad = Math.sin(x * 0.105 + phaseA) * 0.9 + Math.cos(z * 0.12 + phaseB) * 0.75 + Math.sin((x + z) * 0.055) * 0.45;
+    const level = broad > 1.15 ? 3 : broad > 0.3 ? 2 : broad > -0.65 ? 1 : 0;
+    const clearing = clearingAt(x, z);
+    heights.push(clearing >= 0 ? Math.max(0, Math.min(2, level)) : level);
   }
-  scene.rooms.push(createRoom("forest-edge", "Forest edge", "natural", 0, width / 2, 4, width - 4, 6), createRoom("forest-clearing-room", "Hunter clearing", "combat", 0, clearX, clearZ, width * 0.3, depth * 0.24), createRoom("forest-deep", "Deep woodland", "natural", 0, width / 2, depth - 5, width - 4, 7));
-  connectRooms(scene.rooms, "forest-edge", "forest-clearing-room");
-  connectRooms(scene.rooms, "forest-clearing-room", "forest-deep");
-  scene.routes.push(createRoute("forest-primary-route", "primary", [{ x: 1, z: 4 }, { x: width * 0.28, z: depth * 0.32 }, { x: clearX, z: clearZ }, { x: width - 2, z: depth - 5 }]));
-  scene.routes.push(createRoute("forest-hunter-trail", "alternate", [{ x: 3, z: depth - 4 }, { x: width * 0.25, z: depth * 0.7 }, { x: clearX, z: clearZ }, { x: width - 3, z: 4 }]));
-  scene.tactical.push(tacticalFeature("forest-entrance", "entrance", 1, 4, 0, 2, "A narrow game trail enters beneath the canopy."), tacticalFeature("forest-clearing-choke", "chokepoint", clearX, clearZ, 0, 3, "The clearing is exposed but controls both forest trails."));
+  const rendered = renderMorphologyField(scene, {
+    prefix: "forest-morphology", cols, rows, heights, stepFeet: 5,
+    materialFor: (_level, x, z) => clearingAt(x, z) >= 0 ? "earth" : "moss",
+    tagsFor: (_level, x, z) => clearingAt(x, z) >= 0 ? ["forest", "clearing", `clearing:${clearingAt(x, z) + 1}`, "standable"] : ["forest", "woodland-floor", "standable"],
+  });
+  const levelAt = (x: number, z: number) => heights[Math.max(0, Math.min(rows - 1, Math.floor(z))) * cols + Math.max(0, Math.min(cols - 1, Math.floor(x)))] ?? 0;
+  const surfaceY = (x: number, z: number) => rendered.yOf(levelAt(x, z));
+  const primaryPoints = [{ x: 1.5, z: rows * 0.18 }, ...clearings.map((entry) => ({ x: entry.x, z: entry.z })), { x: cols - 2, z: rows * 0.84 }];
+  const alternatePoints = [{ x: 2, z: rows * 0.82 }, { x: cols * 0.2, z: rows * 0.55 }, clearings[1]!, { x: cols * 0.8, z: rows * 0.25 }, { x: cols - 2, z: rows * 0.17 }];
+  scene.routes.push(
+    createRoute("forest-primary-route", "primary", primaryPoints.map((point) => ({ ...point, y: surfaceY(point.x, point.z) }))),
+    createRoute("forest-hunter-trail", "alternate", alternatePoints.map((point) => ({ ...point, y: surfaceY(point.x, point.z) }))),
+  );
+  for (let index = 1; index < primaryPoints.length; index += 1) {
+    const from = primaryPoints[index - 1]!; const to = primaryPoints[index]!;
+    scene.primitives.push(corridor(`forest-trail-segment-${index}`, 0, from.x, from.z, to.x, to.z, Math.min(surfaceY(from.x, from.z), surfaceY(to.x, to.z)) + 0.02, 1.25, "earth", ["forest", "route", "trail", "surface-grid"]));
+  }
+  if (streamWanted) {
+    const segments = 18;
+    for (let index = 0; index < segments; index += 1) {
+      const x1 = 1 + (cols - 2) * index / segments; const x2 = 1 + (cols - 2) * (index + 1) / segments;
+      const z1 = streamAt(x1); const z2 = streamAt(x2); const dx = x2 - x1; const dz = z2 - z1;
+      scene.primitives.push(water(`forest-stream-${index}`, 0, (x1 + x2) / 2, feetToMeters(1), (z1 + z2) / 2, 2.3, 0.22, Math.hypot(dx, dz) + 0.45, ["forest", "stream", "watercourse", "shallow-water"], Math.atan2(dx, dz)));
+    }
+    scene.routes.push(createRoute("forest-stream-flow", "waterflow", Array.from({ length: 8 }, (_, index) => { const x = 1 + (cols - 2) * index / 7; return { x, z: streamAt(x), y: feetToMeters(1 - index * 0.08) }; })));
+  }
+  const routeDistance = (x: number, z: number, points: Array<{ x: number; z: number }>) => Math.min(...points.map((point) => Math.hypot(x - point.x, z - point.z)));
+  const treeTarget = Math.round(48 + density * 205);
+  let trees = 0;
+  for (let attempt = 0; attempt < treeTarget * 6 && trees < treeTarget; attempt += 1) {
+    const clusterX = ecology.float(2, cols - 2); const clusterZ = ecology.float(2, rows - 2);
+    const x = Math.max(1.5, Math.min(cols - 1.5, clusterX + ecology.float(-3.2, 3.2)));
+    const z = Math.max(1.5, Math.min(rows - 1.5, clusterZ + ecology.float(-3.2, 3.2)));
+    if (clearingAt(x, z) >= 0 || routeDistance(x, z, [...primaryPoints, ...alternatePoints]) < 1.1 || (streamWanted && Math.abs(z - streamAt(x)) < 2.2)) continue;
+    const trunk = ecology.float(0.34, 0.74) * (density > 0.75 ? 1.08 : 1);
+    const height = feetToMeters(ecology.int(20, 46)); const y = surfaceY(x, z);
+    scene.primitives.push(cylinder(`forest-tree-${trees}`, 0, x, y, z, trunk, height, "darkStone", ["forest", "tree", "tree-cluster", "natural-cover", "cover"]));
+    scene.primitives.push(primitive(`forest-canopy-${trees}`, ecology.int(0, 2) === 0 ? "sphere" : "cone", 0, x, y + height * 0.78, z, trunk * CELL * ecology.float(3.7, 5.5), height * ecology.float(0.32, 0.5), trunk * CELL * ecology.float(3.7, 5.5), "moss", ["forest", "canopy", "closed-canopy", "cover"]));
+    if (trees % 13 === 0) scene.tactical.push(tacticalFeature(`forest-tree-cover-${trees}`, "cover", x, z, y, 1, "A mature tree and its roots break lines of sight."));
+    trees += 1;
+  }
+  const undergrowthCount = Math.round(18 + density * 135);
+  for (let index = 0; index < undergrowthCount; index += 1) {
+    const x = micro.float(2, cols - 2); const z = micro.float(2, rows - 2);
+    if (clearingAt(x, z) >= 0 || routeDistance(x, z, primaryPoints) < 1.4) continue;
+    const radius = micro.float(0.35, 0.85);
+    scene.primitives.push(primitive(`forest-undergrowth-${index}`, "sphere", 0, x, surfaceY(x, z), z, radius * CELL, feetToMeters(micro.float(1.2, 3.5)), radius * CELL, "moss", ["forest", "undergrowth", "difficult-terrain", "natural-detail"]));
+  }
+  const logCount = Math.round(4 + density * 10);
+  for (let index = 0; index < logCount; index += 1) {
+    const x = micro.float(3, cols - 3); const z = micro.float(3, rows - 3); const length = micro.float(3.5, 7.5); const angle = micro.float(-Math.PI, Math.PI);
+    scene.primitives.push(box(`forest-fallen-log-${index}`, 0, x, surfaceY(x, z) + feetToMeters(0.8), z, 0.75, feetToMeters(1.5), length, "wood", ["forest", "fallen-log", "cover", "climbable", "standable"], angle));
+  }
+  const ancientCount = 2 + Math.round(density * 2);
+  for (let index = 0; index < ancientCount; index += 1) {
+    const anchor = clearings[index % clearings.length]!; const x = anchor.x + anchor.rx * 0.72; const z = anchor.z - anchor.rz * 0.46; const y = surfaceY(x, z); const height = feetToMeters(45 + index * 4); const platformY = y + feetToMeters(15 + index * 3);
+    scene.primitives.push(cylinder(`forest-ancient-tree-${index}`, 0, x, y, z, 2.2 + index * 0.15, height, "wood", ["forest", "tree", "giant-tree", "landmark", "support"]));
+    scene.primitives.push(primitive(`forest-ancient-canopy-${index}`, "sphere", 0, x, y + height * 0.76, z, feetToMeters(30), feetToMeters(18), feetToMeters(30), "moss", ["forest", "canopy", "closed-canopy", "landmark"]));
+    scene.primitives.push(cylinder(`forest-canopy-platform-${index}`, 0, x, platformY, z, 3.3, feetToMeters(1), "wood", ["forest", "canopy-platform", "platform", "high-ground", "standable", "supported"]));
+    const outwardX = x - anchor.x; const outwardZ = z - anchor.z; const outwardLength = Math.max(0.1, Math.hypot(outwardX, outwardZ));
+    const nx = outwardX / outwardLength; const nz = outwardZ / outwardLength;
+    const stairStartX = x + nx * 4.2; const stairStartZ = z + nz * 4.2;
+    const stairEndX = x + nx * 1.2; const stairEndZ = z + nz * 1.2;
+    const stair = stairConnection(`forest-tree-ascent-${index}`, 0, { xCells: stairStartX, zCells: stairStartZ, yMeters: surfaceY(stairStartX, stairStartZ) }, { xCells: stairEndX, zCells: stairEndZ, yMeters: platformY + FLOOR_SLAB_METERS }, 1.15, "wood", ["forest", "vertical-route", "vertical-opening", "tree-ascent", "supported"]);
+    scene.primitives.push(stair.primitive); scene.routes.push(stairRoute(`forest-canopy-route-${index}`, stair));
+    scene.tactical.push(tacticalFeature(`forest-canopy-highground-${index}`, "highGround", x, z, platformY, 2, "A reachable platform in an ancient tree overlooks the clearing."));
+  }
+  scene.rooms.push(
+    createRoom("forest-edge", "Forest edge", "natural", 0, cols * 0.5, rows * 0.12, cols - 4, 6, surfaceY(cols * 0.5, rows * 0.12)),
+    ...clearings.map((entry, index) => createRoom(`forest-clearing-${index + 1}`, `Irregular clearing ${index + 1}`, index === 1 ? "combat" : "natural", 0, entry.x, entry.z, entry.rx * 1.5, entry.rz * 1.5, surfaceY(entry.x, entry.z))),
+    createRoom("forest-deep", "Closed-canopy woodland", "natural", 0, cols * 0.74, rows * 0.76, cols * 0.38, rows * 0.34, surfaceY(cols * 0.74, rows * 0.76)),
+  );
+  connectRooms(scene.rooms, "forest-edge", "forest-clearing-1"); connectRooms(scene.rooms, "forest-clearing-1", "forest-clearing-2"); connectRooms(scene.rooms, "forest-clearing-2", "forest-clearing-3"); connectRooms(scene.rooms, "forest-clearing-3", "forest-deep");
+  scene.tactical.push(tacticalFeature("forest-entrance", "entrance", 1.5, rows * 0.18, surfaceY(1.5, rows * 0.18), 2, "A narrow game trail enters beneath a layered canopy."), tacticalFeature("forest-clearing-choke", "chokepoint", clearings[1]!.x, clearings[1]!.z, surfaceY(clearings[1]!.x, clearings[1]!.z), 3, "The middle clearing exposes movement between two dense tree walls."));
+  scene.description = `Layered forest composition with ${rendered.walkable} terrain cells, ${rendered.cliffs} vertical faces, three irregular clearings, ${trees} clustered trees, ${undergrowthCount} undergrowth attempts, ${logCount} fallen logs, ${ancientCount} reachable canopy platforms${streamWanted ? ", and a shallow stream" : ""}.`;
+  scene.floorHeightFeet = [Math.ceil((rendered.yOf(3) + feetToMeters(54)) / 0.3048)];
 }
 
 function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorContext, width: number, depth: number, archetype: WildernessArchetype): void {
@@ -988,6 +1150,10 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   // rivers, cliffs and routes remain the owner of the surrounding site.
   scene.primitives = scene.primitives.filter((item) => {
     if (item.tags?.includes("floor") || item.tags?.includes("terrain")) return true;
+    // Tactical tree structures own their support and route geometry. A cabin
+    // pad may clear brush and ordinary trees, but must not orphan a retained
+    // canopy route by deleting its stair or platform primitive.
+    if (item.tags?.some((tag) => tag === "vertical-route" || tag === "canopy-platform" || tag === "giant-tree")) return true;
     if (!item.tags?.some((tag) => tag === "natural-detail" || tag === "natural-prop" || tag === "cover" || tag === "forest")) return true;
     const px = item.position.x / CELL; const pz = item.position.z / CELL;
     return Math.hypot(px - x, pz - z) > 8;
@@ -1014,13 +1180,6 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
   const siteAnchor = scene.rooms.find((room) => room.id === "forest-clearing-room") ?? scene.rooms.find((room) => room.level === 0 && !room.id.startsWith("core-wilderness"));
   if (wildernessRoot && siteAnchor) connectRooms(scene.rooms, siteAnchor.id, wildernessRoot.id);
-  if (archetype === "forest") {
-    scene.routes = scene.routes.filter((route) => route.id !== "forest-primary-route" && route.id !== "forest-hunter-trail");
-    scene.routes.push(
-      createRoute("forest-primary-route", "primary", [{ x: 1, z: 4 }, { x: x - 9, z: z - 7 }, { x: x - 9, z: z + 7 }, { x: width - 2, z: depth - 5 }]),
-      createRoute("forest-hunter-trail", "alternate", [{ x: 3, z: depth - 4 }, { x: x + 9, z: z + 7 }, { x: x + 9, z: z - 7 }, { x: width - 3, z: 4 }]),
-    );
-  }
   scene.primitives.push(corridor("wilderness-access-path", 0, entrance.x - 7, entrance.z + 5, entrance.x, entrance.z, baseY, 1.6, archetype === "forest" ? "earth" : "rock", ["road", "trail", "parcel-access", "site-program"]));
   scene.routes.push(createRoute("wilderness-building-access", "primary", [{ x: entrance.x - 7, z: entrance.z + 5, y: baseY }, { x: entrance.x, z: entrance.z, y: baseY }, { x, z, y: baseY }], { purpose: "movement", traffic: 0.45, schedule: "all" }));
   let siteRoadCount = 1;
@@ -1454,18 +1613,18 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   scene.archetype = archetype;
   if (archetype === "industrial-ruin") buildIndustrialRuin(scene, profile.width, profile.depth, profile.density, context.rng.fork("industrial"));
   else if (archetype === "coral-tide") buildCoralTide(scene, profile.width, profile.depth, context.rng.fork("coral"));
-  else if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, context.rng.fork("river"));
+  else if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, profile.density, context.rng.fork("river"));
   else if (archetype === "dry-riverbed") buildDryRiverbed(scene, profile.width, profile.depth, profile.density, context.rng.fork("dry-riverbed"));
   else if (archetype === "impact-crater") buildImpactCrater(scene, profile.width, profile.depth, profile.density, context.rng.fork("impact-crater"));
   else if (archetype === "volcanic") buildVolcanic(scene, profile.width, profile.depth, profile.density, context.rng.fork("volcanic"));
   else if (archetype === "infernal-waste") buildInfernalWaste(scene, profile.width, profile.depth, profile.density, context.rng.fork("infernal-waste"));
   else if (archetype === "floating-islands") buildFloatingIslands(scene, profile.width, profile.depth, profile.density, context.rng.fork("floating-islands"));
   else if (archetype === "burial-ground") buildBurialGround(scene, profile.width, profile.depth, profile.density, context.rng.fork("burial-ground"));
-  else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, context.rng.fork("rift"));
+  else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, profile.density, context.rng.fork("rift"));
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, context.rng.fork("ice"));
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));
-  else if (archetype === "forest") buildForest(scene, profile.width, profile.depth, context.rng.fork("forest"));
+  else if (archetype === "forest") buildForest(scene, profile.width, profile.depth, profile.density, context.rng.fork("forest"), context.request.prompt);
   else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, context.rng.fork("swamp"));
   else if (archetype === "underdark") buildUnderdark(scene, profile.width, profile.depth, profile.density, context.rng.fork("underdark"));
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
@@ -1486,7 +1645,8 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   if (["mushroom", "fungus", "fungal", "蘑菇", "菌类", "菌林"].some((term) => fungalText.includes(term))) {
     addGiantFungalLandmarks(scene, profile.width, profile.depth, profile.density, context.rng.fork("giant-fungi"));
   }
-  if (archetype !== "floating-islands") {
+  const ownsTacticalComplexity = ["forest", "river-valley", "volcanic", "impact-crater", "rift"].includes(archetype);
+  if (archetype !== "floating-islands" && !ownsTacticalComplexity) {
     addStandableProps(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("standable-props"));
     addTerrainComplexity(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("terrain-complexity"));
   }

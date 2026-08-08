@@ -2,6 +2,7 @@ import { GRID_FEET, GRID_METERS } from "../schema";
 import type { GeneratedScene, GenerationRequest, SceneKind } from "../schema";
 import type { RenderStats } from "../render/SceneRenderer";
 import { GenerationClient } from "../workers/GenerationClient";
+import { generateAtomTestScene } from "../composition";
 
 const KIND_LABELS: Record<SceneKind, string> = {
   adaptive: "自适应题材",
@@ -385,13 +386,17 @@ export async function mountApp(root: HTMLElement): Promise<void> {
 
     try {
       const generationStartedAt = performance.now();
-      const generated = await generationClient.generate(request, kind);
+      const atomAuditId = new URLSearchParams(window.location.search).get("atom");
+      const generated = atomAuditId ? generateAtomTestScene(atomAuditId, request.seed) : await generationClient.generate(request, kind);
       // Generation stays deterministic in the rule layer; elapsed time is a UI-only readout.
       const scene: GeneratedScene = {
         ...generated,
         generationMs: Math.max(0, performance.now() - generationStartedAt),
       };
       activeScene = scene;
+      // Read-only browser audit hook for visual regression tooling. It exposes
+      // the exact generated contract without coupling tests to renderer state.
+      Object.assign(window, { __TRPG_SCENE__: scene });
       renderer.setScene(scene);
       setToggle(elements.cameraToggle, false);
       setToggle(elements.topCameraToggle, false);
@@ -411,7 +416,8 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       const semanticLabel = scene.sceneProgram
         ? ` · SceneProgram v${scene.sceneProgram.version} · ${scene.sceneProgram.regionCount} 区域${scene.sceneProgram.source === "ollama" ? " · Ollama" : ""}`
         : scene.semantic?.source === "ollama" ? " · Ollama 语义" : "";
-      elements.statusDetail.textContent = `${scene.primitives.length} 个可批处理图元 · ${scene.generationMs.toFixed(0)} ms 生成${semanticLabel}`;
+      const compositionLabel = scene.compositionProgram ? ` · Composition v${scene.compositionProgram.version} · ${scene.compositionProgram.motifIds.length} 母题 · ${scene.compositionProgram.source.toUpperCase()}` : "";
+      elements.statusDetail.textContent = `${scene.primitives.length} 个可批处理图元 · ${scene.generationMs.toFixed(0)} ms 生成${semanticLabel}${compositionLabel}`;
     } catch (error) {
       const description = error instanceof Error ? error.message : "未知生成错误";
       setStatus(elements, "生成失败", "error");
@@ -598,6 +604,7 @@ function renderDiagnostics(container: HTMLElement, scene: GeneratedScene): void 
   list.className = "diagnostic-list";
   const notes = [
     ...(scene.sceneProgram ? [{ type: "规划", text: `${scene.sceneProgram.ruleset.toUpperCase()} · ${scene.sceneProgram.era} · ${scene.sceneProgram.gameplay} · ${scene.sceneProgram.morphology.join(" + ")}` }] : []),
+    ...(scene.compositionProgram ? [{ type: "组合", text: `${scene.compositionProgram.grammarId} · ${scene.compositionProgram.motifIds.join(" + ") || "generic"} · 语义覆盖 ${scene.compositionProgram.semanticCoverage?.score ?? 100}%` }] : []),
     ...diagnostics.warnings.map((note) => ({ type: "警告", text: note })),
     ...diagnostics.repairs.map((note) => ({ type: "修复", text: note })),
   ];

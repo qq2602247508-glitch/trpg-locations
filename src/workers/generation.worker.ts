@@ -1,6 +1,8 @@
 import { generateScene } from "../generators";
 import { planSceneProgramLocally, planSceneProgramWithOllama, type SceneProgram } from "../scene-program";
 import type { GenerationRequest, SceneKind } from "../schema";
+import { compileSceneComposition, type SceneCompositionProgram } from "../composition";
+import { retrieveCapabilitiesWithBge } from "../semantic/bge";
 
 interface GenerationWorkerRequest {
   id: number;
@@ -22,8 +24,9 @@ interface WorkerScope {
 // Keep the main tsconfig on DOM types; Vite evaluates this module in a worker.
 const scope = globalThis as unknown as WorkerScope;
 const sceneProgramCache = new Map<string, SceneProgram>();
+const compositionCache = new Map<string, SceneCompositionProgram>();
 
-async function planProgram(prompt: string, kind: SceneKind): Promise<SceneProgram> {
+async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean): Promise<SceneProgram> {
   const key = `${kind}|${prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}`;
   const cached = sceneProgramCache.get(key);
   if (cached) return cached;
@@ -35,7 +38,7 @@ async function planProgram(prompt: string, kind: SceneKind): Promise<SceneProgra
     && localProgram.morphology[0] === "plain"
     && localProgram.coverage.length === 1
     && localProgram.coverage[0] === "sparse";
-  const shouldUseOllama = unresolved
+  const shouldUseOllama = allowOllama && unresolved
     && (localProgram.primaryKind === "wilderness" || localProgram.primaryKind === "building")
     && (kind === "adaptive" || kind === "wilderness" || kind === "building" || kind === "settlement");
   const program = shouldUseOllama
@@ -46,11 +49,25 @@ async function planProgram(prompt: string, kind: SceneKind): Promise<SceneProgra
   return program;
 }
 
+async function planComposition(request: GenerationRequest): Promise<SceneCompositionProgram> {
+  const key = `${request.prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}|${request.seed}|${request.density}`;
+  const cached = compositionCache.get(key); if (cached) return cached;
+  const local = compileSceneComposition(request);
+  const retrieval = local.primaryDomain === "generic" ? await retrieveCapabilitiesWithBge(request.prompt) : undefined;
+  const program = retrieval && retrieval.capabilityIds.length > 0 ? compileSceneComposition(request, retrieval.source === "bge" ? "bge" : "local", retrieval.capabilityIds) : local;
+  compositionCache.set(key, program); if (compositionCache.size > 32) compositionCache.delete(compositionCache.keys().next().value ?? key);
+  return program;
+}
+
 scope.addEventListener("message", async (event: MessageEvent<GenerationWorkerRequest>) => {
   const { id, request, kind } = event.data;
   try {
-    const program = await planProgram(request.prompt, kind);
-    const scene = generateScene(request, kind, undefined, program);
+    const composition = await planComposition(request);
+    // A successful BGE/lexical capability retrieval is sufficient for the
+    // deterministic compiler. Qwen is the final ambiguity fallback, not a
+    // mandatory step in every unknown prompt.
+    const program = await planProgram(request.prompt, kind, composition.capabilityIds.length === 0);
+    const scene = generateScene(request, kind, undefined, program, composition);
     scope.postMessage({ id, scene } satisfies GenerationWorkerResponse);
   } catch (error) {
     scope.postMessage({

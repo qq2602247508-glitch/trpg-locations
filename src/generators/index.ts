@@ -1,4 +1,5 @@
 import { SeededRandom } from "../core/random";
+import { auditSemanticCoverage, compileSceneComposition, summarizeComposition, type SceneCompositionProgram } from "../composition";
 import { classifyInput, type AdaptiveFeatures, type InputClassification } from "../semantic/classify";
 import type { GeneratedScene, GenerationRequest, GeneratorContext, Room, SceneKind } from "../schema";
 import { validateScene } from "../validation/scene";
@@ -261,7 +262,7 @@ export function generateAdaptiveScene(
  * Public generation entry point.  It always validates/repairs the finished
  * scene, including adaptive compositions, before a renderer receives it.
  */
-export function generateScene(request: GenerationRequest, requestedKind: SceneKind = "adaptive", suppliedClassification?: InputClassification, suppliedProgram?: SceneProgram): GeneratedScene {
+export function generateScene(request: GenerationRequest, requestedKind: SceneKind = "adaptive", suppliedClassification?: InputClassification, suppliedProgram?: SceneProgram, suppliedComposition?: SceneCompositionProgram): GeneratedScene {
   const normalized = normalizeRequest(request);
   const kind = isSceneKind(requestedKind) ? requestedKind : "adaptive";
   // Prompt semantics must influence deterministic variation even when the user
@@ -269,6 +270,7 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   // “洞窟 + 水晶” and “洞窟 + 熔岩” do not collapse to the same layout.
   const promptKey = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const rootRng = new SeededRandom(`${normalized.seed}|prompt:${promptKey}`);
+  const composition = suppliedComposition ?? compileSceneComposition(normalized);
   let program = suppliedProgram ?? planSceneProgramLocally(normalized.prompt, kind);
   let primary = kind === "adaptive" ? program.primaryKind : kind;
   const programText = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
@@ -301,6 +303,7 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
     rng: rootRng.fork(kind === "adaptive" ? `program:${primary}` : `fixed:${kind}`),
     semanticHints,
     sceneProgram: program,
+    compositionProgram: composition,
   });
   applySceneProgram(generated, program, rootRng.fork("scene-program-realization"));
   if (kind === "adaptive") {
@@ -313,7 +316,25 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   generated.semantic = { source: semanticSource, ...(semanticModel ? { model: semanticModel } : {}) };
   generated.sceneProgram = summarizeSceneProgram(program);
 
-  return validateScene(generated, { repair: true }).scene;
+  const validated = validateScene(generated, { repair: true }).scene;
+  const semanticCoverage = auditSemanticCoverage(validated, composition);
+  validated.compositionProgram = summarizeComposition(composition, semanticCoverage);
+  const geometryIntegrity = validated.diagnostics.valid ? 100 : Math.max(0, 100 - validated.diagnostics.warnings.length * 12);
+  const spatialCoherence = validated.diagnostics.valid ? 100 : Math.max(20, 90 - validated.diagnostics.warnings.length * 15);
+  const tacticalQuality = Math.min(100, 38 + validated.routes.length * 7 + validated.tactical.length * 5);
+  const visualIdentity = semanticCoverage.score;
+  const variationQuality = Math.round(Math.min(100, 45 + composition.density.structuralComplexity * 35 + composition.density.routeComplexity * 20));
+  const performanceQuality = validated.primitives.length < 4500 ? 100 : validated.primitives.length < 7500 ? 85 : 65;
+  Object.assign(validated.diagnostics.metrics, { geometryIntegrity, semanticCoverage: semanticCoverage.score, spatialCoherence, tacticalQuality, visualIdentity, variationQuality, performanceQuality });
+  const compositeScore = Math.round(geometryIntegrity * 0.22 + semanticCoverage.score * 0.22 + spatialCoherence * 0.18 + tacticalQuality * 0.12 + visualIdentity * 0.1 + variationQuality * 0.08 + performanceQuality * 0.08);
+  validated.diagnostics.score = Math.min(validated.diagnostics.score, compositeScore);
+  if (semanticCoverage.missing.length > 0) {
+    validated.diagnostics.warnings.push(`Semantic geometry missing: ${semanticCoverage.missing.join(", ")}.`);
+    validated.diagnostics.score = Math.min(validated.diagnostics.score, 55 + Math.round(semanticCoverage.score * 0.45));
+  }
+  const compositionOwnsGeneratedDomain = ({ forest: "forest", river: "river-valley", volcanic: "volcanic", crater: "impact-crater", rift: "rift" } as Record<string, string | undefined>)[composition.primaryDomain] === validated.archetype;
+  if (compositionOwnsGeneratedDomain && semanticCoverage.coveredCritical < semanticCoverage.totalCritical) validated.diagnostics.valid = false;
+  return validated;
 }
 
 export { generateTavern } from "./tavern";

@@ -3,6 +3,7 @@ export const GRID_METERS = 1.524;
 
 import type { SceneProgram, SceneProgramSummary } from "./scene-program/schema";
 import type { SettlementAdaptationProgramSummary, SiteProgramSummary, TerrainProgramSummary } from "./site-program/schema";
+import type { SceneCompositionProgram, SceneCompositionProgramSummary } from "./composition/schema";
 
 export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "dungeon" | "building" | "settlement" | "wilderness" | "adaptive";
 export type PrimitiveShape = "box" | "cylinder" | "cone" | "sphere" | "gable" | "stairs" | "water";
@@ -174,6 +175,8 @@ export interface GeneratedScene {
   /** How buildings and circulation were adapted onto that parent terrain. */
   settlementAdaptation?: SettlementAdaptationProgramSummary;
   buildingProgram?: BuildingProgramSummary;
+  /** Auditable five-layer atom/module/motif/grammar composition result. */
+  compositionProgram?: SceneCompositionProgramSummary;
 }
 
 export interface GenerationRequest {
@@ -201,4 +204,5 @@ export interface GeneratorContext {
   rng: import("./core/random").SeededRandom;
   semanticHints?: SemanticGenerationHints;
   sceneProgram?: SceneProgram;
+  compositionProgram?: SceneCompositionProgram;
 }
