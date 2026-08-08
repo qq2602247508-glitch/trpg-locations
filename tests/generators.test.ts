@@ -344,6 +344,39 @@ describe("scene generators", () => {
     expect(hasTag(canalCity, "main-canal")).toBe(true);
   });
 
+  it("plans premodern settlements through an auditable organic morphology program", () => {
+    const scene = generateScene({ ...request("r13-organic-waterdeep", "large", 0.76), prompt: "深水城旧港区，前现代弯曲街巷、码头、鱼市、酒馆、神殿与仓库" }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.siteProgram?.roadPattern).toBe("harbor-spine");
+    expect(scene.siteProgram?.curvedRoadRatio ?? 0).toBeGreaterThan(0.65);
+    expect(scene.siteProgram?.nonRectangularBlockRatio ?? 0).toBeGreaterThan(0.65);
+    expect(scene.buildingInstances?.every((building) => Boolean(building.buildingProgram))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("focus-interior"))).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("routes literal water cities and crater villages into distinct settlement compositions", () => {
+    const waterCity = generateScene({ ...request("r13-water-city", "medium", 0.72), prompt: "河道水城，弯曲主运河、三条支流、石桥、木桥、水上市集、船坞与前现代不规则街巷" }, "adaptive");
+    const craterVillage = generateScene({ ...request("r13-crater-village", "medium", 0.68), prompt: "陨石坑边缘村庄，房屋沿破碎环形坑缘生长，有三条下坑坡道、坠星碎片、木屋与神殿" }, "adaptive");
+    expect(waterCity.sceneProgram?.domain).toBe("settlement");
+    expect(waterCity.title).toContain("Waterwoven");
+    expect(waterCity.siteProgram?.roadPattern).toBe("canal-banks");
+    expect(hasTag(waterCity, "main-canal")).toBe(true);
+    expect(craterVillage.sceneProgram?.domain).toBe("settlement");
+    expect(craterVillage.title).toContain("Fallen-Star");
+    expect(craterVillage.siteProgram?.roadPattern).toBe("radial-ring");
+    expect(craterVillage.primitives.filter((primitive) => primitive.tags?.includes("crater-rim")).length).toBeGreaterThanOrEqual(12);
+    expect(craterVillage.primitives.filter((primitive) => primitive.tags?.includes("crater-ramp")).length).toBe(3);
+    expect(waterCity.diagnostics.valid && craterVillage.diagnostics.valid).toBe(true);
+  });
+
+  it("supports vertical settlement platforms and connects their authored heights", () => {
+    const scene = generateScene({ ...request("r13-supported-vertical", "medium", 0.7), prompt: "建在巨型桥墩之间的垂直贫民街区，有三层市场平台、吊桥、楼梯和桥下维修区" }, "adaptive");
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("platform-support")).length).toBeGreaterThanOrEqual(12);
+    expect(scene.routes.filter((route) => route.id.startsWith("vertical-slum-climb-route-")).length).toBe(3);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
   it("keeps a hillside noble district under settlement planning", () => {
     const scene = generateScene({ ...request("r12-hillside-settlement", "large", 0.62), prompt: "山坡贵族区，沿等高线道路、三座不同庄园、公共花园、守卫岗亭、仆从巷、山顶钟楼和下层商业街" }, "adaptive");
     expect(scene.sceneProgram?.domain).toBe("settlement");

@@ -1066,7 +1066,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     if (basement) basement.name = "Underground greenhouse and root laboratory";
   }
   if (hunter) scene.tactical.push(tacticalFeature("hunter-ambush-line", "cover", x + 5.5, z + 3, baseY, 2, "The woodpile, fence and tree line form a prepared hunter ambush position."));
-  scene.siteProgram = { version: 1, siteType: "wilderness-site", districtCount: 1, roadCount: siteRoadCount, junctionCount: 1, blockCount: 1, parcelCount: 1, fullInteriorCount: 1, facadeCount: 0, massCount: 0, roadLengthCells: siteRoadLength, parcelCoverage: (13 * 12) / (width * depth), buildingCoverage: (9 * 8) / (width * depth), averageParcelArea: 13 * 12, openSpaceRatio: 1 - (13 * 12) / (width * depth) };
+  scene.siteProgram = { version: 1, siteType: "wilderness-site", districtCount: 1, roadCount: siteRoadCount, junctionCount: 1, blockCount: 1, parcelCount: 1, fullInteriorCount: 1, facadeCount: 0, massCount: 0, roadLengthCells: siteRoadLength, parcelCoverage: (13 * 12) / (width * depth), buildingCoverage: (9 * 8) / (width * depth), averageParcelArea: 13 * 12, openSpaceRatio: 1 - (13 * 12) / (width * depth), roadPattern: "anchor-web", curvedRoadRatio: siteRoadCount > 0 ? 1 : 0, nonRectangularBlockRatio: 1 };
   scene.floors = Math.max(scene.floors, 4);
   scene.floorHeightFeet = [12, 10, 8, 10];
   scene.floorLabels = ["地形/1F", "阁楼", "屋顶", "B1"];

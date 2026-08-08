@@ -2,6 +2,7 @@ import {
   GRID_FEET,
   GRID_METERS,
   type BuildingInstance,
+  type BuildingProgramSummary,
   type GeneratedScene,
   type MaterialKey,
   type PrimitiveShape,
@@ -12,6 +13,7 @@ import {
   type ScenePrimitive,
   type TacticalFeature,
   type SettlementBuildingKind,
+  type SettlementBuildingProgram,
   type Vec2,
   type Vec3,
 } from "../schema";
@@ -308,7 +310,10 @@ function validateGeometryInvariants(
   const naturalSupports = primitives.filter(isNaturalElevationSupport);
   const floorSlabs = primitives.filter(isSolidFloorSlab);
   const openings = primitives.filter(isOpeningEvidence);
-  const solidWalls = primitives.filter((primitive) => hasTag(primitive, "wall") && !isOpeningEvidence(primitive));
+  // Dormant focus interiors are compiled for on-demand building inspection.
+  // Settlement-wide roads do not participate in that isolated local graph, so
+  // they must not be reported as crossing walls that are invisible in overview.
+  const solidWalls = primitives.filter((primitive) => hasTag(primitive, "wall") && !hasTag(primitive, "focus-interior") && !isOpeningEvidence(primitive));
   const maximumX = boundsCells.x * GRID_METERS;
   const maximumZ = boundsCells.z * GRID_METERS;
   let routePointCount = 0;
@@ -475,6 +480,15 @@ function validateGeometryInvariants(
         geometryError(`Room connection ${first.id} <-> ${second.id} crosses solid wall ${barrier.id} without nearby door-frame/opening evidence.`);
       }
     }
+  }
+
+  const authoredPlatforms = primitives.filter((primitive) => hasTag(primitive, "vertical-slum") && hasTag(primitive, "market-platform"));
+  const authoredSupports = primitives.filter((primitive) => hasTag(primitive, "vertical-slum") && hasTag(primitive, "platform-support"));
+  for (const platform of authoredPlatforms) {
+    const platformBottom = primitiveVerticalSpan(platform).min;
+    const supportingColumns = authoredSupports.filter((support) => pointNearPrimitiveFootprint(support.position, platform, GRID_METERS * 0.2)
+      && primitiveVerticalSpan(support).max >= platformBottom - ROUTE_SURFACE_MARGIN_METERS);
+    if (supportingColumns.length < 2) geometryError(`Elevated platform ${platform.id} lacks two grounded structural supports.`);
   }
 
   return {
@@ -877,9 +891,14 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
       floors: manifestFloors,
       floorHeightFeet: manifestHeights,
       detailLevel,
+      ...(typeof raw.baseYMeters === "number" && Number.isFinite(raw.baseYMeters) ? { baseYMeters: raw.baseYMeters } : {}),
+      ...(typeof raw.exteriorHeightMeters === "number" && raw.exteriorHeightMeters > 0 && Number.isFinite(raw.exteriorHeightMeters) ? { exteriorHeightMeters: raw.exteriorHeightMeters } : {}),
       ...(typeof raw.parcelId === "string" ? { parcelId: raw.parcelId } : {}),
       ...(typeof raw.frontageRoadId === "string" ? { frontageRoadId: raw.frontageRoadId } : {}),
       ...(isRecord(raw.entranceCells) ? { entranceCells: sizeVec2(raw.entranceCells, { x: 0, z: 0 }, `buildingInstances[${index}].entranceCells`) } : {}),
+      ...(isRecord(raw.buildingProgram) && Array.isArray(raw.buildingProgram.requiredFeatures) ? { buildingProgram: raw.buildingProgram as unknown as BuildingProgramSummary } : {}),
+      ...(isRecord(raw.envelopeProgram) && typeof raw.envelopeProgram.silhouetteSignature === "string" ? { envelopeProgram: raw.envelopeProgram as unknown as NonNullable<BuildingInstance["envelopeProgram"]> } : {}),
+      ...(isRecord(raw.interiorProgram) && Array.isArray(raw.interiorProgram.rooms) && Array.isArray(raw.interiorProgram.connections) && Array.isArray(raw.interiorProgram.verticalCores) ? { interiorProgram: raw.interiorProgram as unknown as SettlementBuildingProgram } : {}),
     };
     if (!primitives.some((primitive) => primitive.id.startsWith(`${id}-`) && hasTag(primitive, "independent-building-module"))) {
       fatal(`Building instance ${id} has no independently generated exterior primitive evidence.`);
@@ -928,7 +947,11 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
   const errorPenalty = Math.min(85, errors.length * 12);
   const score = Math.max(0, Math.min(100, structuralScore + topologyScore + tacticalScore + dimensionScore + metadataScore + verticalScore - errorPenalty));
   const valid = errors.length === 0;
+  const authoredDiagnostics: UnknownRecord = isRecord((output as unknown as UnknownRecord).diagnostics) ? (output as unknown as UnknownRecord).diagnostics as UnknownRecord : {};
+  const authoredMetrics = isRecord(authoredDiagnostics.metrics) ? authoredDiagnostics.metrics : {};
+  const preservedMetrics = Object.fromEntries(Object.entries(authoredMetrics).filter((entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1])));
   const metrics: Record<string, number> = {
+    ...preservedMetrics,
     primitiveCount: primitives.length,
     roomCount: rooms.length,
     routeCount: routes.length,

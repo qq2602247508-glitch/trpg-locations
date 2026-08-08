@@ -2,7 +2,7 @@ import type { GeneratedScene, GeneratorContext } from "../schema";
 import { planSettlementSite, summarizeSiteProgram, type RoadProgram } from "../site-program";
 import { instantiateBuildingModule } from "./buildingModule";
 import { classifySettlementArchetype } from "./settlement";
-import { FLOOR_SLAB_METERS, baseScene, box, connectRooms, corridor, createRoom, createRoute, cylinder, feetToMeters, primitive, stairs, tacticalFeature, water } from "./shared";
+import { FLOOR_SLAB_METERS, baseScene, box, connectRooms, corridor, createRoom, createRoute, cylinder, feetToMeters, primitive, stairConnection, stairs, tacticalFeature, water } from "./shared";
 
 function roadPieces(road: RoadProgram, elevationAt: (x: number, z: number) => number = () => 0) {
   return road.points.slice(1).map((point, index) => {
@@ -219,6 +219,34 @@ function addWaterCity(scene: GeneratedScene, width: number, depth: number): void
   scene.routes.push(createRoute("water-city-canal-route", "waterflow", [{ x: mainX, z: depth * 0.05 }, { x: mainX, z: depth * 0.5 }, { x: mainX, z: depth * 0.95 }], { purpose: "water", traffic: 0.72, schedule: "all" }));
 }
 
+function addImpactCraterSettlement(scene: GeneratedScene, width: number, depth: number): void {
+  const cx = width * 0.5; const cz = depth * 0.5;
+  const radiusX = width * 0.22; const radiusZ = depth * 0.23;
+  scene.primitives.push(cylinder("impact-crater-basin", 0, cx, FLOOR_SLAB_METERS + 0.015, cz, Math.min(radiusX, radiusZ) * 1.42, 0.08, "darkStone", ["impact-crater", "crater-floor", "hazard", "standable", "site-program"]));
+  const rimAngles = [0.02, 0.31, 0.7, 1.04, 1.52, 1.85, 2.29, 2.72, 3.08, 3.51, 3.95, 4.28, 4.78, 5.22, 5.72];
+  for (const [index, angle] of rimAngles.entries()) {
+    const radiusNoise = 0.88 + ((index * 7) % 5) * 0.045;
+    const x = cx + Math.cos(angle) * radiusX * radiusNoise;
+    const z = cz + Math.sin(angle) * radiusZ * radiusNoise;
+    const height = feetToMeters(3.5 + ((index * 5) % 4) * 2.2);
+    scene.primitives.push(box(`impact-crater-rim-${index + 1}`, 0, x, FLOOR_SLAB_METERS, z, 3.2 + ((index * 3) % 4) * 0.85, height, 2.4 + ((index * 5) % 3) * 0.9, "rock", ["impact-crater", "crater-rim", "slope", "high-ground", "cover", "site-program"], -angle + ((index % 3) - 1) * 0.12));
+  }
+  for (const [index, angle] of [Math.PI * 0.1, Math.PI * 0.92, Math.PI * 1.48].entries()) {
+    const outer = { x: cx + Math.cos(angle) * (radiusX + 5), z: cz + Math.sin(angle) * (radiusZ + 5) };
+    const inner = { x: cx + Math.cos(angle) * (radiusX * 0.45), z: cz + Math.sin(angle) * (radiusZ * 0.45) };
+    scene.primitives.push(corridor(`impact-crater-ramp-${index + 1}`, 0, outer.x, outer.z, inner.x, inner.z, FLOOR_SLAB_METERS + 0.18, 2, "earth", ["impact-crater", "crater-ramp", "alternate-route", "standable", "site-program"]));
+  }
+  scene.primitives.push(
+    cylinder("impact-crater-meteor-core", 0, cx - radiusX * 0.18, FLOOR_SLAB_METERS, cz + radiusZ * 0.12, 2.4, feetToMeters(7), "metal", ["impact-crater", "meteor-fragment", "landmark", "cover", "site-program"]),
+    box("impact-crater-shatter-1", 0, cx + radiusX * 0.2, FLOOR_SLAB_METERS, cz - radiusZ * 0.12, 2.6, feetToMeters(2.2), 1.1, "rock", ["impact-crater", "meteor-fragment", "cover", "site-program"], 0.42),
+    box("impact-crater-shatter-2", 0, cx - radiusX * 0.06, FLOOR_SLAB_METERS, cz - radiusZ * 0.28, 1.4, feetToMeters(1.8), 2.1, "rock", ["impact-crater", "meteor-fragment", "cover", "site-program"], -0.28),
+  );
+  scene.tactical.push(
+    tacticalFeature("impact-crater-rim-high-ground", "highGround", cx + radiusX, cz, feetToMeters(7), 3, "The broken crater rim overlooks the settlement and basin."),
+    tacticalFeature("impact-crater-basin-hazard", "hazard", cx, cz, 0, Math.min(radiusX, radiusZ) * 0.55, "The exposed impact basin is difficult ground with little cover."),
+  );
+}
+
 function addGateDistrict(scene: GeneratedScene, width: number, depth: number): void {
   const gateX = width * 0.28;
   scene.primitives.push(
@@ -251,8 +279,19 @@ function addVerticalSlum(scene: GeneratedScene, width: number, depth: number): v
     scene.primitives.push(
       box(`vertical-slum-market-platform-${levelIndex + 1}`, levelIndex + 1, width * 0.5, levelY, z, width * 0.38, FLOOR_SLAB_METERS, 6.5, "wood", ["vertical-slum", "market-platform", "platform", "standable", "site-program"]),
       corridor(`vertical-slum-rope-bridge-${levelIndex + 1}`, levelIndex + 1, width * 0.3, z, width * 0.7, z, levelY + 0.08, 1.2, "wood", ["vertical-slum", "rope-bridge", "bridge", "standable", "site-program"]),
-      stairs(`vertical-slum-ladder-${levelIndex + 1}`, levelIndex + 1, width * 0.34, levelIndex === 0 ? 0 : levels[levelIndex - 1] ?? 0, z + 2.2, 1, feetToMeters(12), 3.2, "wood", ["vertical-slum", "rope-ladder", "vertical-opening", "site-program"]),
     );
+    for (const [supportIndex, dx, dz] of [[0, -0.17, -0.34], [1, 0.17, -0.34], [2, -0.17, 0.34], [3, 0.17, 0.34]] as const) scene.primitives.push(cylinder(`vertical-slum-platform-support-${levelIndex + 1}-${supportIndex + 1}`, levelIndex + 1, width * (0.5 + dx), 0, z + dz * 6.5, 0.55, levelY, "wood", ["vertical-slum", "platform-support", "support", "site-program"]));
+    const previousY = levelIndex === 0 ? 0 : levels[levelIndex - 1] ?? 0;
+    const previousZ = levelIndex === 0 ? depth * 0.18 : depth * (0.3 + (levelIndex - 1) * 0.19);
+    const climb = stairConnection(`vertical-slum-climb-${levelIndex + 1}`, levelIndex + 1,
+      { xCells: width * 0.38, zCells: previousZ, yMeters: previousY },
+      { xCells: width * 0.38, zCells: z, yMeters: levelY },
+      1.15, "wood", ["vertical-slum", "building-stair", "vertical-opening", "standable", "site-program"]);
+    scene.primitives.push(climb.primitive);
+    scene.routes.push(createRoute(`vertical-slum-climb-route-${levelIndex + 1}`, "vertical", [
+      { x: climb.bottom.xCells, z: climb.bottom.zCells, y: climb.bottom.yMeters },
+      { x: climb.top.xCells, z: climb.top.zCells, y: climb.top.yMeters },
+    ], { purpose: "escape", traffic: 0.32, schedule: "all" }));
   }
   scene.primitives.push(water("vertical-slum-public-pool", 0, width * 0.5, 0.04, depth * 0.78, 7, 0.18, 6, ["vertical-slum", "public-water", "site-program"]), box("vertical-slum-maintenance", 3, width * 0.5, -feetToMeters(8), depth * 0.5, width * 0.32, FLOOR_SLAB_METERS, 7, "metal", ["vertical-slum", "under-bridge-maintenance", "underground", "floor", "standable", "site-program"]));
 }
@@ -286,7 +325,13 @@ function addRiverCrossingSite(scene: GeneratedScene, width: number, depth: numbe
 export function generateSiteSettlement(context: GeneratorContext): GeneratedScene {
   const archetype = classifySettlementArchetype(context.request.prompt);
   const program = planSettlementSite({ request: context.request, archetype }, context.rng.fork("site-program"));
-  const scene = baseScene("settlement", program.siteType === "harbor-district" ? "The Layered Quays" : program.siteType === "village" ? "The Living Crossroads" : program.siteType === "mining-settlement" ? "Orewater Camp" : "The Planned Ward", `${program.siteType} compiled from terrain, districts, hierarchical roads, frontage parcels and independently seeded buildings.`, context.request.seed, program.bounds, 4, [12, 10, 8, 10]);
+  const settlementTitle = program.requiredFeatures.includes("water-city") ? "The Waterwoven Quarter"
+    : program.requiredFeatures.includes("impact-crater-settlement") ? "The Fallen-Star Village"
+      : program.siteType === "harbor-district" ? "The Layered Quays"
+        : program.siteType === "village" ? "The Living Crossroads"
+          : program.siteType === "mining-settlement" ? "Orewater Camp"
+            : program.morphology.growth === "organic" ? "The Accreted Ward" : "The Planned Ward";
+  const scene = baseScene("settlement", settlementTitle, `${program.siteType} compiled as a ${program.morphology.era} ${program.morphology.roadPattern} settlement from terrain constraints, districts, hierarchical roads, frontage parcels and independently seeded buildings.`, context.request.seed, program.bounds, 4, [12, 10, 8, 10]);
   scene.archetype = archetype;
   scene.floorLabels = ["地面/1F", "主要上层", "屋顶", "B1"];
   scene.siteProgram = summarizeSiteProgram(program);
@@ -314,6 +359,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   if (isFlooded) addFloodedSite(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("elevated-rail")) addElevatedRailMarket(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("water-city")) addWaterCity(scene, program.bounds.x, program.bounds.z);
+  if (program.requiredFeatures.includes("impact-crater-settlement")) addImpactCraterSettlement(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("gate-district")) addGateDistrict(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("war-damaged")) addWarDamage(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("vertical-slum")) addVerticalSlum(scene, program.bounds.x, program.bounds.z);
@@ -359,9 +405,9 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   const core = scene.buildingInstances?.filter((building) => building.detailLevel === "full-interior") ?? [];
   const wantsRoofRoute = ["屋顶", "房顶", "追逐", "roof", "rooftop", "chase"].some((term) => context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term));
   if (wantsRoofRoute && core.length > 0) {
-    const roofY = feetToMeters(22);
     const anchor = core[0];
     if (anchor) {
+      const roofY = (anchor.baseYMeters ?? FLOOR_SLAB_METERS) + (anchor.exteriorHeightMeters ?? feetToMeters(20)) + 0.12;
       const roofSpan = Math.min(2, anchor.footprintCells.x * 0.2);
       scene.primitives.push(corridor(`site-roof-walkway-${anchor.id}`, 2,
         anchor.positionCells.x - roofSpan, anchor.positionCells.z,
@@ -376,7 +422,10 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     for (let index = 1; index < core.length; index += 1) {
       const previous = core[index - 1]; const current = core[index];
       if (!previous || !current || Math.hypot(previous.positionCells.x - current.positionCells.x, previous.positionCells.z - current.positionCells.z) > 16) continue;
-      scene.primitives.push(corridor(`site-roof-bridge-${index}`, 2, previous.positionCells.x, previous.positionCells.z, current.positionCells.x, current.positionCells.z, roofY, 1.2, "wood", ["roof-route", "high-ground", "standable", "site-program"]));
+      const previousRoofY = (previous.baseYMeters ?? FLOOR_SLAB_METERS) + (previous.exteriorHeightMeters ?? feetToMeters(20)) + 0.12;
+      const currentRoofY = (current.baseYMeters ?? FLOOR_SLAB_METERS) + (current.exteriorHeightMeters ?? feetToMeters(20)) + 0.12;
+      if (Math.abs(previousRoofY - currentRoofY) > feetToMeters(5)) continue;
+      scene.primitives.push(corridor(`site-roof-bridge-${index}`, 2, previous.positionCells.x, previous.positionCells.z, current.positionCells.x, current.positionCells.z, (previousRoofY + currentRoofY) / 2, 1.2, "wood", ["roof-route", "high-ground", "standable", "site-program"]));
     }
   }
   for (const zone of program.encounterZones) scene.tactical.push(tacticalFeature(`site-${zone.id}`, zone.kind === "high-ground" ? "highGround" : zone.kind, zone.center.x, zone.center.z, 0, zone.radiusCells, `SiteProgram ${zone.kind} derived from district and route relationships.`));
@@ -388,5 +437,9 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   scene.diagnostics.metrics.siteBlocks = program.diagnostics.blockCount;
   scene.diagnostics.metrics.siteAverageParcelArea = program.diagnostics.averageParcelArea;
   scene.diagnostics.metrics.siteOpenSpaceRatio = program.diagnostics.openSpaceRatio;
+  scene.diagnostics.metrics.siteCurvedRoadRatio = program.diagnostics.curvedRoadRatio;
+  scene.diagnostics.metrics.siteNonRectangularBlockRatio = program.diagnostics.nonRectangularBlockRatio;
+  scene.diagnostics.metrics.siteBuildingPrograms = scene.buildingInstances?.filter((building) => Boolean(building.interiorProgram)).length ?? 0;
+  scene.diagnostics.metrics.siteFocusInteriorPrimitives = scene.primitives.filter((primitive) => primitive.tags?.includes("focus-interior")).length;
   return scene;
 }

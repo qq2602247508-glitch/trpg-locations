@@ -1,5 +1,5 @@
 import type { SeededRandom } from "../core/random";
-import type { SettlementBuildingKind, Vec2 } from "../schema";
+import type { BuildingProgramSummary, SettlementBuildingKind, Vec2 } from "../schema";
 import type {
   BlockProgram,
   DistrictProgram,
@@ -8,6 +8,7 @@ import type {
   ParcelProgram,
   RoadNodeProgram,
   RoadProgram,
+  SettlementMorphologyProgram,
   SitePlanningInput,
   SitePoint,
   SiteProgram,
@@ -81,8 +82,50 @@ function requestedSiteFeatures(text: string): string[] {
   add("colony-port", ["火星殖民", "气闸", "居住模块", "温室", "mars colony", "airlock"]);
   add("coastal-town", ["海滨小镇", "1920年代海滨", "coastal town", "seaside town"]);
   add("fantasy-harbor", ["深水城港区", "奇幻港区", "deepwater harbor", "fantasy harbor"]);
+  add("impact-crater-settlement", ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"]);
+  add("premodern-old-city", ["深水城", "旧城", "老城", "中世纪", "古城", "medieval", "old city"]);
   add("wooden-wall", ["木墙", "木栅", "palisade", "wooden wall"]);
   return features;
+}
+
+function inferMorphology(text: string, siteType: SiteType, features: readonly string[], width: number, depth: number): SettlementMorphologyProgram {
+  const era: SettlementMorphologyProgram["era"] = contains(text, ["1920", "爵士时代"]) ? "1920s"
+    : contains(text, ["前现代", "前工业", "旧城", "古城", "premodern", "pre-modern"]) ? "medieval"
+      : contains(text, ["现代", "当代", "modern"]) ? "modern"
+      : contains(text, ["未来", "赛博", "火星", "future", "cyber"]) ? "future"
+        : contains(text, ["远古", "古代", "ancient"]) ? "ancient"
+          : contains(text, ["深水城", "中世纪", "奇幻", "城堡", "神殿", "medieval", "fantasy"]) ? "medieval"
+            : "timeless";
+  const roadPattern: SettlementMorphologyProgram["roadPattern"] = features.includes("impact-crater-settlement") ? "radial-ring"
+    : features.includes("water-city") ? "canal-banks"
+      : features.includes("hillside-district") ? "contour"
+        : siteType === "harbor-district" || features.includes("fantasy-harbor") ? "harbor-spine"
+          : era === "modern" || era === "future" || features.includes("industrial-plant") ? "rectilinear"
+            : "anchor-web";
+  const growth: SettlementMorphologyProgram["growth"] = features.includes("vertical-slum") ? "vertical"
+    : features.includes("gate-district") ? "military"
+      : features.includes("industrial-plant") ? "industrial"
+        : roadPattern === "rectilinear" ? "planned" : "organic";
+  const anchors: SettlementMorphologyProgram["anchors"] = roadPattern === "harbor-spine" || roadPattern === "canal-banks"
+    ? [
+        { id: "harbor-gate", kind: "gate", point: { x: width * 0.12, z: depth * 0.18 } },
+        { id: "market", kind: "market", point: { x: width * 0.5, z: depth * 0.48 } },
+        { id: "quay", kind: "harbor", point: { x: width * 0.62, z: depth * 0.82 } },
+        { id: "temple", kind: "sacred", point: { x: width * 0.8, z: depth * 0.22 } },
+      ]
+    : roadPattern === "radial-ring"
+      ? [
+          { id: "crater-rim", kind: "terrain", point: { x: width * 0.5, z: depth * 0.5 } },
+          { id: "market", kind: "market", point: { x: width * 0.5, z: depth * 0.2 } },
+          { id: "gate", kind: "gate", point: { x: width * 0.08, z: depth * 0.58 } },
+        ]
+      : [
+          { id: "gate", kind: "gate", point: { x: width * 0.08, z: depth * 0.58 } },
+          { id: "market", kind: "market", point: { x: width * 0.5, z: depth * 0.5 } },
+          { id: "temple", kind: "sacred", point: { x: width * 0.78, z: depth * 0.2 } },
+          { id: "works", kind: "industry", point: { x: width * 0.76, z: depth * 0.78 } },
+        ];
+  return { era, growth, roadPattern, constraints: features.filter((feature) => ["water-city", "fantasy-harbor", "impact-crater-settlement", "hillside-district", "vertical-slum", "river-crossing"].includes(feature)), anchors };
 }
 
 function roleSequence(siteType: SiteType, features: readonly string[]): readonly DistrictRole[] {
@@ -102,6 +145,18 @@ function buildingKindFor(role: DistrictRole, index: number, text: string): Settl
   if (role === "service" && contains(text, ["诊所", "医院", "clinic", "hospital"])) return "clinic";
   if (role === "service" && contains(text, ["铁匠", "工坊", "blacksmith", "workshop"])) return "blacksmith";
   return "home";
+}
+
+function parcelBuildingProgram(kind: SettlementBuildingKind, floors: number): BuildingProgramSummary {
+  const roomCount = kind === "manor" ? 8 : kind === "shrine" ? 6 : kind === "tavern" ? 7 : kind === "warehouse" || kind === "factory" ? 5 : kind === "tower" ? floors * 2 : 4 + floors;
+  const topology: BuildingProgramSummary["topology"] = kind === "tower" ? "vertical" : kind === "manor" ? "courtyard" : kind === "shrine" ? "winged" : kind === "warehouse" || kind === "factory" ? "composite" : "composite";
+  const requiredFeatures = kind === "tavern" ? ["taproom", "kitchen", "guest-room", "cellar"]
+    : kind === "shrine" ? ["nave", "side-chapel", "vestry", "crypt"]
+      : kind === "warehouse" || kind === "factory" ? ["loading-hall", "secure-store", "service-route", "catwalk"]
+        : kind === "tower" ? ["entry", "vertical-core", "high-ground", "roof"]
+          : kind === "manor" ? ["great-hall", "service-wing", "private-chambers", "cellar"]
+            : ["entry", "public-room", "service-room", "private-room"];
+  return { archetype: kind, requiredFeatures, roomCount, connectionCount: Math.max(3, roomCount), levels: floors + 1, topology };
 }
 
 function road(id: string, hierarchy: RoadProgram["hierarchy"], widthCells: number, points: SitePoint[], purpose: RoadProgram["purpose"], levelFeet = 0): RoadProgram {
@@ -233,6 +288,98 @@ function urbanRoadsAndBlocks(siteType: SiteType, width: number, depth: number, d
   return { roads, blocks, districts };
 }
 
+function organicBoundary(center: Vec2, size: Vec2, rng: SeededRandom): SitePoint[] {
+  const hx = size.x / 2; const hz = size.z / 2;
+  const jx = Math.min(1.5, size.x * 0.12); const jz = Math.min(1.5, size.z * 0.12);
+  return [
+    { x: center.x - hx + rng.float(-jx, jx), z: center.z - hz + rng.float(-jz, jz) },
+    { x: center.x + hx + rng.float(-jx, jx), z: center.z - hz + rng.float(-jz, jz) },
+    { x: center.x + hx + rng.float(-jx, jx), z: center.z + hz + rng.float(-jz, jz) },
+    { x: center.x - hx + rng.float(-jx, jx), z: center.z + hz + rng.float(-jz, jz) },
+  ];
+}
+
+function curvedPath(a: SitePoint, b: SitePoint, bend: number): SitePoint[] {
+  const dx = b.x - a.x; const dz = b.z - a.z; const length = Math.max(1, Math.hypot(dx, dz));
+  const nx = -dz / length; const nz = dx / length;
+  return [a, { x: a.x + dx * 0.32 + nx * bend, z: a.z + dz * 0.32 + nz * bend }, { x: a.x + dx * 0.68 - nx * bend * 0.45, z: a.z + dz * 0.68 - nz * bend * 0.45 }, b];
+}
+
+function organicRoadsAndBlocks(siteType: SiteType, width: number, depth: number, density: number, features: readonly string[], morphology: SettlementMorphologyProgram, rng: SeededRandom): { roads: RoadProgram[]; blocks: BlockProgram[]; districts: DistrictProgram[] } {
+  const roads: RoadProgram[] = [];
+  const centre = morphology.anchors.find((anchor) => anchor.id === "market")?.point ?? { x: width / 2, z: depth / 2 };
+  const gate = morphology.anchors.find((anchor) => anchor.kind === "gate")?.point ?? { x: 1, z: depth * 0.55 };
+  const sacred = morphology.anchors.find((anchor) => anchor.kind === "sacred")?.point ?? { x: width * 0.78, z: depth * 0.2 };
+  const industry = morphology.anchors.find((anchor) => anchor.kind === "industry" || anchor.kind === "harbor")?.point ?? { x: width * 0.76, z: depth * 0.78 };
+  if (morphology.roadPattern === "radial-ring") {
+    const radiusX = width * 0.27; const radiusZ = depth * 0.28;
+    const ring = Array.from({ length: 13 }, (_, index) => {
+      const angle = (Math.PI * 2 * index) / 12;
+      const noise = index === 12 ? 1 : rng.float(0.9, 1.1);
+      return { x: width / 2 + Math.cos(angle) * radiusX * noise, z: depth / 2 + Math.sin(angle) * radiusZ * noise };
+    });
+    roads.push(road("road-crater-ring", "street", 2.1, ring, "crowd"));
+    roads.push(road("road-crater-gate", "arterial", 2.7, curvedPath(gate, ring[6] ?? centre, 2.4), "rural"));
+    roads.push(road("road-crater-ramp", "trail", 1.4, curvedPath(ring[9] ?? centre, { x: width * 0.5, z: depth * 0.5 }, -3), "rural", -5));
+  } else if (morphology.roadPattern === "harbor-spine" || morphology.roadPattern === "canal-banks") {
+    const quayZ = depth * 0.82;
+    roads.push(road("road-quay-spine", "quay", 2.8, [
+      { x: 2, z: quayZ + rng.float(-1, 1) }, { x: width * 0.27, z: quayZ - 1.5 },
+      { x: width * 0.56, z: quayZ + 0.7 }, { x: width - 2, z: quayZ - 0.8 },
+    ], "cargo"));
+    roads.push(road("road-gate-market", "arterial", 3, curvedPath(gate, centre, 3.5), "crowd"));
+    roads.push(road("road-market-quay", "street", 2.2, curvedPath(centre, industry, -2.8), "cargo"));
+    roads.push(road("road-temple-lane", "lane", 1.35, curvedPath(centre, sacred, 2.2), "crowd"));
+    roads.push(road("road-ropewalk-lane", "lane", 1.2, curvedPath({ x: width * 0.18, z: depth * 0.58 }, { x: width * 0.84, z: depth * 0.68 }, -3.1), "service"));
+    if (morphology.roadPattern === "canal-banks") {
+      roads.push(road("road-west-canal-bank", "quay", 1.8, [{ x: width * 0.42, z: 2 }, { x: width * 0.39, z: depth * 0.48 }, { x: width * 0.43, z: depth - 2 }], "cargo"));
+      roads.push(road("road-east-canal-bank", "quay", 1.8, [{ x: width * 0.54, z: 2 }, { x: width * 0.57, z: depth * 0.5 }, { x: width * 0.53, z: depth - 2 }], "cargo"));
+    }
+  } else {
+    roads.push(road("road-old-main", "arterial", 2.7, curvedPath(gate, centre, 3.6), "crowd"));
+    roads.push(road("road-market-temple", "street", 2, curvedPath(centre, sacred, -2.6), "crowd"));
+    roads.push(road("road-market-works", "street", 1.8, curvedPath(centre, industry, 2.2), "service"));
+    roads.push(road("road-back-lane", "lane", 1.1, curvedPath({ x: width * 0.2, z: depth * 0.25 }, { x: width * 0.82, z: depth * 0.64 }, -4.2), "service"));
+  }
+
+  if (density > 0.52) roads.push(road("road-density-loop", "lane", density > 0.8 ? 1.35 : 1.05, [
+    { x: width * 0.2, z: depth * 0.42 }, { x: width * 0.34, z: depth * 0.72 },
+    { x: width * 0.67, z: depth * 0.74 }, { x: width * 0.82, z: depth * 0.43 },
+    { x: width * 0.62, z: depth * 0.25 }, { x: width * 0.32, z: depth * 0.24 }, { x: width * 0.2, z: depth * 0.42 },
+  ], "service"));
+  if (density > 0.82) roads.push(road("road-density-alley", "lane", 0.9, curvedPath({ x: width * 0.28, z: depth * 0.68 }, { x: width * 0.72, z: depth * 0.3 }, 3.5), "service"));
+
+  const scaleBand = Math.sqrt((width * depth) / (60 * 48));
+  const blockCount = Math.max(6, Math.round((8 + density * 7) * scaleBand));
+  const roles = roleSequence(siteType, features);
+  const blocks: BlockProgram[] = [];
+  const districts: DistrictProgram[] = [];
+  for (let index = 0; index < blockCount; index += 1) {
+    const angle = (Math.PI * 2 * index) / blockCount + rng.float(-0.16, 0.16);
+    const ring = morphology.roadPattern === "radial-ring" ? rng.float(0.34, 0.46) : index % 3 === 0 ? 0.23 : rng.float(0.28, 0.43);
+    let center = { x: width * 0.5 + Math.cos(angle) * width * ring, z: depth * 0.5 + Math.sin(angle) * depth * ring };
+    if (morphology.roadPattern === "harbor-spine") center = { x: width * (0.12 + 0.76 * ((index + 0.5) / blockCount)) + rng.float(-2, 2), z: depth * (0.25 + (index % 3) * 0.2) + rng.float(-1.7, 1.7) };
+    if (morphology.roadPattern === "canal-banks") {
+      const side = index % 2;
+      const column = Math.floor(index / 2);
+      const rows = Math.max(3, Math.ceil(blockCount / 2));
+      center = {
+        x: side === 0 ? width * rng.float(0.13, 0.32) : width * rng.float(0.66, 0.86),
+        z: depth * (0.12 + 0.7 * ((column + 0.5) / rows)) + rng.float(-1.2, 1.2),
+      };
+    }
+    center = { x: Math.max(5, Math.min(width - 5, center.x)), z: Math.max(5, Math.min(depth - 7, center.z)) };
+    const size = { x: rng.float(8.5, 13.5), z: rng.float(7.5, 12.5) };
+    let role = roles[index % roles.length] ?? "residential";
+    if ((morphology.roadPattern === "harbor-spine" || morphology.roadPattern === "canal-banks") && center.z > depth * 0.6) role = index % 2 ? "harbor" : "commercial";
+    const districtId = `district-${role}-${index + 1}`;
+    const nearestRoad = roads.map((candidate) => ({ id: candidate.id, distance: Math.min(...candidate.points.map((point) => Math.hypot(point.x - center.x, point.z - center.z))) })).sort((a, b) => a.distance - b.distance)[0]?.id ?? roads[0]?.id ?? "road-old-main";
+    districts.push({ id: districtId, label: `${role} accreted quarter`, role, center, size, density: Math.min(1, density * (role === "residential" || role === "commercial" ? 1.08 : 0.9)) });
+    blocks.push({ id: `block-${index + 1}`, districtId, boundary: organicBoundary(center, size, rng.fork(`block-${index}`)), center, size, frontageRoadIds: [nearestRoad], setbackCells: role === "sacred" ? 1.4 : 0.65, openSpaceRatio: role === "sacred" ? 0.34 : role === "residential" ? 0.12 : 0.2 });
+  }
+  return { roads, blocks, districts };
+}
+
 function villageRoadsAndBlocks(width: number, depth: number, density: number, features: readonly string[], rng: SeededRandom): { roads: RoadProgram[]; blocks: BlockProgram[]; districts: DistrictProgram[] } {
   const centre = { x: width * 0.52, z: depth * 0.5 };
   const bridge = { x: width * 0.16, z: depth * 0.42 };
@@ -313,6 +460,14 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
         z: Math.max(minZ + insetZ, Math.min(maxZ - insetZ, proposedCenter.z)),
       };
       const state: ParcelProgram["state"] = features.includes("war-damaged") ? (parcels.length % 3 === 0 ? "temporary" : "abandoned") : features.includes("flooded-site") ? "flooded" : "active";
+      const floors = kind === "tower" ? { min: 3, max: 5 } : kind === "warehouse" || kind === "factory" || kind === "barn" ? { min: 1, max: 2 } : { min: 1, max: 3 };
+      const hx = parcelFrontage / 2; const hz = parcelDepth / 2;
+      const boundary = [
+        { x: center.x - ux * hx - nx * hz, z: center.z - uz * hx - nz * hz },
+        { x: center.x + ux * hx - nx * hz, z: center.z + uz * hx - nz * hz },
+        { x: center.x + ux * hx + nx * hz, z: center.z + uz * hx + nz * hz },
+        { x: center.x - ux * hx + nx * hz, z: center.z - uz * hx + nz * hz },
+      ];
       parcels.push({
         id: `parcel-${parcels.length + 1}`,
         blockId: block.id,
@@ -326,8 +481,11 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
         buildingKind: kind,
         buildingSeed: `${input.request.seed}/site/building/${parcels.length + 1}`,
         lod: "mass",
-        floors: kind === "tower" ? { min: 3, max: 5 } : kind === "warehouse" || kind === "factory" || kind === "barn" ? { min: 1, max: 2 } : { min: 1, max: 3 },
+        floors,
         state,
+        boundary,
+        shapeSignature: boundary.map((point) => `${point.x.toFixed(1)},${point.z.toFixed(1)}`).join("|"),
+        buildingProgram: parcelBuildingProgram(kind, floors.max),
       });
     }
   }
@@ -357,9 +515,12 @@ export function planSettlementSite(input: SitePlanningInput, rng: SeededRandom):
   const factor = sizeFactor(input.request.size);
   const width = Math.round(base[0] * factor) + rng.int(-3, 4);
   const depth = Math.round(base[1] * factor) + rng.int(-3, 4);
-  const layout = siteType === "village" || siteType === "mining-settlement"
-    ? villageRoadsAndBlocks(width, depth, input.request.density, features, rng.fork("rural-layout"))
-    : urbanRoadsAndBlocks(siteType, width, depth, input.request.density, features, rng.fork("urban-layout"));
+  const morphology = inferMorphology(text, siteType, features, width, depth);
+  const layout = morphology.roadPattern !== "rectilinear"
+    ? organicRoadsAndBlocks(siteType, width, depth, input.request.density, features, morphology, rng.fork("organic-layout"))
+    : siteType === "village" || siteType === "mining-settlement"
+      ? villageRoadsAndBlocks(width, depth, input.request.density, features, rng.fork("rural-layout"))
+      : urbanRoadsAndBlocks(siteType, width, depth, input.request.density, features, rng.fork("urban-layout"));
   const roadNodes = attachRoadNodes(layout.roads, width, depth);
   let parcels = makeParcels(input, siteType, layout.blocks, layout.districts, layout.roads, features, rng.fork("parcels"));
   if (features.includes("water-city")) {
@@ -376,7 +537,9 @@ export function planSettlementSite(input: SitePlanningInput, rng: SeededRandom):
   const massCount = parcels.length - fullInteriorCount - facadeCount;
   const isHarbor = siteType === "harbor-district";
   const openSpaces: OpenSpaceProgram[] = [
-    { id: "central-open-space", kind: siteType === "village" ? "market" : "plaza", center: { x: width / 2, z: (isHarbor ? depth - 10 : depth) * 0.5 }, size: { x: siteType === "village" ? 8 : 10, z: siteType === "village" ? 7 : 9 } },
+    ...(features.includes("impact-crater-settlement")
+      ? [{ id: "crater-rim-market", kind: "market" as const, center: { x: width * 0.5, z: depth * 0.16 }, size: { x: 9, z: 5 } }]
+      : [{ id: "central-open-space", kind: siteType === "village" ? "market" as const : "plaza" as const, center: { x: width / 2, z: (isHarbor ? depth - 10 : depth) * 0.5 }, size: { x: siteType === "village" ? 8 : 10, z: siteType === "village" ? 7 : 9 } }]),
     ...(siteType === "village" ? [{ id: "village-fields", kind: "farm" as const, center: { x: width * 0.2, z: depth * 0.78 }, size: { x: width * 0.28, z: depth * 0.2 } }, { id: "village-orchard", kind: "orchard" as const, center: { x: width * 0.78, z: depth * 0.18 }, size: { x: width * 0.22, z: depth * 0.2 } }] : []),
     ...(isHarbor ? [{ id: "fish-market", kind: "market" as const, center: { x: width * 0.55, z: depth - 13 }, size: { x: 12, z: 6 } }, { id: "harbor-quay", kind: "quay" as const, center: { x: width / 2, z: depth - 9 }, size: { x: width - 5, z: 3.5 } }] : []),
     ...(features.includes("industrial-plant") ? [{ id: "industrial-loading-yard", kind: "yard" as const, center: { x: width * 0.48, z: depth * 0.78 }, size: { x: width * 0.42, z: depth * 0.17 } }] : []),
@@ -389,6 +552,7 @@ export function planSettlementSite(input: SitePlanningInput, rng: SeededRandom):
     id: `site-${input.request.seed}`,
     seed: input.request.seed,
     siteType,
+    morphology,
     bounds: { x: width, z: depth },
     terrain: { kind: isHarbor ? "coast" : siteType === "mining-settlement" ? "valley" : siteType === "village" ? "rolling" : "urban", buildableRatio: isHarbor ? 0.78 : 0.9, elevationBandsFeet: features.includes("hillside-district") ? [0, 5, 10, 15] : siteType === "village" || siteType === "mining-settlement" ? [0, 5, 10] : [0, 5], ...(isHarbor ? { waterEdge: [{ x: 0, z: depth - 8 }, { x: width * 0.28, z: depth - 9 }, { x: width * 0.58, z: depth - 7 }, { x: width, z: depth - 9 }] } : {}) },
     districts: layout.districts,
@@ -413,6 +577,11 @@ export function planSettlementSite(input: SitePlanningInput, rng: SeededRandom):
       blockCount: layout.blocks.length,
       averageParcelArea: parcels.length > 0 ? parcelArea / parcels.length : 0,
       openSpaceRatio: openSpaceArea / (width * depth),
+      curvedRoadRatio: layout.roads.length > 0 ? layout.roads.filter((candidate) => candidate.points.length > 2).length / layout.roads.length : 0,
+      nonRectangularBlockRatio: layout.blocks.length > 0 ? layout.blocks.filter((block) => block.boundary.some((point, index) => {
+        const next = block.boundary[(index + 1) % block.boundary.length];
+        return Boolean(next && Math.abs(point.x - next.x) > 0.05 && Math.abs(point.z - next.z) > 0.05);
+      })).length / layout.blocks.length : 0,
     },
   };
 }

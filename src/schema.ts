@@ -95,17 +95,38 @@ export interface BuildingInstance {
   rotationY: number;
   floors: number;
   floorHeightFeet: number[];
+  baseYMeters?: number;
+  exteriorHeightMeters?: number;
   detailLevel: "mass" | "facade" | "full-interior";
   parcelId?: string;
   frontageRoadId?: string;
   entranceCells?: Vec2;
   buildingProgram?: BuildingProgramSummary;
+  interiorProgram?: SettlementBuildingProgram;
   envelopeProgram?: {
     version: 1;
     variant: string;
     partCount: number;
     silhouetteSignature: string;
   };
+}
+
+export interface SettlementBuildingRoomProgram {
+  id: string;
+  name: string;
+  level: number;
+  role: "public" | "private" | "service" | "circulation" | "combat";
+  centerLocalCells: Vec2;
+  sizeCells: Vec2;
+}
+
+export interface SettlementBuildingProgram {
+  version: 1;
+  archetype: SettlementBuildingKind;
+  envelopeVariant: string;
+  rooms: SettlementBuildingRoomProgram[];
+  connections: Array<{ from: string; to: string; kind: "door" | "stair" | "cellar-stair" }>;
+  verticalCores: Array<{ id: string; fromLevel: number; toLevel: number; positionLocalCells: Vec2; kind: "stair" | "ladder" }>;
 }
 
 /** Auditable room-graph contract used before building geometry is compiled. */

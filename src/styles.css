@@ -744,6 +744,27 @@ textarea:focus-visible {
   margin-top: 14px;
 }
 
+.building-focus-field {
+  margin-top: 12px;
+}
+
+.building-focus-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.building-focus-actions .toggle-button {
+  display: block;
+  padding: 9px 10px;
+}
+
+.building-focus-actions .toggle-button span {
+  display: grid;
+  gap: 2px;
+}
+
 .toggle-button {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) 28px;

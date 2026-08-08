@@ -5,6 +5,14 @@ export type DistrictRole = "civic" | "commercial" | "residential" | "industrial"
 export type RoadHierarchy = "arterial" | "street" | "lane" | "trail" | "quay" | "bridge" | "rail" | "elevated" | "maintenance";
 export type BuildingLod = "full-interior" | "facade" | "mass";
 
+export interface SettlementMorphologyProgram {
+  era: "ancient" | "medieval" | "1920s" | "modern" | "future" | "timeless";
+  growth: "organic" | "planned" | "military" | "industrial" | "vertical";
+  roadPattern: "harbor-spine" | "anchor-web" | "radial-ring" | "contour" | "canal-banks" | "rectilinear";
+  constraints: string[];
+  anchors: Array<{ id: string; kind: "gate" | "market" | "harbor" | "sacred" | "industry" | "terrain"; point: SitePoint }>;
+}
+
 export interface SitePoint extends Vec2 {
   y?: number;
 }
@@ -69,6 +77,8 @@ export interface ParcelProgram {
   lod: BuildingLod;
   floors: { min: number; max: number };
   state: "active" | "abandoned" | "flooded" | "temporary";
+  boundary?: SitePoint[];
+  shapeSignature?: string;
   buildingProgram?: BuildingProgramSummary;
 }
 
@@ -91,6 +101,7 @@ export interface SiteProgram {
   id: string;
   seed: string;
   siteType: SiteType;
+  morphology: SettlementMorphologyProgram;
   bounds: Vec2;
   terrain: SiteTerrainProgram;
   districts: DistrictProgram[];
@@ -115,6 +126,8 @@ export interface SiteProgram {
     blockCount: number;
     averageParcelArea: number;
     openSpaceRatio: number;
+    curvedRoadRatio: number;
+    nonRectangularBlockRatio: number;
   };
 }
 
@@ -134,6 +147,9 @@ export interface SiteProgramSummary {
   buildingCoverage: number;
   averageParcelArea: number;
   openSpaceRatio: number;
+  roadPattern: SettlementMorphologyProgram["roadPattern"];
+  curvedRoadRatio: number;
+  nonRectangularBlockRatio: number;
 }
 
 export interface SitePlanningInput {
@@ -158,5 +174,8 @@ export function summarizeSiteProgram(program: SiteProgram): SiteProgramSummary {
     buildingCoverage: program.diagnostics.buildingCoverage,
     averageParcelArea: program.diagnostics.averageParcelArea,
     openSpaceRatio: program.diagnostics.openSpaceRatio,
+    roadPattern: program.morphology.roadPattern,
+    curvedRoadRatio: program.diagnostics.curvedRoadRatio,
+    nonRectangularBlockRatio: program.diagnostics.nonRectangularBlockRatio,
   };
 }

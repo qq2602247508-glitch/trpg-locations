@@ -4,6 +4,7 @@ import type {
   GeneratorContext,
   MaterialKey,
   SettlementBuildingKind,
+  SettlementBuildingProgram,
 } from "../schema";
 import {
   FLOOR_SLAB_METERS,
@@ -79,14 +80,46 @@ function fullInteriorLabels(kind: SettlementBuildingKind): { publicName: string;
   return { publicName: "Living room", serviceName: "Store and work room", upperName: "Sleeping loft", basementName: "Root cellar", tags: ["living", "service", "loft", "cellar"] };
 }
 
-function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, generated: ReturnType<typeof profile>, envelope: BuildingEnvelopeProgram): BuildingInstance {
+function planSettlementBuildingProgram(lot: BuildingLot, generated: ReturnType<typeof profile>, envelope: BuildingEnvelopeProgram): SettlementBuildingProgram {
+  const labels = fullInteriorLabels(lot.kind);
+  const primary = envelope.parts[0];
+  const rooms: SettlementBuildingProgram["rooms"] = [];
+  if (primary) rooms.push({ id: "ground-public", name: labels.publicName, level: 0, role: "public", centerLocalCells: primary.offset, sizeCells: { x: primary.size.x * 0.68, z: primary.size.z * 0.78 } });
+  for (const [index, extension] of envelope.parts.slice(1).entries()) rooms.push({ id: `ground-service-${index + 1}`, name: index === 0 ? labels.serviceName : `${labels.serviceName} annex ${index + 1}`, level: 0, role: "service", centerLocalCells: extension.offset, sizeCells: { x: extension.size.x * 0.84, z: extension.size.z * 0.8 } });
+  const representedFloors = Math.min(generated.floors, 3);
+  for (let level = 1; level < representedFloors; level += 1) rooms.push({ id: `upper-${level}`, name: `${labels.upperName} ${level}`, level, role: lot.kind === "tower" ? "combat" : "private", centerLocalCells: { x: (primary?.offset.x ?? 0) + level * 0.08, z: (primary?.offset.z ?? 0) - level * 0.06 }, sizeCells: { x: Math.max(3, (primary?.size.x ?? lot.width) * (0.82 - level * 0.08)), z: Math.max(3, (primary?.size.z ?? lot.depth) * (0.78 - level * 0.07)) } });
+  rooms.push({ id: "basement", name: labels.basementName, level: 3, role: "service", centerLocalCells: { x: (primary?.offset.x ?? 0) - lot.width * 0.08, z: (primary?.offset.z ?? 0) + lot.depth * 0.08 }, sizeCells: { x: Math.max(3, (primary?.size.x ?? lot.width) * 0.62), z: Math.max(3, (primary?.size.z ?? lot.depth) * 0.55) } });
+  const connections: SettlementBuildingProgram["connections"] = [];
+  for (const room of rooms.filter((candidate) => candidate.level === 0 && candidate.id !== "ground-public")) connections.push({ from: "ground-public", to: room.id, kind: "door" });
+  const uppers = rooms.filter((candidate) => candidate.id.startsWith("upper-"));
+  for (const [index, room] of uppers.entries()) connections.push({ from: index === 0 ? "ground-public" : uppers[index - 1]?.id ?? "ground-public", to: room.id, kind: "stair" });
+  connections.push({ from: rooms.find((room) => room.id.startsWith("ground-service"))?.id ?? "ground-public", to: "basement", kind: "cellar-stair" });
+  const verticalCores: SettlementBuildingProgram["verticalCores"] = [
+    ...uppers.map((room, index) => ({ id: `main-stair-${index + 1}`, fromLevel: index, toLevel: index + 1, positionLocalCells: { x: lot.width * 0.26, z: lot.depth * 0.16 }, kind: "stair" as const })),
+    { id: "cellar-stair", fromLevel: 3, toLevel: 0, positionLocalCells: { x: -lot.width * 0.26, z: lot.depth * 0.12 }, kind: "stair" as const },
+  ];
+  return { version: 1, archetype: lot.kind, envelopeVariant: envelope.variant, rooms, connections, verticalCores };
+}
+
+function summarizeBuildingProgram(program: SettlementBuildingProgram, tags: string[]): NonNullable<BuildingInstance["buildingProgram"]> {
+  return {
+    archetype: program.archetype,
+    requiredFeatures: tags,
+    roomCount: program.rooms.length,
+    connectionCount: program.connections.length,
+    levels: new Set(program.rooms.map((room) => room.level)).size,
+    topology: program.archetype === "tower" ? "vertical" : program.archetype === "manor" ? "courtyard" : program.archetype === "shrine" ? "winged" : "composite",
+  };
+}
+
+function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, generated: ReturnType<typeof profile>, envelope: BuildingEnvelopeProgram, interiorProgram: SettlementBuildingProgram): BuildingInstance {
   const baseY = lot.baseY ?? FLOOR_SLAB_METERS;
   const width = Math.max(5.2, lot.width * 0.9);
   const depth = Math.max(5, lot.depth * 0.86);
   const wallHeight = feetToMeters(generated.floorHeightFeet[0] ?? 10);
   const upperY = baseY + wallHeight;
   const basementY = baseY - feetToMeters(10);
-  const tags = ["settlement-building", "independent-building-module", "full-interior", `building:${lot.kind}`, `district:${lot.district}`];
+  const tags = ["settlement-building", "independent-building-module", "full-interior", `building:${lot.kind}`, `building-instance:${lot.id}`, `district:${lot.district}`];
   const point = (x: number, z: number) => localPoint(lot, x, z);
   const addRotatedBox = (id: string, x: number, z: number, w: number, h: number, d: number, y: number, material: MaterialKey, extra: string[] = [], level = 0) => {
     const p = point(x, z);
@@ -161,22 +194,67 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     id: lot.id, archetype: lot.kind, seed: lot.seed, district: lot.district,
     positionCells: { x: lot.x, z: lot.z }, footprintCells: { x: lot.width, z: lot.depth }, rotationY: lot.rotation,
     floors: 4, floorHeightFeet: [generated.floorHeightFeet[0] ?? 10, generated.floorHeightFeet[1] ?? 9, 8, 10], detailLevel: "full-interior",
+    baseYMeters: baseY,
+    exteriorHeightMeters: wallHeight * 1.82,
     ...(lot.parcelId ? { parcelId: lot.parcelId } : {}), ...(lot.frontageRoadId ? { frontageRoadId: lot.frontageRoadId } : {}), ...(lot.entrance ? { entranceCells: lot.entrance } : {}),
-    buildingProgram: { archetype: lot.kind, requiredFeatures: labels.tags, roomCount: 4, connectionCount: 3, levels: 4, topology: lot.kind === "tower" ? "vertical" : "composite" },
+    buildingProgram: summarizeBuildingProgram(interiorProgram, labels.tags),
+    interiorProgram,
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },
   };
   (scene.buildingInstances ??= []).push(instance);
   return instance;
 }
 
+function addFocusInteriorBlueprint(scene: GeneratedScene, lot: BuildingLot, generated: ReturnType<typeof profile>, envelope: BuildingEnvelopeProgram, interiorProgram: SettlementBuildingProgram): void {
+  const baseY = lot.baseY ?? FLOOR_SLAB_METERS;
+  const primary = envelope.parts[0];
+  if (!primary) return;
+  const tags = ["settlement-building", "independent-building-module", "focus-interior", `building:${lot.kind}`, `building-instance:${lot.id}`, `district:${lot.district}`];
+  const point = (x: number, z: number) => localPoint(lot, x, z);
+  let y = baseY;
+  for (let level = 0; level < Math.min(generated.floors, 3); level += 1) {
+    const floorHeight = feetToMeters(generated.floorHeightFeet[level] ?? 10);
+    const shrink = Math.max(0.62, 1 - level * 0.1);
+    const width = Math.max(3.8, primary.size.x * shrink);
+    const depth = Math.max(3.8, primary.size.z * shrink);
+    const center = point(primary.offset.x + level * 0.08, primary.offset.z - level * 0.06);
+    const add = (id: string, lx: number, lz: number, w: number, h: number, d: number, material: MaterialKey, extra: string[] = []) => {
+      const position = point(primary.offset.x + level * 0.08 + lx, primary.offset.z - level * 0.06 + lz);
+      scene.primitives.push(box(`${lot.id}-focus-${level}-${id}`, level, position.x, y, position.z, w, h, d, material, [...tags, ...extra], lot.rotation));
+    };
+    const authoredRoom = interiorProgram.rooms.find((room) => room.level === level);
+    add("floor", 0, 0, width, FLOOR_SLAB_METERS, depth, "wood", ["floor", "standable", "program-room", ...(authoredRoom ? [`program-room:${authoredRoom.id}`] : [])]);
+    add("north", 0, -depth / 2, width, floorHeight, 0.18, generated.material, ["wall", "building-shell"]);
+    add("west", -width / 2, 0, 0.18, floorHeight, depth, generated.material, ["wall", "building-shell"]);
+    add("east", width / 2, 0, 0.18, floorHeight, depth, generated.material, ["wall", "building-shell"]);
+    add("south-left", -width * 0.31, depth / 2, width * 0.34, floorHeight, 0.18, generated.material, ["wall", "door-frame"]);
+    add("south-right", width * 0.31, depth / 2, width * 0.34, floorHeight, 0.18, generated.material, ["wall", "door-frame"]);
+    const partitionX = level % 2 === 0 ? -width * 0.12 : width * 0.17;
+    add("partition", partitionX, -depth * 0.08, 0.18, floorHeight * 0.92, depth * 0.62, generated.material, ["wall", "room-partition", "door-frame"]);
+    if (level > 0 || generated.floors > 1) {
+      const stair = point(primary.offset.x + width * 0.28, primary.offset.z + depth * 0.18);
+      scene.primitives.push(stairs(`${lot.id}-focus-stair-${level}`, level, stair.x, y, stair.z, 1.05, floorHeight, Math.max(2.8, depth * 0.42), "wood", [...tags, "building-stair", "vertical-opening", "standable"], lot.rotation));
+    }
+    if (level === 0) scene.primitives.push(box(`${lot.id}-focus-furniture`, level, center.x + width * 0.12, y + FLOOR_SLAB_METERS, center.z, Math.max(1.2, width * 0.24), feetToMeters(3.2), 1.1, lot.kind === "factory" || lot.kind === "clinic" ? "metal" : "wood", [...tags, "furniture", "cover"], lot.rotation));
+    y += floorHeight;
+  }
+  const cellarY = baseY - feetToMeters(9);
+  const cellar = point(primary.offset.x - primary.size.x * 0.08, primary.offset.z + primary.size.z * 0.08);
+  scene.primitives.push(
+    box(`${lot.id}-focus-cellar-floor`, 3, cellar.x, cellarY, cellar.z, primary.size.x * 0.62, FLOOR_SLAB_METERS, primary.size.z * 0.55, "stone", [...tags, "floor", "underground", "standable"], lot.rotation),
+    stairs(`${lot.id}-focus-cellar-stair`, 3, cellar.x - primary.size.x * 0.22, cellarY, cellar.z, 1.05, baseY - cellarY, Math.max(3, primary.size.z * 0.45), "stone", [...tags, "building-stair", "vertical-opening", "underground", "standable"], lot.rotation),
+  );
+}
+
 /** Independent exterior grammar consumed by settlement planners. */
 export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLot, rng: GeneratorContext["rng"]): BuildingInstance {
   const generated = profile(lot.kind, rng);
   const envelope = planBuildingEnvelope(lot.kind, lot.width, lot.depth, rng.fork("building-envelope"));
-  if (lot.lod === "full-interior") return instantiateFullInterior(scene, lot, generated, envelope);
+  const interiorProgram = planSettlementBuildingProgram(lot, generated, envelope);
+  if (lot.lod === "full-interior") return instantiateFullInterior(scene, lot, generated, envelope, interiorProgram);
   const totalHeight = feetToMeters(generated.floorHeightFeet.reduce((sum, height) => sum + height, 0));
   const y = lot.baseY ?? FLOOR_SLAB_METERS;
-  const tags = ["settlement-building", "independent-building-module", `building:${lot.kind}`, `district:${lot.district}`];
+  const tags = ["settlement-building", "independent-building-module", `building:${lot.kind}`, `building-instance:${lot.id}`, `district:${lot.district}`];
   for (const [partIndex, envelopePart] of envelope.parts.entries()) {
     const point = localPoint(lot, envelopePart.offset.x, envelopePart.offset.z);
     const damaged = lot.state === "abandoned" && partIndex === envelope.parts.length - 1;
@@ -229,6 +307,8 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
     scene.primitives.push(box(`${lot.id}-temporary-barricade`, 0, barricade.x, y, barricade.z, Math.min(3.6, lot.width * 0.62), feetToMeters(4), 0.55, "wood", [...tags, "temporary", "barricade", "cover"], lot.rotation));
   }
 
+  addFocusInteriorBlueprint(scene, lot, generated, envelope, interiorProgram);
+
   scene.rooms.push(createRoom(`${lot.id}-room`, `${lot.kind} at ${lot.district}`, lot.kind === "warehouse" ? "service" : lot.kind === "tower" ? "combat" : "public", 0, lot.x, lot.z, lot.width, lot.depth));
   const instance: BuildingInstance = {
     id: lot.id,
@@ -240,10 +320,14 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
     rotationY: lot.rotation,
     floors: generated.floors,
     floorHeightFeet: generated.floorHeightFeet,
+    baseYMeters: y,
+    exteriorHeightMeters: totalHeight,
     detailLevel: lot.lod ?? "facade",
     ...(lot.parcelId ? { parcelId: lot.parcelId } : {}),
     ...(lot.frontageRoadId ? { frontageRoadId: lot.frontageRoadId } : {}),
     ...(lot.entrance ? { entranceCells: lot.entrance } : {}),
+    buildingProgram: summarizeBuildingProgram(interiorProgram, fullInteriorLabels(lot.kind).tags),
+    interiorProgram,
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },
   };
   (scene.buildingInstances ??= []).push(instance);

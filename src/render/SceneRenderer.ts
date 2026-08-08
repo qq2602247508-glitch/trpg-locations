@@ -227,6 +227,8 @@ export class SceneRenderer {
 
   private currentScene?: GeneratedScene;
 
+  private focusedBuildingId?: string;
+
   private worldBounds: WorldBounds = {
     minX: -8,
     maxX: 8,
@@ -279,6 +281,7 @@ export class SceneRenderer {
 
   setScene(scene: GeneratedScene): void {
     this.currentScene = scene;
+    this.focusedBuildingId = undefined;
     this.floorLayers.clear();
     this.modelRoot.clear();
     this.primitiveBatches = 0;
@@ -291,6 +294,38 @@ export class SceneRenderer {
     this.buildTacticalMarkers(scene);
     this.positionCamera();
     this.setFloorView(this.activeFloorView);
+  }
+
+  setBuildingFocus(buildingId?: string): void {
+    if (!this.currentScene) return;
+    const selected = buildingId ? this.currentScene.buildingInstances?.find((building) => building.id === buildingId) : undefined;
+    this.focusedBuildingId = selected?.id;
+    this.modelRoot.clear();
+    this.floorLayers.clear();
+    this.primitiveBatches = 0;
+    this.buildPrimitiveBatches(this.currentScene);
+    if (!selected) {
+      this.setFloorView("roof");
+      this.positionCamera();
+      return;
+    }
+    this.setFloorView("cut");
+    this.cameraMode = "perspective";
+    this.controls.enabled = true;
+    // BuildingInstance retains the original `*Cells` field names for schema
+    // compatibility, but settlement planners author these values in the same
+    // metre-space as primitive positions. Applying GRID_METERS here moved the
+    // focus camera away from the selected building a second time.
+    const target = new THREE.Vector3(
+      selected.positionCells.x,
+      (selected.baseYMeters ?? 0) + Math.max(1.4, (selected.exteriorHeightMeters ?? selected.floorHeightFeet.reduce((sum, value) => sum + value, 0) * 0.3048) * 0.38),
+      selected.positionCells.z,
+    );
+    const span = Math.max(selected.footprintCells.x, selected.footprintCells.z, 7);
+    this.controls.target.copy(target);
+    this.camera.position.set(target.x + span * 1.35, target.y + span * 0.9, target.z + span * 1.2);
+    this.camera.lookAt(target);
+    this.controls.update();
   }
 
   setFloorView(view: FloorView): void {
@@ -671,9 +706,22 @@ export class SceneRenderer {
       ...scene.primitives.map((primitive) => primitive.level),
       0,
     );
+    const focusedBuilding = this.focusedBuildingId ? scene.buildingInstances?.find((building) => building.id === this.focusedBuildingId) : undefined;
+    const focusCenter = focusedBuilding ? new THREE.Vector2(focusedBuilding.positionCells.x, focusedBuilding.positionCells.z) : undefined;
+    const focusRadius = focusedBuilding ? Math.max(focusedBuilding.footprintCells.x, focusedBuilding.footprintCells.z, 7) * 2.4 : Number.POSITIVE_INFINITY;
     for (let level = 0; level <= maxLevel; level += 1) this.createFloorLayer(level);
 
     for (const primitive of scene.primitives) {
+      const instanceTag = primitive.tags?.find((tag) => tag.startsWith("building-instance:"));
+      const primitiveBuildingId = instanceTag?.slice("building-instance:".length);
+      const focusInterior = primitive.tags?.includes("focus-interior") === true;
+      if (!this.focusedBuildingId && focusInterior) continue;
+      if (this.focusedBuildingId) {
+        if (primitiveBuildingId && primitiveBuildingId !== this.focusedBuildingId) continue;
+        if (primitiveBuildingId === this.focusedBuildingId && !focusInterior && primitive.tags?.some((tag) => tag === "envelope-part" || tag === "roof") === true) continue;
+        if (!primitiveBuildingId && primitive.tags?.includes("roof-route") === true) continue;
+        if (!primitiveBuildingId && focusCenter && primitive.id !== "site-terrain-base" && Math.hypot(primitive.position.x - focusCenter.x, primitive.position.z - focusCenter.y) > focusRadius) continue;
+      }
       // A reachable roof deck is authored as ordinary stone/wood so it can
       // carry a tactical grid.  It is still part of the roof inspection
       // layer: keeping it in the numeric top floor used to hide the actual

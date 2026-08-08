@@ -33,6 +33,9 @@ interface AppElements {
   stageDescription: HTMLElement;
   seedBadge: HTMLElement;
   floor: HTMLSelectElement;
+  buildingFocus: HTMLSelectElement;
+  buildingFocusButton: HTMLButtonElement;
+  buildingFocusExit: HTMLButtonElement;
   time: HTMLSelectElement;
   exportScene: HTMLButtonElement;
   transparencyToggle: HTMLButtonElement;
@@ -174,6 +177,14 @@ export async function mountApp(root: HTMLElement): Promise<void> {
                 <option value="roof">完整 · 显示屋顶</option>
               </select>
             </label>
+            <label class="field building-focus-field">
+              <span>进入建筑</span>
+              <select data-role="building-focus" aria-label="选择聚落建筑"><option value="">当前场景没有可选建筑</option></select>
+            </label>
+            <div class="building-focus-actions">
+              <button class="toggle-button" data-role="building-focus-button" type="button"><span><strong>聚焦内部</strong><small>按需显示该建筑的房间与交通</small></span></button>
+              <button class="toggle-button" data-role="building-focus-exit" type="button"><span><strong>返回聚落</strong><small>恢复完整屋顶与城市上下文</small></span></button>
+            </div>
             <div class="toggle-stack">
               <button class="toggle-button" data-role="routes-toggle" type="button" aria-pressed="false">
                 <span class="toggle-glyph route-glyph" aria-hidden="true"></span>
@@ -281,6 +292,19 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     const raw = elements.floor.value;
     renderer.setFloorView(raw === "cut" || raw === "roof" ? raw : Number(raw));
   });
+  elements.buildingFocusButton.addEventListener("click", () => {
+    if (!activeScene || !elements.buildingFocus.value) return;
+    renderer.setBuildingFocus(elements.buildingFocus.value);
+    elements.floor.value = "cut";
+    setToggle(elements.topCameraToggle, false);
+    setToggle(elements.cameraToggle, false);
+    setStatus(elements, "建筑内部聚焦", "ok");
+  });
+  elements.buildingFocusExit.addEventListener("click", () => {
+    renderer.setBuildingFocus();
+    elements.floor.value = "roof";
+    setStatus(elements, "返回聚落总览", "ok");
+  });
   elements.time.addEventListener("change", () => {
     renderer.setTimeOfDay(elements.time.value === "night" ? "night" : "day");
   });
@@ -380,6 +404,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       renderer.setRouteVisibility(routeDebug);
       renderer.setTacticalVisibility(tacticalDebug);
       renderSceneDetails(elements, scene, lastStats);
+      if (scene.siteProgram && elements.floor.value === "cut") elements.floor.value = "roof";
       const floorView = elements.floor.value;
       renderer.setFloorView(floorView === "cut" || floorView === "roof" ? floorView : Number(floorView));
       setStatus(elements, scene.diagnostics.valid ? "校验通过" : "需要注意", scene.diagnostics.valid ? "ok" : "warn");
@@ -418,6 +443,9 @@ function getElements(root: HTMLElement): AppElements {
     stageDescription: query(root, '[data-role="stage-description"]'),
     seedBadge: query(root, '[data-role="seed-badge"]'),
     floor: query(root, '[data-role="floor"]'),
+    buildingFocus: query(root, '[data-role="building-focus"]'),
+    buildingFocusButton: query(root, '[data-role="building-focus-button"]'),
+    buildingFocusExit: query(root, '[data-role="building-focus-exit"]'),
     time: query(root, '[data-role="time"]'),
     exportScene: query(root, '[data-role="export-scene"]'),
     transparencyToggle: query(root, '[data-role="transparency-toggle"]'),
@@ -472,6 +500,7 @@ function renderSceneDetails(elements: AppElements, scene: GeneratedScene, stats:
   elements.stageDescription.textContent = scene.description;
   elements.seedBadge.textContent = `SEED ${scene.seed}`;
   populateFloorOptions(elements.floor, scene);
+  populateBuildingOptions(elements.buildingFocus, scene);
   renderMetrics(elements.metrics, scene, stats);
   renderDiagnostics(elements.diagnostics, scene);
   renderRooms(elements.roomList, scene);
@@ -481,6 +510,21 @@ function renderSceneDetails(elements: AppElements, scene: GeneratedScene, stats:
   score.classList.toggle("is-warning", !scene.diagnostics.valid);
   const roomCount = query<HTMLElement>(elements.roomList.parentElement ?? elements.roomList, ".room-count");
   roomCount.textContent = `${scene.rooms.length} 间`;
+}
+
+function populateBuildingOptions(select: HTMLSelectElement, scene: GeneratedScene): void {
+  select.replaceChildren();
+  const buildings = scene.buildingInstances ?? [];
+  if (buildings.length === 0) {
+    select.add(new Option("当前场景没有可选建筑", ""));
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
+  for (const [index, building] of buildings.entries()) {
+    const detail = building.detailLevel === "full-interior" ? "完整" : building.detailLevel === "facade" ? "按需内部" : "远景/按需";
+    select.add(new Option(`${index + 1}. ${building.archetype} · ${building.district} · ${detail}`, building.id));
+  }
 }
 
 function floorLabel(scene: GeneratedScene, level: number): string {
