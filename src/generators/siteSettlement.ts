@@ -234,9 +234,9 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
     water("mangrove-tidal-branch-east", 0, width * 0.78, -0.16, depth * 0.72, 3.8, 0.25, depth * 0.38, ["mangrove", "tidal-channel", "watercourse", "site-program"]),
   );
   const boardwalks = [
-    [[width * 0.08, depth * 0.24], [width * 0.2, depth * 0.14], [width * 0.34, depth * 0.22], [width * 0.28, depth * 0.4], [width * 0.08, depth * 0.24]],
-    [[width * 0.34, depth * 0.68], [width * 0.48, depth * 0.56], [width * 0.66, depth * 0.68], [width * 0.58, depth * 0.82], [width * 0.34, depth * 0.68]],
-    [[width * 0.66, depth * 0.22], [width * 0.78, depth * 0.12], [width * 0.94, depth * 0.28], [width * 0.84, depth * 0.44], [width * 0.66, depth * 0.22]],
+    [[width * 0.08, depth * 0.25], [width * 0.18, depth * 0.11], [width * 0.35, depth * 0.18], [width * 0.3, depth * 0.36], [width * 0.15, depth * 0.43], [width * 0.08, depth * 0.25]],
+    [[width * 0.38, depth * 0.59], [width * 0.52, depth * 0.47], [width * 0.68, depth * 0.55], [width * 0.71, depth * 0.71], [width * 0.54, depth * 0.8], [width * 0.4, depth * 0.68], [width * 0.38, depth * 0.59]],
+    [[width * 0.68, depth * 0.2], [width * 0.82, depth * 0.1], [width * 0.95, depth * 0.23], [width * 0.87, depth * 0.4], [width * 0.71, depth * 0.34], [width * 0.68, depth * 0.2]],
   ] as const;
   for (const [index, points] of boardwalks.entries()) {
     for (let segment = 1; segment < points.length; segment += 1) {
@@ -657,8 +657,8 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     const mangroveNode = isMangrovePort ? mangroveBuildingNodes[adaptedBuildings % mangroveBuildingNodes.length] : undefined;
     const mangroveSide = isMangrovePort ? (adaptedBuildings % 2 === 0 ? -1 : 1) : 0;
     const mangrovePlacement: { x: number; z: number; elevationFeet?: number } | undefined = mangroveNode ? {
-      x: mangroveNode[0] + mangroveSide * (4.5 + (adaptedBuildings % 3) * 1.3),
-      z: mangroveNode[1] + Math.sin(adaptedBuildings * 1.7) * 2.2,
+      x: mangroveNode[0] + mangroveSide * (2.7 + (adaptedBuildings % 3) * 0.8),
+      z: mangroveNode[1] + Math.sin(adaptedBuildings * 1.7) * 1.2,
     } : undefined;
     const placement = mangrovePlacement ?? semanticPlacement ?? nearestBuildable(parcel.center.x, parcel.center.z, clearance);
     if (!placement) continue;
