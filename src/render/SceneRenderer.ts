@@ -618,7 +618,13 @@ export class SceneRenderer {
     for (const primitive of scene.primitives) {
       const isRoof = primitive.material === "roof" || primitive.tags?.includes("roof") === true;
       const isBuilding = primitive.tags?.some((tag) => tag === "wall" || tag === "settlement-building" || tag === "building-shell" || tag === "curtain-wall" || tag === "keep") === true;
-      const ghost = this.buildingTransparency && isBuilding;
+      // In architectural scenes the slab itself is part of the inspection
+      // problem: opaque upper floors hide rooms and create the same stacked
+      // plate look that made the earlier screenshots unreadable. Ghost the
+      // floor surface together with walls, but leave tactical furniture solid.
+      const isArchitecturalFloor = (scene.kind === "building" || scene.kind === "dungeon" || scene.kind === "tower")
+        && primitive.tags?.includes("floor-slab") === true;
+      const ghost = this.buildingTransparency && (isBuilding || isArchitecturalFloor);
       const layer = this.floorLayers.get(primitive.level) ?? this.createFloorLayer(primitive.level);
       const host = isRoof ? layer.roof : layer.structure;
       const chunk = spatialBatchKey(primitive.position, this.worldBounds);
@@ -639,7 +645,7 @@ export class SceneRenderer {
     for (const batch of batchMap.values()) {
       const mesh = new THREE.InstancedMesh(
         this.getGeometry(batch.shape),
-        this.getMaterial(batch.material, batch.primitives.some((primitive) => primitive.tags?.some((tag) => tag === "wall" || tag === "settlement-building" || tag === "building-shell" || tag === "curtain-wall" || tag === "keep") === true)),
+        this.getMaterial(batch.material, batch.primitives.some((primitive) => primitive.tags?.some((tag) => tag === "wall" || tag === "settlement-building" || tag === "building-shell" || tag === "curtain-wall" || tag === "keep" || tag === "floor-slab") === true)),
         batch.primitives.length,
       );
       mesh.name = `${batch.material} ${batch.shape} × ${batch.primitives.length}`;

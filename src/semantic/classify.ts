@@ -82,8 +82,11 @@ const CATEGORY_RULES: Readonly<Record<KnownSceneKind, readonly KeywordRule[]>> =
     { term: "法师塔", weight: 6 },
     { term: "魔法塔", weight: 6 },
     { term: "巫师塔", weight: 6 },
+    { term: "炼金塔", weight: 6 },
+    { term: "炼金术塔", weight: 6 },
     { term: "wizard tower", weight: 6 },
     { term: "mage tower", weight: 6 },
+    { term: "alchemy tower", weight: 6 },
   ],
   sewer: [
     { term: "sewer", weight: 4 },

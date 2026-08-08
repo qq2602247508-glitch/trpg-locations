@@ -53,9 +53,9 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   // a room function such as laboratory, temple, prison, or archive.
   const hasBuildingSubject = has(text, ["庄园", "宅邸", "教堂", "神殿", "堡垒", "警局", "警察局", "医院", "学校", "车站", "manor", "mansion", "church", "temple", "fortress", "police station"]);
   const hasExplicitDungeonSubject = has(text, ["地牢", "地下城", "迷宫", "龙巢", "地下神殿", "dungeon", "labyrinth", "lair"]);
-  if (!hasBuildingSubject && (hasExplicitDungeonSubject || has(text, ["墓穴", "crypt"]))) return { domain: "building", primaryKind: "dungeon" };
-  if (has(text, ["法师塔", "魔法塔", "巫师塔", "wizard tower", "mage tower"])) return { domain: "building", primaryKind: "tower" };
-  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "警察局", "工厂", "宅邸", "教堂", "建筑", "观测所", "天文馆", "天文台", "研究所", "实验室", "博物馆", "剧院", "车站", "hospital", "hotel", "school", "police", "factory", "manor", "church", "observatory", "planetarium", "laboratory", "museum", "theatre", "station"])) return { domain: "building", primaryKind: "building" };
+  if (hasExplicitDungeonSubject || (!hasBuildingSubject && has(text, ["墓穴", "crypt"]))) return { domain: "building", primaryKind: "dungeon" };
+  if (has(text, ["法师塔", "魔法塔", "巫师塔", "炼金塔", "炼金术塔", "wizard tower", "mage tower", "alchemy tower"])) return { domain: "building", primaryKind: "tower" };
+  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "警察局", "工厂", "宅邸", "庄园", "教堂", "神殿", "神庙", "堡垒", "要塞", "城堡", "灯塔", "建筑", "观测所", "天文馆", "天文台", "研究所", "实验室", "博物馆", "剧院", "车站", "hospital", "hotel", "school", "police", "factory", "manor", "mansion", "church", "temple", "fortress", "citadel", "castle", "lighthouse", "observatory", "planetarium", "laboratory", "museum", "theatre", "station"])) return { domain: "building", primaryKind: "building" };
   if (has(text, ["工业区", "工业遗址", "废弃工业区", "潮汐", "潮池", "珊瑚庭院", "珊瑚礁"])) return { domain: "natural", primaryKind: "wilderness" };
   if (has(text, ["城市", "城镇", "村庄", "街区", "港区", "深水城", "city", "town", "village", "district", "harbor"])) return { domain: "settlement", primaryKind: "settlement" };
   if (has(text, ["下水道", "排水", "隧道", "地铁", "sewer", "drain", "subway"])) return { domain: "infrastructure", primaryKind: "sewer" };
@@ -77,7 +77,7 @@ function inferOperators(text: string): { morphology: MorphologyOperator[]; cover
   if (has(text, ["地牢", "地下城", "迷宫", "龙巢", "墓穴", "地下神殿", "dungeon", "labyrinth", "crypt", "lair"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["墓地", "埋葬", "墓园", "grave", "burial", "cemetery"])) morphology.push("burial-field", "crypt-sink");
   if (has(text, ["城市", "街区", "深水城", "city", "district"])) morphology.push("urban-blocks");
-  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "警察局", "建筑", "hospital", "hotel", "school", "police"])) morphology.push("interior-partitions", "vertical-stack");
+  if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "警察局", "建筑", "庄园", "宅邸", "教堂", "神殿", "神庙", "堡垒", "要塞", "城堡", "灯塔", "博物馆", "工厂", "剧院", "车站", "hospital", "hotel", "school", "police", "manor", "mansion", "church", "temple", "fortress", "citadel", "castle", "lighthouse", "museum", "factory", "theatre", "station"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["观测所", "天文馆", "天文台", "observatory", "planetarium"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["森林", "树林", "forest", "woodland"])) coverage.push("woodland", "dense");
   if (has(text, ["蘑菇", "菌林", "fungal", "mushroom"])) coverage.push("fungal");

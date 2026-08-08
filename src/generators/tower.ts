@@ -88,7 +88,9 @@ function spiralFlight(id: string, level: number, center: number, bottomY: number
 export function generateTower(context: GeneratorContext): GeneratedScene {
   const { request, rng } = context;
   const promptText = request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
-  const wizardTower = ["法师塔", "魔法塔", "巫师塔", "wizard tower", "mage tower"].some((term) => promptText.includes(term));
+  const wizardTower = ["法师塔", "魔法塔", "巫师塔", "炼金塔", "炼金术塔", "wizard tower", "mage tower", "alchemy tower"].some((term) => promptText.includes(term));
+  const giantTree = ["巨树", "大树", "古树", "giant tree", "great tree"].some((term) => promptText.includes(term));
+  const undergroundGreenhouse = ["地下温室", "underground greenhouse", "subterranean greenhouse"].some((term) => promptText.includes(term));
   const profileBase = towerProfile(context);
   const profile = {
     ...profileBase,
@@ -147,6 +149,7 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
     const floorOpenings = level === 0
       ? []
       : [{ id: `tower-stair-opening-${level}`, centerXCells: wizardTower ? center : landingPortal.xCells, centerZCells: wizardTower ? center : landingPortal.zCells, widthCells: wizardTower ? 4.2 : 2.7, depthCells: wizardTower ? 4.2 : 2.7, tags: ["stair-opening", "vertical-opening"] }];
+    if (giantTree) floorOpenings.push({ id: `tower-tree-opening-${level}`, centerXCells: center + profile.footprint * 0.18, centerZCells: center - profile.footprint * 0.08, widthCells: 2.8, depthCells: 2.8, tags: ["tree-opening", "vertical-opening"] });
     scene.rooms.push(
       createRoom(roomId, roomName, roomRole, level, center, center, profile.footprint - 1.2, profile.footprint - 1.2, baseY),
       createRoom(stairsId, level === 0 ? "Lower landing" : "Stair landing", "circulation", level, landingPortal.xCells, landingPortal.zCells, 3, 3, baseY),
@@ -257,6 +260,31 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
       cylinder("wizard-roof-duel-platform", profile.floors - 1, center, topY + roofHeight * 0.78, center, profile.footprint * 0.82, FLOOR_SLAB_METERS, "stone", ["roof-platform", "roof-duel", "standable", "high-ground"]),
       cylinder("wizard-roof-parapet", profile.floors - 1, center, topY + roofHeight * 0.78 + FLOOR_SLAB_METERS, center, profile.footprint * 0.9, feetToMeters(3), "darkStone", ["roof", "parapet", "cover"]),
     );
+  }
+  if (giantTree) {
+    const treeX = center + profile.footprint * 0.18;
+    const treeZ = center - profile.footprint * 0.08;
+    const canopyY = topY + feetToMeters(8);
+    scene.primitives.push(
+      cylinder("tower-giant-tree-trunk", 0, treeX, undergroundGreenhouse ? -feetToMeters(12) : 0, treeZ, Math.max(2.4, profile.footprint * 0.22), canopyY + feetToMeters(12), "wood", ["giant-tree", "vertical-landmark", "cover"]),
+      cylinder("tower-tree-canopy-platform", profile.floors - 1, treeX, canopyY, treeZ, Math.max(6, profile.footprint * 0.7), FLOOR_SLAB_METERS, "moss", ["floor", "platform", "tree-canopy", "standable", "high-ground"]),
+      box("tower-canopy-bridge", profile.floors - 1, (center + treeX + profile.footprint * 0.42) / 2, topY + feetToMeters(2), (center + treeZ) / 2, Math.max(5, profile.footprint * 0.62), FLOOR_SLAB_METERS, 1.6, "wood", ["platform", "bridge", "terrain", "suspended-bridge", "standable", "vertical-opening"]),
+    );
+    scene.rooms.push(createRoom("tower-tree-canopy-room", "Tree-canopy battle platform", "combat", profile.floors - 1, treeX, treeZ, Math.max(6, profile.footprint * 0.65), Math.max(6, profile.footprint * 0.65), canopyY));
+    connectRooms(scene.rooms, `tower-chamber-${profile.floors - 1}`, "tower-tree-canopy-room");
+    scene.routes.push(createRoute("tower-canopy-route", "vertical", [{ x: treeX, z: treeZ, y: topY }, { x: treeX, z: treeZ, y: canopyY }]));
+    scene.tactical.push(tacticalFeature("tower-tree-canopy-high-ground", "highGround", treeX, treeZ, canopyY, 3, "The giant tree canopy forms a reachable battle platform above the broken tower roof."));
+  }
+  if (undergroundGreenhouse) {
+    const greenhouseY = -feetToMeters(12);
+    const greenhouseX = center + profile.footprint * 0.75;
+    const greenhouseZ = center + profile.footprint * 0.42;
+    scene.primitives.push(...rectangularShell("tower-underground-greenhouse", 0, greenhouseX, greenhouseZ, greenhouseY, 8, 6, feetToMeters(9), "moss", "darkStone", ["underground", "greenhouse", "building-shell"], { west: { widthCells: 1.6 } }));
+    scene.rooms.push(createRoom("tower-underground-greenhouse-room", "Underground alchemical greenhouse", "service", 0, greenhouseX, greenhouseZ, 7, 5, greenhouseY));
+    connectRooms(scene.rooms, "tower-chamber-0", "tower-underground-greenhouse-room");
+    const greenhouseStair = stairConnection("tower-greenhouse-stair", 0, { xCells: greenhouseX - 3, zCells: greenhouseZ, yMeters: greenhouseY + FLOOR_SLAB_METERS }, { xCells: center + profile.footprint * 0.3, zCells: center, yMeters: FLOOR_SLAB_METERS }, 1.5, "stone", ["underground", "greenhouse-access", "vertical-opening"]);
+    scene.primitives.push(greenhouseStair.primitive);
+    scene.routes.push(stairRoute("tower-greenhouse-route", greenhouseStair));
   }
   scene.routes.push(
     createRoute("tower-primary-route", "primary", [

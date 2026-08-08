@@ -440,6 +440,11 @@ function floorLabel(scene: GeneratedScene, level: number): string {
   return `${level - groundLevel + 1}F`;
 }
 
+function roomFloorLabel(scene: GeneratedScene, room: GeneratedScene["rooms"][number]): string {
+  if (room.center.y < -0.1) return "B1";
+  return floorLabel(scene, room.level);
+}
+
 function populateFloorOptions(select: HTMLSelectElement, scene: GeneratedScene): void {
   const previous = select.value;
   select.replaceChildren();
@@ -520,7 +525,7 @@ function renderRooms(container: HTMLElement, scene: GeneratedScene): void {
       const name = document.createElement("strong");
       name.textContent = room.name;
       const type = document.createElement("small");
-      type.textContent = `${floorLabel(scene, room.level)} · ${room.sizeCells.x} × ${room.sizeCells.z} 格`;
+      type.textContent = `${roomFloorLabel(scene, room)} · ${room.sizeCells.x} × ${room.sizeCells.z} 格`;
       detail.append(name, type);
       const role = document.createElement("span");
       role.className = "room-role";
