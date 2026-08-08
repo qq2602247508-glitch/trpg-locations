@@ -234,9 +234,9 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
     water("mangrove-tidal-branch-east", 0, width * 0.78, -0.16, depth * 0.72, 3.8, 0.25, depth * 0.38, ["mangrove", "tidal-channel", "watercourse", "site-program"]),
   );
   const boardwalks = [
-    [[width * 0.1, depth * 0.18], [width * 0.24, depth * 0.31], [width * 0.36, depth * 0.47]],
-    [[width * 0.39, depth * 0.67], [width * 0.54, depth * 0.52], [width * 0.7, depth * 0.34]],
-    [[width * 0.66, depth * 0.18], [width * 0.78, depth * 0.31], [width * 0.91, depth * 0.51]],
+    [[width * 0.08, depth * 0.24], [width * 0.2, depth * 0.14], [width * 0.34, depth * 0.22], [width * 0.28, depth * 0.4], [width * 0.08, depth * 0.24]],
+    [[width * 0.34, depth * 0.68], [width * 0.48, depth * 0.56], [width * 0.66, depth * 0.68], [width * 0.58, depth * 0.82], [width * 0.34, depth * 0.68]],
+    [[width * 0.66, depth * 0.22], [width * 0.78, depth * 0.12], [width * 0.94, depth * 0.28], [width * 0.84, depth * 0.44], [width * 0.66, depth * 0.22]],
   ] as const;
   for (const [index, points] of boardwalks.entries()) {
     for (let segment = 1; segment < points.length; segment += 1) {
@@ -246,6 +246,11 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
     }
     scene.routes.push(createRoute(`mangrove-boardwalk-route-${index + 1}`, "alternate", points.map(([x, z]) => ({ x, z, y: FLOOR_SLAB_METERS + 0.7 })), { purpose: "service", traffic: 0.58, schedule: "all" }));
   }
+  scene.primitives.push(corridor("mangrove-ferry-bridge-west", 0, width * 0.34, depth * 0.68, width * 0.28, depth * 0.4, FLOOR_SLAB_METERS + 0.7, 0.9, "wood", ["mangrove", "root-boardwalk", "bridge", "standable", "site-program"]));
+  scene.routes.push(createRoute("mangrove-ferry-route", "alternate", [
+    { x: width * 0.34, z: depth * 0.68, y: FLOOR_SLAB_METERS + 0.7 },
+    { x: width * 0.28, z: depth * 0.4, y: FLOOR_SLAB_METERS + 0.7 },
+  ], { purpose: "movement", traffic: 0.36, schedule: "all" }));
   for (let index = 0; index < 30; index += 1) {
     const x = width * (0.1 + ((index * 0.173) % 0.8));
     const z = depth * (0.12 + ((index * 0.287) % 0.74));
@@ -676,7 +681,8 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       state: parcel.state,
     }, context.rng.fork(parcel.buildingSeed));
     adaptedBuildings += 1;
-    if (isMangrovePort) {
+    const useParentRootAccess = isMangrovePort && (adaptedBuildings < 3 || (parcel.lod === "full-interior" && adaptedBuildings < 5));
+    if (useParentRootAccess) {
       const rootAnchor = mangroveRootWaypoints.reduce((best, candidate) => {
         const bestDistance = Math.hypot(placement.x - best[0], placement.z - best[1]);
         const candidateDistance = Math.hypot(placement.x - candidate[0], placement.z - candidate[1]);
