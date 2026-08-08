@@ -87,7 +87,7 @@ Fixes made after this screenshot:
 - validation preserves `baseYMeters` and `exteriorHeightMeters`;
 - overview envelopes are hidden only for the selected building while its `focus-interior` geometry is shown.
 
-These fixes are covered by deterministic scene tests, but a new browser screenshot could not be captured after the local-browser request was denied by the environment's security reviewer. This item remains visually unclosed.
+These fixes were initially covered only by deterministic tests because local capture was temporarily denied. Browser capture later became available again; the additional camera, cutaway and floor-switch defects it exposed were fixed and are recorded in section F.
 
 ### D. Water city
 
@@ -115,7 +115,7 @@ Fixes made after this screenshot:
 - water-city blocks are placed on both canal banks instead of over the central channel;
 - the scene receives a distinct water-city title and morphology program.
 
-Those fixes passed automated regression checks but remain visually unclosed because post-fix browser capture was denied.
+Those fixes passed automated regression checks. A later browser session restored local capture and the result is recorded in section F.
 
 ### E. Crater village
 
@@ -143,7 +143,63 @@ Fixes made after this screenshot:
 - deliberate rim gaps and impact fragments break the ring;
 - the market/open space moves to the rim instead of covering the basin.
 
-These fixes passed automated regression checks but remain visually unclosed because post-fix browser capture was denied.
+These fixes passed automated regression checks. A later browser session restored local capture and the result is recorded in section F.
+
+### F. Post-fix browser closure
+
+Local browser access became available again and the three previously unclosed paths were regenerated with the same prompts and seeds.
+
+#### Focusable settlement building
+
+- Evidence: `final/11-waterdeep-focus-1f-final.png`, `final/14-waterdeep-focus-2f-final.png`, `final/21-crater-home-b1-focus.png`
+- Selected instance: a mass-LOD guild in the Waterdeep scene, plus a mass-LOD home for the basement check.
+
+The first two new attempts (`07` and `08`) correctly exposed two additional camera bugs: an incorrect coordinate assumption and a fixed world-space cutaway direction. They remain in the audit folder as failure evidence. The accepted implementation now:
+
+- converts tactical-cell building positions to rendered metres exactly once;
+- approaches from the building's rotated local south-east diagonal;
+- removes the two camera-facing focus walls;
+- enters on 1F instead of stacking all storeys;
+- keeps the camera locked to the selected building when switching to 2F or B1;
+- renders basement floor, enclosing walls and cellar stair as authored geometry.
+
+The accepted screenshots show a real floor slab, retained back walls, partition, furniture/cover, stair and separate floor heights. The focus blueprint remains deliberately compact at overview LOD; it is not yet equivalent to a dedicated landmark building's full furnishing pass.
+
+#### Water city
+
+- Evidence: `final/19-water-city-dense-banks.png`
+- Prompt: `河道水城，弯曲主运河、三条支流、石桥、木桥、水上市集、船坞与前现代不规则街巷`
+- Seed: `r13-water-city`
+- Size: medium
+- Density: 72%
+
+The final pass replaces three rectangular water plates with a six-point main canal, three two-segment tributaries, two following quay paths, two bridges and a market dock. The semantic program now reports `channel-cut + urban-blocks`; parcels are filtered against the actual canal polylines instead of obsolete rectangular exclusion bands. Canal-bank block count is increased and buildings sit closer to both banks.
+
+Passed: distinct canal morphology, three tributaries, bank routes, bridges, waterside buildings, premodern era and non-grid circulation.
+
+Remaining quality limitation: road and access meshes visually compete with water at several junctions. A later round should trim roads at canal intersections and replace permitted crossings with explicit bridge programs.
+
+#### Crater village
+
+- Evidence: `final/20-crater-village-postfix.png`
+- Prompt: `陨石坑边缘村庄，房屋沿破碎环形坑缘生长，有三条下坑坡道、坠星碎片、木屋与神殿`
+- Seed: `r13-crater-village`
+- Size: medium
+- Density: 68%
+
+Passed: the basin remains open, the broken rim varies in heading/radius/height, three ramps reach the basin, impact fragments form cover, and buildings occupy the external rim rather than a default rectangular ward.
+
+Remaining quality limitation: several rim rocks are intentionally large tactical blocks and still read more constructed than eroded from a low camera angle.
+
+### G. Vertical settlement closure
+
+- Evidence: `final/22-vertical-slum-supported.png`, `final/23-vertical-slum-low.png`
+- Prompt: `建在巨型桥墩之间的垂直贫民街区，有三层市场平台、吊桥、楼梯和桥下维修区`
+- Seed: `r13-supported-vertical`
+- Size: medium
+- Density: 70%
+
+The overview and low-angle views show that elevated market decks are no longer unsupported floating slabs. Posts reach the platform undersides, three vertical routes exist, stairs and bridges meet standable surfaces, and the bridge-pier context remains visible.
 
 ## Structural and semantic validation
 
@@ -168,7 +224,7 @@ The Vite build still reports the existing chunk-size warning for bundles over 50
 
 ## Round verdict
 
-Substantially improved and architecturally usable, but not a fully closed visual round.
+Accepted for the Round 13 objective after post-fix browser closure.
 
 Passed:
 
@@ -180,14 +236,15 @@ Passed:
 - vertical platforms have explicit support validation;
 - scale and density affect block and parcel counts;
 - deterministic tests, type checks and production build pass.
+- post-fix 1F, 2F, B1, water-city, crater-village and low-angle vertical-settlement screenshots were captured and inspected.
 
-Remaining:
+Non-blocking follow-up quality work:
 
-- recapture the post-fix building-focus, water-city and crater-village views when browser access is available;
 - improve curved-road meshing and road/frontage joins;
+- trim ordinary roads at canal intersections and promote legal crossings to bridge programs;
 - add stronger facade identity and micro-frontage detail to lower-LOD buildings;
 - improve landmark hierarchy in large districts;
 - measure and reduce bundle size and focus-mode activation latency;
 - extend terrain composition beyond crater, canal and vertical-slum cases.
 
-The round must not be described as fully visually accepted until the three post-fix browser regressions are captured and inspected.
+All artifacts required to prove the Round 13 architecture are now present. The remaining items are visual-quality extensions rather than missing Round 13 contracts.

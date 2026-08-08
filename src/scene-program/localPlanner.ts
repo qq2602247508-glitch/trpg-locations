@@ -85,13 +85,13 @@ function inferOperators(text: string): { morphology: MorphologyOperator[]; cover
   if (has(text, ["陨石", "流星", "撞击坑", "meteor", "impact crater"])) morphology.push("impact-crater", "radial-fractures", "basin");
   if (has(text, ["火山", "caldera", "volcano"])) morphology.push("caldera");
   if (has(text, ["熔岩", "岩浆", "lava", "magma", "阿弗纳斯", "地狱"])) morphology.push("lava-flow");
-  if (has(text, ["河流", "河谷", "溪流", "river", "stream"])) morphology.push("channel-cut");
+  if (has(text, ["河流", "河谷", "溪流", "河道", "水城", "运河", "支流", "river", "stream", "canal", "water city"])) morphology.push("channel-cut");
   if (has(text, ["河床", "干涸", "dry river", "wadi"])) morphology.push("dry-channel");
   if (has(text, ["裂谷", "峡谷", "rift", "chasm"])) morphology.push("rift", "ravine");
   if (has(text, ["浮空", "浮岛", "空岛", "floating island", "sky island", "levitating"])) morphology.push("floating-islands");
   if (has(text, ["地牢", "地下城", "迷宫", "龙巢", "墓穴", "地下神殿", "dungeon", "labyrinth", "crypt", "lair"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["墓地", "埋葬", "墓园", "grave", "burial", "cemetery"])) morphology.push("burial-field", "crypt-sink");
-  if (has(text, ["城市", "街区", "深水城", "city", "district"])) morphology.push("urban-blocks");
+  if (has(text, ["城市", "街区", "深水城", "水城", "运河城", "city", "district", "water city", "canal city"])) morphology.push("urban-blocks");
   if (has(text, ["医院", "旅馆", "酒店", "学校", "警局", "警察局", "建筑", "庄园", "宅邸", "教堂", "神殿", "神庙", "堡垒", "要塞", "城堡", "灯塔", "博物馆", "工厂", "剧院", "车站", "修道院", "办公楼", "银行", "市政厅", "公寓", "住宅", "发电站", "防空洞", "电影院", "夜总会", "诊所", "大学", "hospital", "hotel", "school", "police", "manor", "mansion", "church", "temple", "fortress", "citadel", "castle", "lighthouse", "museum", "factory", "theatre", "station", "monastery", "office", "bank", "city hall", "apartment", "residence", "power station", "institute", "bunker", "cinema", "nightclub", "clinic", "university"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["观测所", "天文馆", "天文台", "observatory", "planetarium"])) morphology.push("interior-partitions", "vertical-stack");
   if (has(text, ["森林", "树林", "forest", "woodland"])) coverage.push("woodland", "dense");

@@ -207,16 +207,45 @@ function addElevatedRailMarket(scene: GeneratedScene, width: number, depth: numb
 }
 
 function addWaterCity(scene: GeneratedScene, width: number, depth: number): void {
-  const mainX = width * 0.48;
+  type CanalPoint = { x: number; z: number };
+  const main: CanalPoint[] = [
+    { x: width * 0.39, z: depth * 0.03 },
+    { x: width * 0.44, z: depth * 0.23 },
+    { x: width * 0.41, z: depth * 0.43 },
+    { x: width * 0.49, z: depth * 0.62 },
+    { x: width * 0.46, z: depth * 0.79 },
+    { x: width * 0.54, z: depth * 0.97 },
+  ];
+  const branches: CanalPoint[][] = [
+    [main[1]!, { x: width * 0.26, z: depth * 0.3 }, { x: width * 0.03, z: depth * 0.27 }],
+    [main[2]!, { x: width * 0.61, z: depth * 0.39 }, { x: width * 0.96, z: depth * 0.33 }],
+    [main[4]!, { x: width * 0.31, z: depth * 0.74 }, { x: width * 0.04, z: depth * 0.82 }],
+  ];
+  const canalSegments = (id: string, points: CanalPoint[], canalWidth: number, kind: "main-canal" | "branch-canal") => {
+    for (let index = 1; index < points.length; index += 1) {
+      const from = points[index - 1]!; const to = points[index]!;
+      scene.primitives.push(corridor(`${id}-${index}`, 0, from.x, from.z, to.x, to.z, 0.025, canalWidth, "water", ["water-city", kind, "watercourse", "hazard", "site-program"]));
+    }
+  };
+  canalSegments("water-city-main-canal", main, 4.8, "main-canal");
+  branches.forEach((points, index) => canalSegments(`water-city-branch-${index + 1}`, points, 2.8 + index * 0.25, "branch-canal"));
+
+  // Quays follow the canal as two discontinuous historical frontage paths.
+  const westQuay = main.map((point, index) => ({ x: point.x - 4.2 - (index % 2) * 0.5, z: point.z }));
+  const eastQuay = main.map((point, index) => ({ x: point.x + 4.2 + ((index + 1) % 2) * 0.5, z: point.z }));
+  for (const [side, points] of [["west", westQuay], ["east", eastQuay]] as const) {
+    for (let index = 1; index < points.length; index += 1) {
+      const from = points[index - 1]!; const to = points[index]!;
+      scene.primitives.push(corridor(`water-city-${side}-quay-${index}`, 0, from.x, from.z, to.x, to.z, FLOOR_SLAB_METERS + 0.08, 1.6, "stone", ["water-city", "quay", "bank-route", "standable", "site-program"]));
+    }
+  }
+
   scene.primitives.push(
-    water("water-city-main-canal", 0, mainX, FLOOR_SLAB_METERS + 0.02, depth * 0.5, 5.4, 0.12, depth * 0.92, ["water-city", "main-canal", "watercourse", "site-program"]),
-    water("water-city-west-branch", 0, width * 0.28, FLOOR_SLAB_METERS + 0.025, depth * 0.34, width * 0.4, 0.1, 3.4, ["water-city", "branch-canal", "watercourse", "site-program"], -0.12),
-    water("water-city-east-branch", 0, width * 0.7, FLOOR_SLAB_METERS + 0.025, depth * 0.66, width * 0.42, 0.1, 3.2, ["water-city", "branch-canal", "watercourse", "site-program"], 0.1),
-    corridor("water-city-stone-bridge", 0, mainX - 5, depth * 0.46, mainX + 5, depth * 0.46, FLOOR_SLAB_METERS + 0.22, 2.8, "stone", ["water-city", "stone-bridge", "bridge", "standable", "site-program"]),
-    corridor("water-city-wood-bridge", 0, mainX - 4, depth * 0.72, mainX + 4, depth * 0.72, FLOOR_SLAB_METERS + 0.18, 1.6, "wood", ["water-city", "wood-bridge", "bridge", "standable", "site-program"]),
-    box("water-city-market-dock", 0, mainX + 5.8, FLOOR_SLAB_METERS + 0.1, depth * 0.57, 6.5, FLOOR_SLAB_METERS, 4, "wood", ["water-city", "market-dock", "quay", "standable", "site-program"]),
+    corridor("water-city-stone-bridge", 0, main[2]!.x - 5, main[2]!.z, main[2]!.x + 5, main[2]!.z, FLOOR_SLAB_METERS + 0.24, 2.5, "stone", ["water-city", "stone-bridge", "bridge", "standable", "site-program"]),
+    corridor("water-city-wood-bridge", 0, main[4]!.x - 4.6, main[4]!.z, main[4]!.x + 4.6, main[4]!.z, FLOOR_SLAB_METERS + 0.2, 1.5, "wood", ["water-city", "wood-bridge", "bridge", "standable", "site-program"]),
+    box("water-city-market-dock", 0, main[3]!.x + 6.2, FLOOR_SLAB_METERS + 0.1, main[3]!.z, 6.5, FLOOR_SLAB_METERS, 4, "wood", ["water-city", "market-dock", "quay", "standable", "site-program"]),
   );
-  scene.routes.push(createRoute("water-city-canal-route", "waterflow", [{ x: mainX, z: depth * 0.05 }, { x: mainX, z: depth * 0.5 }, { x: mainX, z: depth * 0.95 }], { purpose: "water", traffic: 0.72, schedule: "all" }));
+  scene.routes.push(createRoute("water-city-canal-route", "waterflow", main.map((point) => ({ ...point, y: 0.025 })), { purpose: "water", traffic: 0.72, schedule: "all" }));
 }
 
 function addImpactCraterSettlement(scene: GeneratedScene, width: number, depth: number): void {

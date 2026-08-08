@@ -323,7 +323,7 @@ function organicRoadsAndBlocks(siteType: SiteType, width: number, depth: number,
     roads.push(road("road-crater-ramp", "trail", 1.4, curvedPath(ring[9] ?? centre, { x: width * 0.5, z: depth * 0.5 }, -3), "rural", -5));
   } else if (morphology.roadPattern === "harbor-spine" || morphology.roadPattern === "canal-banks") {
     const quayZ = depth * 0.82;
-    roads.push(road("road-quay-spine", "quay", 2.8, [
+    if (morphology.roadPattern === "harbor-spine") roads.push(road("road-quay-spine", "quay", 2.8, [
       { x: 2, z: quayZ + rng.float(-1, 1) }, { x: width * 0.27, z: quayZ - 1.5 },
       { x: width * 0.56, z: quayZ + 0.7 }, { x: width - 2, z: quayZ - 0.8 },
     ], "cargo"));
@@ -350,7 +350,8 @@ function organicRoadsAndBlocks(siteType: SiteType, width: number, depth: number,
   if (density > 0.82) roads.push(road("road-density-alley", "lane", 0.9, curvedPath({ x: width * 0.28, z: depth * 0.68 }, { x: width * 0.72, z: depth * 0.3 }, 3.5), "service"));
 
   const scaleBand = Math.sqrt((width * depth) / (60 * 48));
-  const blockCount = Math.max(6, Math.round((8 + density * 7) * scaleBand));
+  const morphologyMultiplier = morphology.roadPattern === "canal-banks" ? 1.35 : 1;
+  const blockCount = Math.max(6, Math.round((8 + density * 7) * scaleBand * morphologyMultiplier));
   const roles = roleSequence(siteType, features);
   const blocks: BlockProgram[] = [];
   const districts: DistrictProgram[] = [];
@@ -364,7 +365,7 @@ function organicRoadsAndBlocks(siteType: SiteType, width: number, depth: number,
       const column = Math.floor(index / 2);
       const rows = Math.max(3, Math.ceil(blockCount / 2));
       center = {
-        x: side === 0 ? width * rng.float(0.13, 0.32) : width * rng.float(0.66, 0.86),
+        x: side === 0 ? width * rng.float(0.17, 0.35) : width * rng.float(0.61, 0.82),
         z: depth * (0.12 + 0.7 * ((column + 0.5) / rows)) + rng.float(-1.2, 1.2),
       };
     }
@@ -524,12 +525,23 @@ export function planSettlementSite(input: SitePlanningInput, rng: SeededRandom):
   const roadNodes = attachRoadNodes(layout.roads, width, depth);
   let parcels = makeParcels(input, siteType, layout.blocks, layout.districts, layout.roads, features, rng.fork("parcels"));
   if (features.includes("water-city")) {
-    const mainX = width * 0.48;
+    const canalLines: Array<{ width: number; points: SitePoint[] }> = [
+      { width: 4.8, points: [{ x: width * 0.39, z: depth * 0.03 }, { x: width * 0.44, z: depth * 0.23 }, { x: width * 0.41, z: depth * 0.43 }, { x: width * 0.49, z: depth * 0.62 }, { x: width * 0.46, z: depth * 0.79 }, { x: width * 0.54, z: depth * 0.97 }] },
+      { width: 2.8, points: [{ x: width * 0.44, z: depth * 0.23 }, { x: width * 0.26, z: depth * 0.3 }, { x: width * 0.03, z: depth * 0.27 }] },
+      { width: 3.05, points: [{ x: width * 0.41, z: depth * 0.43 }, { x: width * 0.61, z: depth * 0.39 }, { x: width * 0.96, z: depth * 0.33 }] },
+      { width: 3.3, points: [{ x: width * 0.46, z: depth * 0.79 }, { x: width * 0.31, z: depth * 0.74 }, { x: width * 0.04, z: depth * 0.82 }] },
+    ];
+    const distanceToSegment = (point: SitePoint, a: SitePoint, b: SitePoint): number => {
+      const dx = b.x - a.x; const dz = b.z - a.z; const length2 = dx * dx + dz * dz;
+      const t = length2 <= 1e-6 ? 0 : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.z - a.z) * dz) / length2));
+      return Math.hypot(point.x - (a.x + dx * t), point.z - (a.z + dz * t));
+    };
     parcels = parcels.filter((parcel) => {
-      const onMainCanal = Math.abs(parcel.center.x - mainX) < 4.4;
-      const onWestBranch = parcel.center.x < width * 0.5 && Math.abs(parcel.center.z - depth * 0.34) < 3.3;
-      const onEastBranch = parcel.center.x > width * 0.48 && Math.abs(parcel.center.z - depth * 0.66) < 3.2;
-      return !onMainCanal && !onWestBranch && !onEastBranch;
+      const buildingClearance = Math.max(0.75, Math.min(parcel.buildingSize.x, parcel.buildingSize.z) * 0.12);
+      return canalLines.every((line) => line.points.slice(1).every((point, index) => {
+        const previous = line.points[index];
+        return previous ? distanceToSegment(parcel.center, previous, point) > line.width / 2 + buildingClearance : true;
+      }));
     });
   }
   const fullInteriorCount = parcels.filter((parcel) => parcel.lod === "full-interior").length;
@@ -539,7 +551,9 @@ export function planSettlementSite(input: SitePlanningInput, rng: SeededRandom):
   const openSpaces: OpenSpaceProgram[] = [
     ...(features.includes("impact-crater-settlement")
       ? [{ id: "crater-rim-market", kind: "market" as const, center: { x: width * 0.5, z: depth * 0.16 }, size: { x: 9, z: 5 } }]
-      : [{ id: "central-open-space", kind: siteType === "village" ? "market" as const : "plaza" as const, center: { x: width / 2, z: (isHarbor ? depth - 10 : depth) * 0.5 }, size: { x: siteType === "village" ? 8 : 10, z: siteType === "village" ? 7 : 9 } }]),
+      : features.includes("water-city")
+        ? [{ id: "canal-bank-market", kind: "market" as const, center: { x: width * 0.7, z: depth * 0.53 }, size: { x: 7, z: 5 } }]
+        : [{ id: "central-open-space", kind: siteType === "village" ? "market" as const : "plaza" as const, center: { x: width / 2, z: (isHarbor ? depth - 10 : depth) * 0.5 }, size: { x: siteType === "village" ? 8 : 10, z: siteType === "village" ? 7 : 9 } }]),
     ...(siteType === "village" ? [{ id: "village-fields", kind: "farm" as const, center: { x: width * 0.2, z: depth * 0.78 }, size: { x: width * 0.28, z: depth * 0.2 } }, { id: "village-orchard", kind: "orchard" as const, center: { x: width * 0.78, z: depth * 0.18 }, size: { x: width * 0.22, z: depth * 0.2 } }] : []),
     ...(isHarbor ? [{ id: "fish-market", kind: "market" as const, center: { x: width * 0.55, z: depth - 13 }, size: { x: 12, z: 6 } }, { id: "harbor-quay", kind: "quay" as const, center: { x: width / 2, z: depth - 9 }, size: { x: width - 5, z: 3.5 } }] : []),
     ...(features.includes("industrial-plant") ? [{ id: "industrial-loading-yard", kind: "yard" as const, center: { x: width * 0.48, z: depth * 0.78 }, size: { x: width * 0.42, z: depth * 0.17 } }] : []),

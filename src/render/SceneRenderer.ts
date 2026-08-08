@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 import { GRID_METERS } from "../schema";
 import type {
+  BuildingInstance,
   GeneratedScene,
   MaterialKey,
   ScenePrimitive,
@@ -309,22 +310,51 @@ export class SceneRenderer {
       this.positionCamera();
       return;
     }
-    this.setFloorView("cut");
     this.cameraMode = "perspective";
     this.controls.enabled = true;
-    // BuildingInstance retains the original `*Cells` field names for schema
-    // compatibility, but settlement planners author these values in the same
-    // metre-space as primitive positions. Applying GRID_METERS here moved the
-    // focus camera away from the selected building a second time.
+    // Enter on the ground floor so the selected building reads as a plan,
+    // rather than stacking every storey's walls into one opaque tower. The
+    // ordinary floor selector remains available for upper floors and B1.
+    this.setFloorView(0);
+  }
+
+  private positionCameraForFocusedBuilding(selected: BuildingInstance, view: FloorView): void {
+    const numericLevel = typeof view === "number" ? view : 0;
+    const isBasement = typeof view === "number" && this.currentScene?.floorLabels?.[view]?.startsWith("B") === true;
+    const priorHeight = selected.floorHeightFeet.slice(0, Math.min(numericLevel, selected.floorHeightFeet.length)).reduce((sum, value) => sum + value, 0) * 0.3048;
+    const currentHeight = (selected.floorHeightFeet[Math.min(numericLevel, selected.floorHeightFeet.length - 1)] ?? 10) * 0.3048;
+    const focusY = typeof view === "number"
+      ? isBasement
+        ? (selected.baseYMeters ?? 0) - 10 * 0.3048 + Math.max(0.8, currentHeight * 0.35)
+        : (selected.baseYMeters ?? 0) + priorHeight + Math.max(0.8, currentHeight * 0.35)
+      : (selected.baseYMeters ?? 0) + Math.max(1.4, (selected.exteriorHeightMeters ?? currentHeight) * 0.38);
+    // BuildingInstance positions and footprints are tactical cells, whereas
+    // rendered primitive positions are metres (see shared.cellPoint). Keep the
+    // focus camera and its context filter in rendered world coordinates.
     const target = new THREE.Vector3(
-      selected.positionCells.x,
-      (selected.baseYMeters ?? 0) + Math.max(1.4, (selected.exteriorHeightMeters ?? selected.floorHeightFeet.reduce((sum, value) => sum + value, 0) * 0.3048) * 0.38),
-      selected.positionCells.z,
+      selected.positionCells.x * GRID_METERS,
+      focusY,
+      selected.positionCells.z * GRID_METERS,
     );
-    const span = Math.max(selected.footprintCells.x, selected.footprintCells.z, 7);
+    const span = Math.max(selected.footprintCells.x, selected.footprintCells.z, 7) * GRID_METERS * (isBasement ? 0.72 : 1);
+    // The focus blueprint cuts its local east and south walls. Approach from
+    // that same local diagonal after applying the building's authored yaw;
+    // a fixed world-space camera could otherwise look straight at the two
+    // retained back walls of a rotated building.
+    const cosine = Math.cos(selected.rotationY);
+    const sine = Math.sin(selected.rotationY);
+    const viewX = (cosine + sine) / Math.SQRT2;
+    const viewZ = (-sine + cosine) / Math.SQRT2;
+    this.cameraMode = "perspective";
+    this.controls.enabled = true;
     this.controls.target.copy(target);
-    this.camera.position.set(target.x + span * 1.35, target.y + span * 0.9, target.z + span * 1.2);
+    this.camera.position.set(target.x + viewX * span * 1.8, target.y + span * 0.9, target.z + viewZ * span * 1.8);
+    this.camera.near = 0.1;
+    this.camera.far = Math.max(300, span * 20);
+    this.controls.minDistance = Math.max(1.8, span * 0.35);
+    this.controls.maxDistance = Math.max(30, span * 8);
     this.camera.lookAt(target);
+    this.camera.updateProjectionMatrix();
     this.controls.update();
   }
 
@@ -707,8 +737,8 @@ export class SceneRenderer {
       0,
     );
     const focusedBuilding = this.focusedBuildingId ? scene.buildingInstances?.find((building) => building.id === this.focusedBuildingId) : undefined;
-    const focusCenter = focusedBuilding ? new THREE.Vector2(focusedBuilding.positionCells.x, focusedBuilding.positionCells.z) : undefined;
-    const focusRadius = focusedBuilding ? Math.max(focusedBuilding.footprintCells.x, focusedBuilding.footprintCells.z, 7) * 2.4 : Number.POSITIVE_INFINITY;
+    const focusCenter = focusedBuilding ? new THREE.Vector2(focusedBuilding.positionCells.x * GRID_METERS, focusedBuilding.positionCells.z * GRID_METERS) : undefined;
+    const focusRadius = focusedBuilding ? Math.max(focusedBuilding.footprintCells.x, focusedBuilding.footprintCells.z, 7) * GRID_METERS * 2.4 : Number.POSITIVE_INFINITY;
     for (let level = 0; level <= maxLevel; level += 1) this.createFloorLayer(level);
 
     for (const primitive of scene.primitives) {
@@ -718,6 +748,7 @@ export class SceneRenderer {
       if (!this.focusedBuildingId && focusInterior) continue;
       if (this.focusedBuildingId) {
         if (primitiveBuildingId && primitiveBuildingId !== this.focusedBuildingId) continue;
+        if (primitiveBuildingId === this.focusedBuildingId && primitive.tags?.includes("focus-cutaway")) continue;
         if (primitiveBuildingId === this.focusedBuildingId && !focusInterior && primitive.tags?.some((tag) => tag === "envelope-part" || tag === "roof") === true) continue;
         if (!primitiveBuildingId && primitive.tags?.includes("roof-route") === true) continue;
         if (!primitiveBuildingId && focusCenter && primitive.id !== "site-terrain-base" && Math.hypot(primitive.position.x - focusCenter.x, primitive.position.z - focusCenter.y) > focusRadius) continue;
@@ -929,6 +960,13 @@ export class SceneRenderer {
 
   private recenterCameraForFloor(view: FloorView): void {
     if (!this.currentScene) return;
+    if (this.focusedBuildingId) {
+      const focused = this.currentScene.buildingInstances?.find((building) => building.id === this.focusedBuildingId);
+      if (focused) {
+        this.positionCameraForFocusedBuilding(focused, view);
+        return;
+      }
+    }
     if (this.cameraMode === "top") {
       this.configureTopCamera();
       return;

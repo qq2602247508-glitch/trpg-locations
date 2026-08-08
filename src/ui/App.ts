@@ -295,7 +295,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   elements.buildingFocusButton.addEventListener("click", () => {
     if (!activeScene || !elements.buildingFocus.value) return;
     renderer.setBuildingFocus(elements.buildingFocus.value);
-    elements.floor.value = "cut";
+    elements.floor.value = "0";
     setToggle(elements.topCameraToggle, false);
     setToggle(elements.cameraToggle, false);
     setStatus(elements, "建筑内部聚焦", "ok");

@@ -351,7 +351,9 @@ describe("scene generators", () => {
     expect(scene.siteProgram?.curvedRoadRatio ?? 0).toBeGreaterThan(0.65);
     expect(scene.siteProgram?.nonRectangularBlockRatio ?? 0).toBeGreaterThan(0.65);
     expect(scene.buildingInstances?.every((building) => Boolean(building.buildingProgram))).toBe(true);
+    expect(scene.buildingInstances?.every((building) => Boolean(building.interiorProgram))).toBe(true);
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("focus-interior"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("focus-cutaway"))).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
   });
 
@@ -361,7 +363,10 @@ describe("scene generators", () => {
     expect(waterCity.sceneProgram?.domain).toBe("settlement");
     expect(waterCity.title).toContain("Waterwoven");
     expect(waterCity.siteProgram?.roadPattern).toBe("canal-banks");
-    expect(hasTag(waterCity, "main-canal")).toBe(true);
+    expect(waterCity.primitives.filter((primitive) => primitive.tags?.includes("main-canal")).length).toBeGreaterThanOrEqual(5);
+    expect(waterCity.primitives.filter((primitive) => primitive.tags?.includes("branch-canal")).length).toBeGreaterThanOrEqual(6);
+    expect(waterCity.primitives.filter((primitive) => primitive.tags?.includes("bank-route")).length).toBeGreaterThanOrEqual(8);
+    expect(waterCity.routes.find((route) => route.id === "water-city-canal-route")?.points.length).toBeGreaterThanOrEqual(6);
     expect(craterVillage.sceneProgram?.domain).toBe("settlement");
     expect(craterVillage.title).toContain("Fallen-Star");
     expect(craterVillage.siteProgram?.roadPattern).toBe("radial-ring");
