@@ -62,7 +62,8 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   // A settlement is the parent site and named buildings are its children.
   // "港区有酒馆和神殿" must therefore plan a district, not collapse into
   // whichever child building noun appears last in the prompt.
-  const hasStrongSettlementSubject = has(text, ["城镇", "村庄", "村落", "市场村", "聚居地", "街区", "港区", "深水城", "聚落", "小镇", "town", "village", "market village", "district", "harbor", "settlement"]);
+  const hasStrongSettlementSubject = has(text, ["城镇", "村庄", "村落", "市场村", "聚居地", "街区", "港区", "港口区", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "聚落", "小镇", "town", "village", "market village", "district", "harbor", "settlement"])
+    || (has(text, ["工业区"]) && !has(text, ["废弃工业区", "工业遗址", "industrial ruin"]));
   const hasSettlementSubject = hasStrongSettlementSubject || (!hasBuildingSubject && has(text, ["城市", "city"]));
   if (hasSettlementSubject) return { domain: "settlement", primaryKind: "settlement" };
   if (hasExplicitDungeonSubject || (!hasBuildingSubject && has(text, ["墓穴", "crypt"]))) return { domain: "building", primaryKind: "dungeon" };

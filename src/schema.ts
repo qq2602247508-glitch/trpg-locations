@@ -100,6 +100,12 @@ export interface BuildingInstance {
   frontageRoadId?: string;
   entranceCells?: Vec2;
   buildingProgram?: BuildingProgramSummary;
+  envelopeProgram?: {
+    version: 1;
+    variant: string;
+    partCount: number;
+    silhouetteSignature: string;
+  };
 }
 
 /** Auditable room-graph contract used before building geometry is compiled. */

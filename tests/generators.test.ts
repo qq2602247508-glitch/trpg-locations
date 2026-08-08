@@ -5,6 +5,7 @@ import { instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
 import { floorBaseY, fogDensityForSpan, levelForY, overlayTouchesFloor, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
+import { planSettlementSite } from "../src/site-program";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
   prompt: "A tactical location with routes, cover, height, and a meaningful encounter objective.",
@@ -272,10 +273,83 @@ describe("scene generators", () => {
     expect(signatures.size).toBe(kinds.length);
   });
 
+  it("keeps one seeded BuildingEnvelopeProgram across mass, facade, and full-interior LODs", () => {
+    for (const kind of ["home", "tavern", "shrine", "warehouse", "manor"] as const) {
+      const signatures = new Set<string>();
+      for (const lod of ["mass", "facade", "full-interior"] as const) {
+        const seed = `stable-envelope-${kind}`;
+        const scene = baseScene("settlement", "Envelope test", "Stable envelope", seed, { x: 20, z: 20 }, 4, [10, 10, 10, 10]);
+        const instance = instantiateBuildingModule(scene, { id: `${kind}-${lod}`, kind, x: 10, z: 10, width: 9, depth: 8, rotation: 0.18, district: "test", seed, lod }, new SeededRandom(seed));
+        expect(instance.envelopeProgram?.partCount).toBeGreaterThanOrEqual(2);
+        expect(scene.primitives.some((primitive) => primitive.tags?.includes("envelope-part"))).toBe(true);
+        signatures.add(instance.envelopeProgram?.silhouetteSignature ?? "missing");
+      }
+      expect(signatures.size).toBe(1);
+    }
+  });
+
+  it("derives frontage parcels from road-bounded blocks and changes the graph with density", () => {
+    const prompt = "1920年代城市工业街区，有铁路货场、厂房、工人住宅、仓库和后巷";
+    const make = (density: number) => {
+      const generationRequest = { ...request(`r12-urban-${density}`, "large", density), prompt };
+      return planSettlementSite({ request: generationRequest, archetype: "city" }, new SeededRandom(generationRequest.seed));
+    };
+    const sparse = make(0.2);
+    const dense = make(0.95);
+    expect(dense.roads.length).toBeGreaterThan(sparse.roads.length);
+    expect(dense.diagnostics.roadLengthCells).toBeGreaterThan(sparse.diagnostics.roadLengthCells);
+    expect(dense.blocks.length).toBeGreaterThan(sparse.blocks.length);
+    expect(dense.parcels.length).toBeGreaterThan(sparse.parcels.length);
+    expect(dense.roadNodes.some((node) => node.kind === "junction" && node.roadIds.length > 1)).toBe(true);
+    expect(dense.blocks.every((block) => block.frontageRoadIds.length > 0)).toBe(true);
+    for (const parcel of dense.parcels) {
+      const block = dense.blocks.find((candidate) => candidate.id === parcel.blockId);
+      expect(block).toBeDefined();
+      expect(Math.abs(parcel.center.x - (block?.center.x ?? 0))).toBeLessThanOrEqual((block?.size.x ?? 0) / 2);
+      expect(Math.abs(parcel.center.z - (block?.center.z ?? 0))).toBeLessThanOrEqual((block?.size.z ?? 0) / 2);
+      expect(parcel.buildingSize.x).toBeLessThanOrEqual(parcel.size.x);
+      expect(parcel.buildingSize.z).toBeLessThanOrEqual(parcel.size.z);
+      expect(parcel.frontageRoadId.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("realizes special settlement morphologies as physical geometry", () => {
+    const cases = [
+      ["河道交错的水城街区，有主运河、支流、石桥和木桥", "main-canal"],
+      ["被战争破坏的城市街区，有坍塌住宅、临时街垒、破损道路和绕行小巷", "war-damaged"],
+      ["建在巨型桥墩之间的垂直贫民街区，有多层棚屋、吊桥和桥下维修区", "vertical-slum"],
+      ["火星殖民地港口区，有气闸主路、温室、控制塔和地下生命维持层", "colony-port"],
+      ["中世纪城门街区，城门到市场的主干路与城墙维护路线", "gate-district"],
+    ] as const;
+    for (const [prompt, tag] of cases) {
+      const scene = generateScene({ ...request(`r12-special-${tag}`, "medium", 0.68), prompt }, "adaptive");
+      expect(hasTag(scene, tag)).toBe(true);
+      expect(scene.diagnostics.valid).toBe(true);
+    }
+  });
+
   it("prefers a specific harbor grammar inside a named city", () => {
     const harborDistrict = generateScene({ ...request("settlement-deepwater-harbor"), prompt: "深水城港区的仓库、市场和码头", size: "large" }, "settlement");
     expect(harborDistrict.archetype).toBe("harbor");
     expect(hasTag(harborDistrict, "harbor-edge")).toBe(true);
+    expect(hasTag(harborDistrict, "main-canal")).toBe(false);
+  });
+
+  it("distinguishes a named fantasy harbor from a literal canal city", () => {
+    const harbor = generateScene({ ...request("r12-deepwater-not-canal", "large", 0.78), prompt: "深水城港区，有弯曲海岸、六码头、沿岸货运大道和仓储街区" }, "adaptive");
+    const canalCity = generateScene({ ...request("r12-literal-water-city", "large", 0.78), prompt: "河道交错的水城街区，有主运河、支流、石桥和木桥" }, "adaptive");
+    expect(harbor.sceneProgram?.domain).toBe("settlement");
+    expect(hasTag(harbor, "harbor-edge")).toBe(true);
+    expect(hasTag(harbor, "main-canal")).toBe(false);
+    expect(hasTag(canalCity, "main-canal")).toBe(true);
+  });
+
+  it("keeps a hillside noble district under settlement planning", () => {
+    const scene = generateScene({ ...request("r12-hillside-settlement", "large", 0.62), prompt: "山坡贵族区，沿等高线道路、三座不同庄园、公共花园、守卫岗亭、仆从巷、山顶钟楼和下层商业街" }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.siteProgram?.siteType).toBe("town");
+    expect(hasTag(scene, "mountain-terrace")).toBe(true);
+    expect(scene.buildingInstances?.length ?? 0).toBeGreaterThanOrEqual(8);
   });
 
   it("keeps a settlement as the parent site when its prompt names child buildings", () => {

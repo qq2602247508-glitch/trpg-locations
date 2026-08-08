@@ -12,6 +12,25 @@ function roadPieces(road: RoadProgram, elevationAt: (x: number, z: number) => nu
   });
 }
 
+function addRoadJunctions(scene: GeneratedScene, program: ReturnType<typeof planSettlementSite>, elevationAt: (x: number, z: number) => number): void {
+  for (const node of program.roadNodes.filter((candidate) => candidate.kind === "junction")) {
+    const connected = node.roadIds.map((id) => program.roads.find((road) => road.id === id)).filter((road): road is RoadProgram => Boolean(road));
+    const radius = Math.max(1.4, ...connected.map((road) => road.widthCells * 0.58));
+    scene.primitives.push(cylinder(`site-${node.id}-junction`, 0, node.point.x, elevationAt(node.point.x, node.point.z) + FLOOR_SLAB_METERS + 0.025, node.point.z, radius * 2, 0.08, "stone", ["road", "road-junction", "standable", "site-program"]));
+  }
+}
+
+function addBlockAndParcelSurfaces(scene: GeneratedScene, program: ReturnType<typeof planSettlementSite>, elevationAt: (x: number, z: number) => number): void {
+  for (const block of program.blocks) {
+    const y = elevationAt(block.center.x, block.center.z);
+    scene.primitives.push(box(`site-${block.id}-surface`, 0, block.center.x, y + 0.035, block.center.z, Math.max(1, block.size.x - 0.24), 0.05, Math.max(1, block.size.z - 0.24), program.siteType === "village" || program.siteType === "mining-settlement" ? "earth" : "darkStone", ["block-surface", `district:${block.districtId}`, "site-program"]));
+  }
+  for (const parcel of program.parcels) {
+    const y = elevationAt(parcel.center.x, parcel.center.z);
+    scene.primitives.push(box(`site-${parcel.id}-yard`, 0, parcel.center.x, y + 0.07, parcel.center.z, parcel.size.x, 0.06, parcel.size.z, program.siteType === "village" || program.siteType === "mining-settlement" ? "earth" : "stone", ["parcel-yard", `parcel:${parcel.id}`, `block:${parcel.blockId}`, "site-program"] , parcel.rotationY));
+  }
+}
+
 function addOpenSpaces(scene: GeneratedScene, program: ReturnType<typeof planSettlementSite>, elevationAt: (x: number, z: number) => number = () => 0): void {
   for (const space of program.openSpaces) {
     const spaceY = elevationAt(space.center.x, space.center.z);
@@ -56,9 +75,13 @@ function addFloatingIslandTerrain(scene: GeneratedScene, width: number, depth: n
   return (x: number) => x < band ? 0 : x < band * 2 ? feetToMeters(10) : feetToMeters(20);
 }
 
-function addHarbor(scene: GeneratedScene, width: number, depth: number): void {
+function addHarbor(scene: GeneratedScene, width: number, depth: number, features: readonly string[]): void {
   const waterZ = depth - 4.5;
-  scene.primitives.push(water("site-harbor-water", 0, width / 2, -0.22, waterZ, width - 2, 0.36, 8, ["harbor-edge", "coast", "site-program"]));
+  if (features.includes("fantasy-harbor")) {
+    for (const [index, centerRatio, widthRatio, shoreOffset] of [[0, 0.17, 0.34, -1.2], [1, 0.5, 0.34, 0.4], [2, 0.83, 0.34, -0.5]] as const) {
+      scene.primitives.push(water(`site-harbor-water-${index + 1}`, 0, width * centerRatio, -0.22, waterZ + shoreOffset / 2, width * widthRatio + 0.4, 0.36, 8 + shoreOffset, ["harbor-edge", "curved-coast", "coast", "site-program"]));
+    }
+  } else scene.primitives.push(water("site-harbor-water", 0, width / 2, -0.22, waterZ, width - 2, 0.36, 8, ["harbor-edge", "coast", "site-program"]));
   for (let index = 0; index < 6; index += 1) {
     const x = 5 + index * ((width - 10) / 5);
     const shoreZ = depth - 8 + Math.sin(index * 1.37) * 1.1;
@@ -69,11 +92,19 @@ function addHarbor(scene: GeneratedScene, width: number, depth: number): void {
   scene.tactical.push(tacticalFeature("harbor-waterline-hazard", "hazard", width / 2, waterZ, -0.22, 5, "Six irregular docks create exposed cargo lanes and dangerous water-edge flanks."));
 }
 
-function addVillageLandmarks(scene: GeneratedScene, width: number, depth: number): void {
+function addVillageLandmarks(scene: GeneratedScene, width: number, depth: number, features: readonly string[]): void {
   scene.primitives.push(cylinder("village-public-well", 0, width / 2, FLOOR_SLAB_METERS, depth / 2, 2.2, feetToMeters(3.2), "stone", ["well", "village-anchor", "cover", "site-program"]));
   const bridgeZ = depth * 0.42;
   scene.primitives.push(water("village-stream", 0, width * 0.16, -0.14, depth / 2, 3, 0.2, depth - 5, ["stream", "watercourse", "site-program"], 0), corridor("village-stone-bridge", 0, width * 0.16 - 3, bridgeZ, width * 0.16 + 3, bridgeZ, FLOOR_SLAB_METERS + 0.16, 2.2, "stone", ["bridge", "village-anchor", "standable"]));
   scene.tactical.push(tacticalFeature("village-bridge-choke", "chokepoint", width * 0.16, bridgeZ, FLOOR_SLAB_METERS, 2, "The stone bridge and public well anchor the village's organic road growth."));
+  if (features.includes("wooden-wall")) {
+    const wallHeight = feetToMeters(7);
+    scene.primitives.push(
+      box("village-palisade-north", 0, width / 2, 0, 1.3, width - 5, wallHeight, 0.28, "wood", ["village-wall", "palisade", "cover", "site-program", "opening"]),
+      box("village-palisade-west", 0, 1.3, 0, depth / 2, 0.28, wallHeight, depth - 4, "wood", ["village-wall", "palisade", "cover", "site-program", "opening"]),
+      box("village-palisade-east", 0, width - 1.3, 0, depth / 2, 0.28, wallHeight, depth - 4, "wood", ["village-wall", "palisade", "cover", "site-program", "opening"]),
+    );
+  }
 }
 
 function addUrbanDefences(scene: GeneratedScene, width: number, depth: number): void {
@@ -175,6 +206,68 @@ function addElevatedRailMarket(scene: GeneratedScene, width: number, depth: numb
   scene.tactical.push(tacticalFeature("elevated-market-underpass", "chokepoint", width * 0.5, railZ, 0, 3, "The viaduct piers divide the central market into defensible bays."));
 }
 
+function addWaterCity(scene: GeneratedScene, width: number, depth: number): void {
+  const mainX = width * 0.48;
+  scene.primitives.push(
+    water("water-city-main-canal", 0, mainX, FLOOR_SLAB_METERS + 0.02, depth * 0.5, 5.4, 0.12, depth * 0.92, ["water-city", "main-canal", "watercourse", "site-program"]),
+    water("water-city-west-branch", 0, width * 0.28, FLOOR_SLAB_METERS + 0.025, depth * 0.34, width * 0.4, 0.1, 3.4, ["water-city", "branch-canal", "watercourse", "site-program"], -0.12),
+    water("water-city-east-branch", 0, width * 0.7, FLOOR_SLAB_METERS + 0.025, depth * 0.66, width * 0.42, 0.1, 3.2, ["water-city", "branch-canal", "watercourse", "site-program"], 0.1),
+    corridor("water-city-stone-bridge", 0, mainX - 5, depth * 0.46, mainX + 5, depth * 0.46, FLOOR_SLAB_METERS + 0.22, 2.8, "stone", ["water-city", "stone-bridge", "bridge", "standable", "site-program"]),
+    corridor("water-city-wood-bridge", 0, mainX - 4, depth * 0.72, mainX + 4, depth * 0.72, FLOOR_SLAB_METERS + 0.18, 1.6, "wood", ["water-city", "wood-bridge", "bridge", "standable", "site-program"]),
+    box("water-city-market-dock", 0, mainX + 5.8, FLOOR_SLAB_METERS + 0.1, depth * 0.57, 6.5, FLOOR_SLAB_METERS, 4, "wood", ["water-city", "market-dock", "quay", "standable", "site-program"]),
+  );
+  scene.routes.push(createRoute("water-city-canal-route", "waterflow", [{ x: mainX, z: depth * 0.05 }, { x: mainX, z: depth * 0.5 }, { x: mainX, z: depth * 0.95 }], { purpose: "water", traffic: 0.72, schedule: "all" }));
+}
+
+function addGateDistrict(scene: GeneratedScene, width: number, depth: number): void {
+  const gateX = width * 0.28;
+  scene.primitives.push(
+    cylinder("gate-district-west-tower", 0, gateX - 4, 0, 2.3, 5.2, feetToMeters(24), "darkStone", ["gate-district", "gate-tower", "high-ground", "site-program"]),
+    cylinder("gate-district-east-tower", 0, gateX + 4, 0, 2.3, 5.2, feetToMeters(24), "darkStone", ["gate-district", "gate-tower", "high-ground", "site-program"]),
+    box("gate-district-lintel", 0, gateX, feetToMeters(16), 2.3, 3.2, feetToMeters(8), 1.2, "darkStone", ["gate-district", "gatehouse", "opening", "site-program"]),
+    corridor("gate-district-kill-lane", 0, gateX, 0, gateX, depth * 0.5, FLOOR_SLAB_METERS + 0.08, 3.5, "stone", ["gate-district", "kill-lane", "road", "standable", "site-program"]),
+  );
+}
+
+function addWarDamage(scene: GeneratedScene, width: number, depth: number): void {
+  for (let index = 0; index < 6; index += 1) {
+    const x = width * (0.18 + (index % 3) * 0.28);
+    const z = depth * (0.3 + Math.floor(index / 3) * 0.34);
+    scene.primitives.push(box(`war-rubble-${index + 1}`, 0, x, FLOOR_SLAB_METERS, z, 2.2 + (index % 2), feetToMeters(2.5 + index % 3), 1.8, "rock", ["war-damaged", "rubble", "cover", "site-program"], index * 0.31));
+  }
+  scene.primitives.push(
+    box("war-street-barricade", 0, width * 0.5, FLOOR_SLAB_METERS, depth * 0.5, 5.2, feetToMeters(5), 0.8, "wood", ["war-damaged", "temporary-barricade", "cover", "site-program"], 0.18),
+    corridor("war-detour-alley", 0, width * 0.18, depth * 0.62, width * 0.44, depth * 0.76, FLOOR_SLAB_METERS + 0.08, 1.1, "earth", ["war-damaged", "detour", "lane", "standable", "site-program"]),
+  );
+}
+
+function addVerticalSlum(scene: GeneratedScene, width: number, depth: number): void {
+  const levels = [feetToMeters(12), feetToMeters(24), feetToMeters(36)];
+  for (const [pierIndex, x] of [width * 0.28, width * 0.72].entries()) {
+    scene.primitives.push(cylinder(`vertical-slum-pier-${pierIndex + 1}`, 0, x, 0, depth * 0.5, 8.5, feetToMeters(50), "darkStone", ["vertical-slum", "bridge-pier", "cover", "site-program"]));
+  }
+  for (const [levelIndex, levelY] of levels.entries()) {
+    const z = depth * (0.3 + levelIndex * 0.19);
+    scene.primitives.push(
+      box(`vertical-slum-market-platform-${levelIndex + 1}`, levelIndex + 1, width * 0.5, levelY, z, width * 0.38, FLOOR_SLAB_METERS, 6.5, "wood", ["vertical-slum", "market-platform", "platform", "standable", "site-program"]),
+      corridor(`vertical-slum-rope-bridge-${levelIndex + 1}`, levelIndex + 1, width * 0.3, z, width * 0.7, z, levelY + 0.08, 1.2, "wood", ["vertical-slum", "rope-bridge", "bridge", "standable", "site-program"]),
+      stairs(`vertical-slum-ladder-${levelIndex + 1}`, levelIndex + 1, width * 0.34, levelIndex === 0 ? 0 : levels[levelIndex - 1] ?? 0, z + 2.2, 1, feetToMeters(12), 3.2, "wood", ["vertical-slum", "rope-ladder", "vertical-opening", "site-program"]),
+    );
+  }
+  scene.primitives.push(water("vertical-slum-public-pool", 0, width * 0.5, 0.04, depth * 0.78, 7, 0.18, 6, ["vertical-slum", "public-water", "site-program"]), box("vertical-slum-maintenance", 3, width * 0.5, -feetToMeters(8), depth * 0.5, width * 0.32, FLOOR_SLAB_METERS, 7, "metal", ["vertical-slum", "under-bridge-maintenance", "underground", "floor", "standable", "site-program"]));
+}
+
+function addColonyPort(scene: GeneratedScene, width: number, depth: number): void {
+  scene.primitives.push(
+    corridor("colony-airlock-road", 0, 1, depth * 0.5, width - 2, depth * 0.5, FLOOR_SLAB_METERS + 0.09, 4, "metal", ["colony-port", "airlock-road", "road", "standable", "site-program"]),
+    cylinder("colony-airlock", 0, width * 0.1, FLOOR_SLAB_METERS, depth * 0.5, 7, feetToMeters(14), "metal", ["colony-port", "airlock", "entrance", "site-program"]),
+    primitive("colony-greenhouse", "sphere", 0, width * 0.68, FLOOR_SLAB_METERS, depth * 0.24, 10, feetToMeters(12), 8, "warmLight", ["colony-port", "greenhouse", "landmark", "site-program"]),
+    cylinder("colony-control-tower", 0, width * 0.82, FLOOR_SLAB_METERS, depth * 0.68, 5.5, feetToMeters(30), "metal", ["colony-port", "control-tower", "high-ground", "site-program"]),
+    corridor("colony-external-boardwalk", 1, width * 0.58, depth * 0.2, width * 0.88, depth * 0.7, feetToMeters(14), 1.4, "metal", ["colony-port", "external-boardwalk", "bridge", "standable", "site-program"]),
+    box("colony-life-support", 3, width * 0.5, -feetToMeters(10), depth * 0.5, width * 0.38, FLOOR_SLAB_METERS, depth * 0.18, "metal", ["colony-port", "life-support", "underground", "floor", "standable", "site-program"]),
+  );
+}
+
 function addRiverCrossingSite(scene: GeneratedScene, width: number, depth: number): void {
   const riverX = width * 0.24; const bridgeZ = depth * 0.52;
   scene.primitives.push(
@@ -199,16 +292,18 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   scene.siteProgram = summarizeSiteProgram(program);
   const landDepth = program.siteType === "harbor-district" ? program.bounds.z - 8 : program.bounds.z;
   const isFloating = context.sceneProgram?.morphology.includes("floating-islands") ?? false;
-  const isMountainMonastery = program.requiredFeatures.includes("mountain-monastery");
+  const isMountainMonastery = program.requiredFeatures.includes("mountain-monastery") || program.requiredFeatures.includes("hillside-district");
   const isFlooded = program.requiredFeatures.includes("flooded-site");
   const elevationAt = isFloating ? addFloatingIslandTerrain(scene, program.bounds.x, program.bounds.z) : isMountainMonastery ? addMountainTerraces(scene, program.bounds.x, program.bounds.z) : () => 0;
   if (!isFloating) scene.primitives.push(box("site-terrain-base", 0, program.bounds.x / 2, 0, landDepth / 2, program.bounds.x, FLOOR_SLAB_METERS, landDepth, program.siteType === "village" || program.siteType === "mining-settlement" || program.siteType === "town" ? "earth" : "darkStone", ["floor", "terrain", "site-program", `site:${program.siteType}`]));
   // Districts are planning ownership, not giant coloured floor decals. Their
   // identity is made legible by parcel use, landmarks and road hierarchy.
+  addBlockAndParcelSurfaces(scene, program, elevationAt);
   for (const road of program.roads) scene.primitives.push(...roadPieces(road, elevationAt));
+  addRoadJunctions(scene, program, elevationAt);
   addOpenSpaces(scene, program, elevationAt);
-  if (program.siteType === "harbor-district") addHarbor(scene, program.bounds.x, program.bounds.z);
-  if (program.siteType === "village") addVillageLandmarks(scene, program.bounds.x, program.bounds.z);
+  if (program.siteType === "harbor-district") addHarbor(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
+  if (program.siteType === "village") addVillageLandmarks(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
   if (!isFloating && (program.siteType === "city-district" || program.siteType === "town")) addUrbanDefences(scene, program.bounds.x, program.bounds.z);
   if (program.siteType === "mining-settlement") {
     addMiningValley(scene, program.bounds.x, program.bounds.z);
@@ -218,6 +313,11 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   if (program.requiredFeatures.includes("industrial-plant") || program.requiredFeatures.includes("rail-yard")) addIndustrialSite(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
   if (isFlooded) addFloodedSite(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("elevated-rail")) addElevatedRailMarket(scene, program.bounds.x, program.bounds.z);
+  if (program.requiredFeatures.includes("water-city")) addWaterCity(scene, program.bounds.x, program.bounds.z);
+  if (program.requiredFeatures.includes("gate-district")) addGateDistrict(scene, program.bounds.x, program.bounds.z);
+  if (program.requiredFeatures.includes("war-damaged")) addWarDamage(scene, program.bounds.x, program.bounds.z);
+  if (program.requiredFeatures.includes("vertical-slum")) addVerticalSlum(scene, program.bounds.x, program.bounds.z);
+  if (program.requiredFeatures.includes("colony-port")) addColonyPort(scene, program.bounds.x, program.bounds.z);
   if (program.requiredFeatures.includes("river-crossing") && program.siteType !== "village" && program.siteType !== "mining-settlement" && program.siteType !== "harbor-district") addRiverCrossingSite(scene, program.bounds.x, program.bounds.z);
 
   for (const parcel of program.parcels) {
@@ -228,8 +328,8 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       kind: parcel.buildingKind,
       x: parcel.center.x,
       z: parcel.center.z,
-      width: parcel.size.x,
-      depth: parcel.size.z,
+      width: parcel.buildingSize.x,
+      depth: parcel.buildingSize.z,
       rotation: parcel.rotationY,
       district: district?.role ?? parcel.districtId,
       seed: parcel.buildingSeed,
@@ -238,6 +338,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       frontageRoadId: parcel.frontageRoadId,
       entrance: parcel.entrance,
       baseY: siteElevation + FLOOR_SLAB_METERS,
+      state: parcel.state,
     }, context.rng.fork(parcel.buildingSeed));
     scene.primitives.push(corridor(`parcel-access-${parcel.id}`, 0, parcel.entrance.x, parcel.entrance.z, parcel.center.x, parcel.center.z, siteElevation + FLOOR_SLAB_METERS + 0.06, parcel.lod === "full-interior" ? 1.4 : 1, program.siteType === "village" ? "earth" : "stone", ["parcel-access", "entrance-route", `parcel:${parcel.id}`, "site-program", "standable"]));
     if (isFlooded) {
@@ -281,6 +382,11 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   for (const zone of program.encounterZones) scene.tactical.push(tacticalFeature(`site-${zone.id}`, zone.kind === "high-ground" ? "highGround" : zone.kind, zone.center.x, zone.center.z, 0, zone.radiusCells, `SiteProgram ${zone.kind} derived from district and route relationships.`));
   scene.diagnostics.metrics.siteRoadLengthCells = program.diagnostics.roadLengthCells;
   scene.diagnostics.metrics.siteParcelCoverage = program.diagnostics.parcelCoverage;
+  scene.diagnostics.metrics.siteBuildingCoverage = program.diagnostics.buildingCoverage;
   scene.diagnostics.metrics.siteFullInteriors = program.lodPolicy.fullInteriorCount;
+  scene.diagnostics.metrics.siteJunctions = program.diagnostics.junctionCount;
+  scene.diagnostics.metrics.siteBlocks = program.diagnostics.blockCount;
+  scene.diagnostics.metrics.siteAverageParcelArea = program.diagnostics.averageParcelArea;
+  scene.diagnostics.metrics.siteOpenSpaceRatio = program.diagnostics.openSpaceRatio;
   return scene;
 }

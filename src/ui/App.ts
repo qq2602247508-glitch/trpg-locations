@@ -37,6 +37,8 @@ interface AppElements {
   exportScene: HTMLButtonElement;
   transparencyToggle: HTMLButtonElement;
   cameraToggle: HTMLButtonElement;
+  topCameraToggle: HTMLButtonElement;
+  planningToggle: HTMLButtonElement;
   routesToggle: HTMLButtonElement;
   tacticalToggle: HTMLButtonElement;
   metrics: HTMLElement;
@@ -199,6 +201,16 @@ export async function mountApp(root: HTMLElement): Promise<void> {
               <span><strong>低角度体量</strong><small>检查高差、立面与悬空</small></span>
               <i aria-hidden="true"></i>
             </button>
+            <button class="toggle-button" data-role="top-camera-toggle" type="button" aria-pressed="false">
+              <span class="toggle-glyph" aria-hidden="true">▦</span>
+              <span><strong>正交规划顶视图</strong><small>检查道路、节点、街区、地块与朝向</small></span>
+              <i aria-hidden="true"></i>
+            </button>
+            <button class="toggle-button" data-role="planning-toggle" type="button" aria-pressed="false">
+              <span class="toggle-glyph" aria-hidden="true">⌗</span>
+              <span><strong data-role="planning-label">规划分层 · 全部</strong><small>循环查看道路、街区地块与建筑轮廓</small></span>
+              <i aria-hidden="true"></i>
+            </button>
           </section>
 
           <section class="inspector-section metrics-section">
@@ -238,6 +250,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   let routeDebug = false;
   let tacticalDebug = false;
   let lastStats: RenderStats = renderer.getStats();
+  let planningView: "all" | "roads" | "parcels" | "buildings" = "all";
 
   elements.prompt.value = DEFAULT_PROMPT;
   elements.seed.value = createSeed();
@@ -294,6 +307,21 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     const enabled = elements.cameraToggle.getAttribute("aria-pressed") !== "true";
     renderer.setCameraPreset(enabled ? "low" : "overview");
     setToggle(elements.cameraToggle, enabled);
+    setToggle(elements.topCameraToggle, false);
+  });
+  elements.topCameraToggle.addEventListener("click", () => {
+    const enabled = elements.topCameraToggle.getAttribute("aria-pressed") !== "true";
+    renderer.setCameraPreset(enabled ? "top" : "overview");
+    setToggle(elements.topCameraToggle, enabled);
+    setToggle(elements.cameraToggle, false);
+  });
+  elements.planningToggle.addEventListener("click", () => {
+    const order = ["all", "roads", "parcels", "buildings"] as const;
+    planningView = order[(order.indexOf(planningView) + 1) % order.length] ?? "all";
+    renderer.setPlanningView(planningView);
+    setToggle(elements.planningToggle, planningView !== "all");
+    const label = elements.planningToggle.querySelector<HTMLElement>('[data-role="planning-label"]');
+    if (label) label.textContent = `规划分层 · ${{ all: "全部", roads: "仅道路", parcels: "道路与地块", buildings: "建筑轮廓" }[planningView]}`;
   });
   elements.routesToggle.addEventListener("click", () => {
     routeDebug = !routeDebug;
@@ -342,6 +370,13 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       activeScene = scene;
       renderer.setScene(scene);
       setToggle(elements.cameraToggle, false);
+      setToggle(elements.topCameraToggle, false);
+      renderer.setCameraPreset("overview");
+      planningView = "all";
+      renderer.setPlanningView("all");
+      setToggle(elements.planningToggle, false);
+      const planningLabel = elements.planningToggle.querySelector<HTMLElement>('[data-role="planning-label"]');
+      if (planningLabel) planningLabel.textContent = "规划分层 · 全部";
       renderer.setRouteVisibility(routeDebug);
       renderer.setTacticalVisibility(tacticalDebug);
       renderSceneDetails(elements, scene, lastStats);
@@ -387,6 +422,8 @@ function getElements(root: HTMLElement): AppElements {
     exportScene: query(root, '[data-role="export-scene"]'),
     transparencyToggle: query(root, '[data-role="transparency-toggle"]'),
     cameraToggle: query(root, '[data-role="camera-toggle"]'),
+    topCameraToggle: query(root, '[data-role="top-camera-toggle"]'),
+    planningToggle: query(root, '[data-role="planning-toggle"]'),
     routesToggle: query(root, '[data-role="routes-toggle"]'),
     tacticalToggle: query(root, '[data-role="tactical-toggle"]'),
     metrics: query(root, '[data-role="metrics"]'),

@@ -164,6 +164,8 @@ export class SceneRenderer {
 
   readonly camera = new THREE.PerspectiveCamera(45, 1, 0.1, 3000);
 
+  readonly topCamera = new THREE.OrthographicCamera(-20, 20, 20, -20, 0.1, 3000);
+
   readonly renderer: THREE.WebGLRenderer;
 
   readonly controls: OrbitControls;
@@ -197,6 +199,10 @@ export class SceneRenderer {
   private floorLayers = new Map<number, FloorLayer>();
 
   private activeFloorView: FloorView = "cut";
+
+  private cameraMode: "perspective" | "top" = "perspective";
+
+  private planningView: "all" | "roads" | "parcels" | "buildings" = "all";
 
   private routesVisible = false;
 
@@ -339,7 +345,20 @@ export class SceneRenderer {
     this.setFloorView(this.activeFloorView);
   }
 
-  setCameraPreset(preset: "overview" | "low"): void {
+  setPlanningView(view: "all" | "roads" | "parcels" | "buildings"): void {
+    this.planningView = view;
+    this.applyPlanningView();
+  }
+
+  setCameraPreset(preset: "overview" | "low" | "top"): void {
+    if (preset === "top") {
+      this.cameraMode = "top";
+      this.controls.enabled = false;
+      this.configureTopCamera();
+      return;
+    }
+    this.cameraMode = "perspective";
+    this.controls.enabled = true;
     if (preset === "overview") {
       this.recenterCameraForFloor(this.activeFloorView);
       return;
@@ -393,7 +412,7 @@ export class SceneRenderer {
     const delta = Math.min(this.clock.getDelta(), 0.25);
     if (delta > 0) this.fps = THREE.MathUtils.lerp(this.fps, 1 / delta, 0.12);
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.cameraMode === "top" ? this.topCamera : this.camera);
 
     const now = performance.now();
     if (this.onStats && now - this.lastStatsAt > 500) {
@@ -407,6 +426,7 @@ export class SceneRenderer {
     if (width < 1 || height < 1) return;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    if (this.cameraMode === "top") this.configureTopCamera();
     this.renderer.setSize(width, height, false);
   }
 
@@ -516,10 +536,15 @@ export class SceneRenderer {
     let maxY = 2;
 
     for (const primitive of scene.primitives) {
-      minX = Math.min(minX, primitive.position.x - primitive.size.x / 2);
-      maxX = Math.max(maxX, primitive.position.x + primitive.size.x / 2);
-      minZ = Math.min(minZ, primitive.position.z - primitive.size.z / 2);
-      maxZ = Math.max(maxZ, primitive.position.z + primitive.size.z / 2);
+      const rotation = primitive.rotationY ?? 0;
+      const cosine = Math.abs(Math.cos(rotation));
+      const sine = Math.abs(Math.sin(rotation));
+      const halfX = (primitive.size.x * cosine + primitive.size.z * sine) / 2;
+      const halfZ = (primitive.size.x * sine + primitive.size.z * cosine) / 2;
+      minX = Math.min(minX, primitive.position.x - halfX);
+      maxX = Math.max(maxX, primitive.position.x + halfX);
+      minZ = Math.min(minZ, primitive.position.z - halfZ);
+      maxZ = Math.max(maxZ, primitive.position.z + halfZ);
       maxY = Math.max(maxY, primitive.position.y + primitive.size.y);
     }
 
@@ -564,6 +589,8 @@ export class SceneRenderer {
     const surfaceLinesByLevel = new Map<number, number[]>();
     const addSurfaceGrid = (surface: ScenePrimitive): void => {
       if (surface.shape !== "box" || !surface.tags?.some((tag) => surfaceTags.has(tag))) return;
+      if (surface.id === "site-terrain-base") return;
+      if (scene.siteProgram && surface.tags?.includes("terrain") && !surface.tags.some((tag) => ["road", "bridge", "platform", "ledge"].includes(tag))) return;
       const cosine = Math.cos(surface.rotationY ?? 0);
       const sine = Math.sin(surface.rotationY ?? 0);
       const toWorld = (localX: number, localZ: number): [number, number, number] => [
@@ -665,7 +692,11 @@ export class SceneRenderer {
       const layer = this.floorLayers.get(primitive.level) ?? this.createFloorLayer(primitive.level);
       const host = isRoof ? layer.roof : layer.structure;
       const chunk = spatialBatchKey(primitive.position, this.worldBounds);
-      const key = `${primitive.level}|${isRoof ? "roof" : "structure"}|${primitive.shape}|${primitive.material}|${ghost ? "ghost" : "solid"}|${chunk}`;
+      const planningClass = primitive.tags?.includes("settlement-building") ? "buildings"
+        : primitive.material === "water" || primitive.tags?.some((tag) => ["road", "rail-track", "dock", "bridge", "quay", "watercourse"].includes(tag)) ? "roads"
+          : primitive.tags?.some((tag) => ["block-surface", "parcel-yard", "open-space"].includes(tag)) ? "parcels"
+            : "context";
+      const key = `${primitive.level}|${isRoof ? "roof" : "structure"}|${primitive.shape}|${primitive.material}|${ghost ? "ghost" : "solid"}|${chunk}|${planningClass}`;
       const existing = batchMap.get(key);
       if (existing) {
         existing.primitives.push(primitive);
@@ -687,6 +718,11 @@ export class SceneRenderer {
         batch.primitives.length,
       );
       mesh.name = `${batch.material} ${batch.shape} × ${batch.primitives.length}`;
+      const sampleTags = batch.primitives[0]?.tags ?? [];
+      mesh.userData.planningClass = sampleTags.includes("settlement-building") ? "buildings"
+        : batch.material === "water" || sampleTags.some((tag) => ["road", "rail-track", "dock", "bridge", "quay", "watercourse"].includes(tag)) ? "roads"
+          : sampleTags.some((tag) => ["block-surface", "parcel-yard", "open-space"].includes(tag)) ? "parcels"
+            : "context";
       mesh.castShadow = batch.material !== "water" && batch.material !== "warmLight";
       mesh.receiveShadow = batch.material !== "warmLight";
       const matrix = new THREE.Matrix4();
@@ -716,6 +752,17 @@ export class SceneRenderer {
       batch.host.add(mesh);
       this.primitiveBatches += 1;
     }
+    this.applyPlanningView();
+  }
+
+  private applyPlanningView(): void {
+    this.modelRoot.traverse((object) => {
+      if (!(object instanceof THREE.InstancedMesh)) return;
+      const category = object.userData.planningClass;
+      object.visible = this.planningView === "all"
+        || category === this.planningView
+        || (this.planningView === "parcels" && (category === "roads" || category === "parcels"));
+    });
   }
 
   private createFloorLayer(level: number): FloorLayer {
@@ -834,6 +881,10 @@ export class SceneRenderer {
 
   private recenterCameraForFloor(view: FloorView): void {
     if (!this.currentScene) return;
+    if (this.cameraMode === "top") {
+      this.configureTopCamera();
+      return;
+    }
     if (view === "cut" || view === "roof") {
       this.positionCamera();
       return;
@@ -884,6 +935,70 @@ export class SceneRenderer {
     this.controls.target.copy(target);
     this.camera.updateProjectionMatrix();
     this.controls.update();
+  }
+
+  private configureTopCamera(): void {
+    const { minX, maxX, minZ, maxZ, maxY } = this.topCameraBounds();
+    const width = Math.max(5, maxX - minX);
+    const depth = Math.max(5, maxZ - minZ);
+    const bounds = this.host.getBoundingClientRect();
+    const aspect = Math.max(0.25, bounds.width / Math.max(1, bounds.height));
+    const paddedWidth = width * 1.08;
+    const paddedDepth = depth * 1.08;
+    const halfHeight = Math.max(paddedDepth / 2, paddedWidth / (2 * aspect));
+    const halfWidth = halfHeight * aspect;
+    this.topCamera.left = -halfWidth;
+    this.topCamera.right = halfWidth;
+    this.topCamera.top = halfHeight;
+    this.topCamera.bottom = -halfHeight;
+    this.topCamera.near = 0.1;
+    this.topCamera.far = Math.max(300, maxY + 220);
+    this.topCamera.position.set((minX + maxX) / 2, Math.max(120, maxY + 80), (minZ + maxZ) / 2);
+    this.topCamera.up.set(0, 0, -1);
+    this.topCamera.lookAt((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
+    this.topCamera.updateProjectionMatrix();
+  }
+
+  /**
+   * A district overview should include the complete site, but an authored
+   * upper, basement or roof layer often occupies only one landmark building.
+   * Fitting those views to the whole settlement made valid rooms look like a
+   * handful of pixels in the corner and defeated visual inspection.
+   */
+  private topCameraBounds(): WorldBounds {
+    if (!this.currentScene || typeof this.activeFloorView !== "number") return this.worldBounds;
+    const authoredRoofView = this.currentScene.floorLabels?.[this.activeFloorView]?.includes("屋顶") === true;
+    const visible = this.currentScene.primitives.filter((primitive) => primitive.level === this.activeFloorView
+      && (authoredRoofView || (primitive.material !== "roof"
+        && !primitive.tags?.includes("roof")
+        && !(primitive.tags?.includes("roof-platform") && !primitive.tags?.includes("wall-walk")))));
+    if (visible.length === 0) return this.worldBounds;
+
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let minZ = Number.POSITIVE_INFINITY;
+    let maxZ = Number.NEGATIVE_INFINITY;
+    let maxY = 2;
+    for (const primitive of visible) {
+      const rotation = primitive.rotationY ?? 0;
+      const cosine = Math.abs(Math.cos(rotation));
+      const sine = Math.abs(Math.sin(rotation));
+      const halfX = (primitive.size.x * cosine + primitive.size.z * sine) / 2;
+      const halfZ = (primitive.size.x * sine + primitive.size.z * cosine) / 2;
+      minX = Math.min(minX, primitive.position.x - halfX);
+      maxX = Math.max(maxX, primitive.position.x + halfX);
+      minZ = Math.min(minZ, primitive.position.z - halfZ);
+      maxZ = Math.max(maxZ, primitive.position.z + halfZ);
+      maxY = Math.max(maxY, primitive.position.y + primitive.size.y);
+    }
+    const pad = GRID_METERS * 1.5;
+    return {
+      minX: minX - pad,
+      maxX: maxX + pad,
+      minZ: minZ - pad,
+      maxZ: maxZ + pad,
+      maxY: maxY + 2,
+    };
   }
 
   private getGeometry(shape: ScenePrimitive["shape"]): THREE.BufferGeometry {
@@ -987,6 +1102,8 @@ export class SceneRenderer {
     // is useful for props, but makes a cell-based heightfield look like noisy
     // mosaic tiles. Keep authored floors, shelves, banks and semantic grids
     // on one stable material tone; retain subtle variation for loose props.
+    if (tags.includes("block-surface")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0, -0.08, 0.045);
+    if (tags.includes("parcel-yard")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0.02, -0.12, 0.08);
     if (tags.includes("terrain") || tags.includes("floor") || tags.includes("semantic-grid") || tags.includes("macro-region")) {
       return new THREE.Color(MATERIAL_STYLE[material].color);
     }

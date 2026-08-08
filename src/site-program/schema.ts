@@ -2,7 +2,7 @@ import type { BuildingProgramSummary, GenerationRequest, SettlementBuildingKind,
 
 export type SiteType = "harbor-district" | "city-district" | "town" | "village" | "mining-settlement" | "wilderness-site";
 export type DistrictRole = "civic" | "commercial" | "residential" | "industrial" | "sacred" | "harbor" | "agricultural" | "service";
-export type RoadHierarchy = "arterial" | "street" | "lane" | "trail" | "quay" | "bridge";
+export type RoadHierarchy = "arterial" | "street" | "lane" | "trail" | "quay" | "bridge" | "rail" | "elevated" | "maintenance";
 export type BuildingLod = "full-interior" | "facade" | "mass";
 
 export interface SitePoint extends Vec2 {
@@ -31,6 +31,27 @@ export interface RoadProgram {
   widthCells: number;
   points: SitePoint[];
   purpose: "crowd" | "cargo" | "service" | "patrol" | "rural";
+  levelFeet?: number;
+  nodeIds: string[];
+}
+
+export interface RoadNodeProgram {
+  id: string;
+  point: SitePoint;
+  levelFeet: number;
+  roadIds: string[];
+  kind: "entry" | "junction" | "terminus" | "grade-separated";
+}
+
+export interface BlockProgram {
+  id: string;
+  districtId: string;
+  boundary: SitePoint[];
+  center: Vec2;
+  size: Vec2;
+  frontageRoadIds: string[];
+  setbackCells: number;
+  openSpaceRatio: number;
 }
 
 export interface ParcelProgram {
@@ -38,7 +59,9 @@ export interface ParcelProgram {
   districtId: string;
   center: Vec2;
   size: Vec2;
+  buildingSize: Vec2;
   rotationY: number;
+  blockId: string;
   frontageRoadId: string;
   entrance: Vec2;
   buildingKind: SettlementBuildingKind;
@@ -71,7 +94,9 @@ export interface SiteProgram {
   bounds: Vec2;
   terrain: SiteTerrainProgram;
   districts: DistrictProgram[];
+  roadNodes: RoadNodeProgram[];
   roads: RoadProgram[];
+  blocks: BlockProgram[];
   parcels: ParcelProgram[];
   openSpaces: OpenSpaceProgram[];
   encounterZones: EncounterZoneProgram[];
@@ -84,7 +109,12 @@ export interface SiteProgram {
   diagnostics: {
     roadLengthCells: number;
     parcelCoverage: number;
+    buildingCoverage: number;
     districtCount: number;
+    junctionCount: number;
+    blockCount: number;
+    averageParcelArea: number;
+    openSpaceRatio: number;
   };
 }
 
@@ -93,12 +123,17 @@ export interface SiteProgramSummary {
   siteType: SiteType;
   districtCount: number;
   roadCount: number;
+  junctionCount: number;
+  blockCount: number;
   parcelCount: number;
   fullInteriorCount: number;
   facadeCount: number;
   massCount: number;
   roadLengthCells: number;
   parcelCoverage: number;
+  buildingCoverage: number;
+  averageParcelArea: number;
+  openSpaceRatio: number;
 }
 
 export interface SitePlanningInput {
@@ -112,11 +147,16 @@ export function summarizeSiteProgram(program: SiteProgram): SiteProgramSummary {
     siteType: program.siteType,
     districtCount: program.districts.length,
     roadCount: program.roads.length,
+    junctionCount: program.roadNodes.filter((node) => node.kind === "junction").length,
+    blockCount: program.blocks.length,
     parcelCount: program.parcels.length,
     fullInteriorCount: program.lodPolicy.fullInteriorCount,
     facadeCount: program.lodPolicy.facadeCount,
     massCount: program.lodPolicy.massCount,
     roadLengthCells: program.diagnostics.roadLengthCells,
     parcelCoverage: program.diagnostics.parcelCoverage,
+    buildingCoverage: program.diagnostics.buildingCoverage,
+    averageParcelArea: program.diagnostics.averageParcelArea,
+    openSpaceRatio: program.diagnostics.openSpaceRatio,
   };
 }
