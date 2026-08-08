@@ -48,6 +48,7 @@ interface PrimitiveBatch {
   host: THREE.Group;
   shape: ScenePrimitive["shape"];
   material: MaterialKey;
+  ghost: boolean;
   primitives: ScenePrimitive[];
 }
 
@@ -288,6 +289,7 @@ export class SceneRenderer {
 
   setFloorView(view: FloorView): void {
     this.activeFloorView = view;
+    const authoredRoofView = typeof view === "number" && this.currentScene?.floorLabels?.[view]?.includes("屋顶") === true;
     for (const [level, layer] of this.floorLayers) {
       if (view === "roof") {
         layer.structure.visible = true;
@@ -297,12 +299,23 @@ export class SceneRenderer {
         layer.roof.visible = false;
       } else {
         layer.structure.visible = level === view;
-        layer.roof.visible = false;
+        layer.roof.visible = authoredRoofView && level === view;
       }
     }
     this.applyRouteFilters();
     this.applyOverlayFloorFilter(this.gridRoot, view);
     this.applyOverlayFloorFilter(this.tacticalRoot, view);
+    const tacticalGround = this.gridRoot.getObjectByName("Tactical ground");
+    if (tacticalGround) {
+      const selected = typeof view === "number"
+        ? this.currentScene?.primitives.filter((primitive) => primitive.level === view) ?? []
+        : [];
+      const undergroundOnly = (typeof view === "number" && this.currentScene?.floorLabels?.[view]?.startsWith("B") === true)
+        || (selected.length > 0
+          && selected.every((primitive) => primitive.position.y + primitive.size.y <= 0.05 || primitive.tags?.includes("underground")));
+      tacticalGround.visible = !undergroundOnly;
+    }
+    this.recenterCameraForFloor(view);
   }
 
   setRouteVisibility(visible: boolean): void {
@@ -608,6 +621,12 @@ export class SceneRenderer {
 
   private buildPrimitiveBatches(scene: GeneratedScene): void {
     const batchMap = new Map<string, PrimitiveBatch>();
+    const architecturalScene = scene.sceneProgram?.domain === "building"
+      || scene.sceneProgram?.domain === "interior"
+      || scene.kind === "building"
+      || scene.kind === "tower"
+      || scene.kind === "tavern"
+      || scene.kind === "dungeon";
     const maxLevel = Math.max(
       scene.floors - 1,
       ...scene.primitives.map((primitive) => primitive.level),
@@ -616,7 +635,13 @@ export class SceneRenderer {
     for (let level = 0; level <= maxLevel; level += 1) this.createFloorLayer(level);
 
     for (const primitive of scene.primitives) {
-      const isRoof = primitive.material === "roof" || primitive.tags?.includes("roof") === true;
+      // A reachable roof deck is authored as ordinary stone/wood so it can
+      // carry a tactical grid.  It is still part of the roof inspection
+      // layer: keeping it in the numeric top floor used to hide the actual
+      // top-storey room beneath one large opaque plate.
+      const isRoof = primitive.material === "roof"
+        || primitive.tags?.includes("roof") === true
+        || (primitive.tags?.includes("roof-platform") === true && primitive.tags?.includes("wall-walk") !== true);
       const isBuilding = primitive.tags?.some((tag) => tag === "wall" || tag === "settlement-building" || tag === "building-shell" || tag === "curtain-wall" || tag === "keep") === true;
       // In architectural scenes the slab itself is part of the inspection
       // problem: opaque upper floors hide rooms and create the same stacked
@@ -624,7 +649,7 @@ export class SceneRenderer {
       // floor surface together with walls, but leave tactical furniture solid.
       const isArchitecturalFloor = (scene.kind === "building" || scene.kind === "dungeon" || scene.kind === "tower")
         && primitive.tags?.includes("floor-slab") === true;
-      const ghost = this.buildingTransparency && (isBuilding || isArchitecturalFloor);
+      const ghost = architecturalScene && this.buildingTransparency && (isBuilding || isArchitecturalFloor);
       const layer = this.floorLayers.get(primitive.level) ?? this.createFloorLayer(primitive.level);
       const host = isRoof ? layer.roof : layer.structure;
       const chunk = spatialBatchKey(primitive.position, this.worldBounds);
@@ -637,6 +662,7 @@ export class SceneRenderer {
           host,
           shape: primitive.shape,
           material: primitive.material,
+          ghost,
           primitives: [primitive],
         });
       }
@@ -645,7 +671,7 @@ export class SceneRenderer {
     for (const batch of batchMap.values()) {
       const mesh = new THREE.InstancedMesh(
         this.getGeometry(batch.shape),
-        this.getMaterial(batch.material, batch.primitives.some((primitive) => primitive.tags?.some((tag) => tag === "wall" || tag === "settlement-building" || tag === "building-shell" || tag === "curtain-wall" || tag === "keep" || tag === "floor-slab") === true)),
+        this.getMaterial(batch.material, batch.ghost),
         batch.primitives.length,
       );
       mesh.name = `${batch.material} ${batch.shape} × ${batch.primitives.length}`;
@@ -786,6 +812,42 @@ export class SceneRenderer {
         && routeMatchesTime(schedule, this.timeOfDay);
     }
     this.routeRoot.visible = this.routesVisible;
+  }
+
+  private recenterCameraForFloor(view: FloorView): void {
+    if (!this.currentScene) return;
+    if (view === "cut") {
+      this.positionCamera();
+      return;
+    }
+    let visible: ScenePrimitive[] = [];
+    if (typeof view === "number") {
+      const authoredRoofView = this.currentScene.floorLabels?.[view]?.includes("屋顶") === true;
+      visible = this.currentScene.primitives.filter((primitive) => primitive.level === view
+        && (authoredRoofView || (primitive.material !== "roof"
+          && !primitive.tags?.includes("roof")
+          && !(primitive.tags?.includes("roof-platform") && !primitive.tags?.includes("wall-walk")))));
+    } else if (view === "roof") {
+      visible = this.currentScene.primitives.filter((primitive) => primitive.material === "roof"
+        || primitive.tags?.includes("roof")
+        || primitive.tags?.includes("roof-platform"));
+    }
+    if (visible.length === 0) return;
+    const minX = Math.min(...visible.map((primitive) => primitive.position.x - primitive.size.x / 2));
+    const maxX = Math.max(...visible.map((primitive) => primitive.position.x + primitive.size.x / 2));
+    const minZ = Math.min(...visible.map((primitive) => primitive.position.z - primitive.size.z / 2));
+    const maxZ = Math.max(...visible.map((primitive) => primitive.position.z + primitive.size.z / 2));
+    const minY = Math.min(...visible.map((primitive) => primitive.position.y));
+    const maxY = Math.max(...visible.map((primitive) => primitive.position.y + primitive.size.y));
+    const target = new THREE.Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+    const span = Math.max(maxX - minX, maxZ - minZ, 5);
+    this.camera.position.set(
+      target.x + span * 0.76,
+      target.y + Math.max(span * 0.92, (maxY - minY) * 1.6),
+      target.z + span * 0.82,
+    );
+    this.controls.target.copy(target);
+    this.controls.update();
   }
 
   private positionCamera(): void {

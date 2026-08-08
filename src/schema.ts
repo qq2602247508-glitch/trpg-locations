@@ -119,6 +119,9 @@ export interface GeneratedScene {
   boundsCells: Vec2;
   floors: number;
   floorHeightFeet: number[];
+  /** Optional inspection labels when logical layers are not a simple upward
+   * stack (for example a roof deck and a below-grade basement). */
+  floorLabels?: string[];
   primitives: ScenePrimitive[];
   rooms: Room[];
   routes: Route[];

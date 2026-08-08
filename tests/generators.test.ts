@@ -515,6 +515,41 @@ describe("scene generators", () => {
     expect(coral.diagnostics.valid).toBe(true);
   });
 
+  it("routes a coastal lighthouse into a dedicated round tower program", () => {
+    const scene = generateScene({ ...request("lighthouse-audit-09"), prompt: "临海灯塔，螺旋交通、储藏层、守塔人住所、灯室和外部维护平台" }, "adaptive");
+    expect(scene.title).toContain("Stormglass Lighthouse");
+    expect(scene.floors).toBeGreaterThanOrEqual(4);
+    expect(scene.rooms.some((room) => room.name === "Oil and signal storage")).toBe(true);
+    expect(scene.rooms.some((room) => room.name === "Keeper's residence")).toBe(true);
+    expect(scene.rooms.some((room) => room.name === "Lamp room")).toBe(true);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("spiral-stair")).length).toBeGreaterThanOrEqual(54);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("maintenance-gallery"))).toBe(true);
+    expect(scene.routes.some((route) => route.id === "lighthouse-gallery-route")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("gives an industrial ruin measurable height bands and a reachable catwalk", () => {
+    const scene = generateScene({ ...request("industrial-audit-09", "medium", 0.62), prompt: "现实废弃工业区，有三栋高低不同的厂房、锅炉车间、锈蚀管道、输送桥、积水坑、维护猫道和可攀爬平台" }, "adaptive");
+    const factoryWalls = scene.primitives.filter((primitive) => primitive.id.includes("industrial-factory-") && primitive.tags?.includes("wall"));
+    const heights = [...new Set(factoryWalls.map((primitive) => Math.round(primitive.size.y * 100) / 100))];
+    expect(heights.length).toBeGreaterThanOrEqual(3);
+    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(3);
+    expect(scene.primitives.some((primitive) => primitive.id === "industrial-catwalk-stair")).toBe(true);
+    expect(scene.routes.some((route) => route.id === "industrial-catwalk-route")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("separates a tower's underground greenhouse from its ground-floor inspection layer", () => {
+    const scene = generateScene({ ...request("tree-greenhouse-contract"), prompt: "被巨树贯穿的炼金塔，断裂楼层、悬桥、地下温室和树冠战斗平台" }, "adaptive");
+    const greenhouse = scene.rooms.find((room) => room.name === "Underground alchemical greenhouse");
+    expect(greenhouse).toBeDefined();
+    expect(scene.floorLabels?.[greenhouse?.level ?? -1]).toBe("B1");
+    expect(greenhouse?.level).toBe(scene.floors - 1);
+    expect(greenhouse?.center.y).toBeLessThan(0);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("tree-canopy") && primitive.tags?.includes("standable"))).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
   it("turns institutional room names into visible police partitions", () => {
     const scene = generateScene({ ...request("police-room-geometry"), prompt: "1920年代 CoC 警察局，接待台、拘留区、审讯室、证物室、档案室和后门车库" }, "adaptive");
     expect(scene.archetype).toBe("police");
@@ -529,6 +564,32 @@ describe("scene generators", () => {
     expect(scene.archetype).toBe("manor");
     expect(scene.rooms.some((room) => room.name === "Inner courtyard")).toBe(true);
     expect(scene.rooms.some((room) => room.name === "Family apartments")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("changes a manor's room graph geometry across seeds while replaying deterministically", () => {
+    const prompt = "D&D 庄园宅邸，有不规则中央庭院、主楼、东西侧翼、仆从通道、家族墓穴和屋顶伏击点";
+    const firstRequest = { ...request("manor-seed-a"), prompt };
+    const secondRequest = { ...request("manor-seed-b"), prompt };
+    const first = generateScene(firstRequest, "adaptive");
+    const replay = generateScene(firstRequest, "adaptive");
+    const second = generateScene(secondRequest, "adaptive");
+    expect(first).toEqual(replay);
+    expect(first.rooms.map((room) => [room.id, room.center.x, room.center.z, room.sizeCells.x, room.sizeCells.z]))
+      .not.toEqual(second.rooms.map((room) => [room.id, room.center.x, room.center.z, room.sizeCells.x, room.sizeCells.z]));
+    expect(first.diagnostics.valid).toBe(true);
+    expect(second.diagnostics.valid).toBe(true);
+  });
+
+  it("composes an unfamiliar mixed-use building instead of falling back to wilderness or a box", () => {
+    const scene = generateScene({ ...request("weather-monastery"), prompt: "COC 1920年代山顶气象修道院，有环形回廊、无线电室、档案密库、屋顶天线平台和地下防空洞" }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("building");
+    expect(scene.buildingProgram?.topology).toBe("composite");
+    expect(scene.rooms.some((room) => room.name === "Enclosed cloister garden")).toBe(true);
+    expect(scene.rooms.some((room) => room.name === "Wireless observation room")).toBe(true);
+    expect(scene.rooms.some((room) => room.name === "Underground air-raid shelter")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("antenna"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("radio-console"))).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
   });
 });

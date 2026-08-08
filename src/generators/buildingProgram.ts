@@ -9,6 +9,7 @@ import {
   createRoute,
   cylinder,
   feetToMeters,
+  primitive,
   rectangularShell,
   stairConnection,
   stairRoute,
@@ -56,6 +57,7 @@ export interface BuildingProgram {
   seed: string;
   bounds: { x: number; z: number };
   floorHeights: number[];
+  floorLabels?: string[];
   rooms: ProgramRoom[];
   connections: ProgramConnection[];
   requiredFeatures: string[];
@@ -98,6 +100,7 @@ function boundaryPoint(from: ProgramRoom, to: ProgramRoom): { x: number; z: numb
 /** Compile an auditable room graph into real floors, walls, door gaps, corridors and stairs. */
 export function compileBuildingProgram(program: BuildingProgram): GeneratedScene {
   const scene = baseScene("building", program.title, program.description, program.seed, program.bounds, program.floorHeights.length, program.floorHeights);
+  if (program.floorLabels) scene.floorLabels = [...program.floorLabels];
   scene.archetype = program.archetype;
   const topology: BuildingProgramSummary["topology"] = program.archetype === "manor" ? "courtyard" : program.archetype === "fortress" ? "defensive" : program.archetype === "hospital" || program.archetype === "police" || program.archetype === "museum" ? "institutional" : "composite";
   scene.buildingProgram = { archetype: program.archetype, requiredFeatures: [...program.requiredFeatures], roomCount: program.rooms.length, connectionCount: program.connections.length, levels: program.floorHeights.length, topology };
@@ -174,6 +177,18 @@ export function compileBuildingProgram(program: BuildingProgram): GeneratedScene
     const column = index % 3;
     scene.primitives.push(box(`${program.id}-functional-fixture-${index}`, target.level, target.x + (column - 1) * Math.min(1.4, target.width * 0.16), baseY(program, target.level, target.elevationFeet, target.absoluteElevationFeet) + FLOOR_SLAB_METERS, target.z, 0.7, 1.25, 1.4, target.tags.includes("underground") ? "metal" : "wood", ["functional-fixture", `room:${target.id}`, "cover"]));
   }
+  for (const target of program.rooms) {
+    const y = baseY(program, target.level, target.elevationFeet, target.absoluteElevationFeet) + FLOOR_SLAB_METERS;
+    if (target.tags.includes("antenna-platform")) {
+      scene.primitives.push(cylinder(`${program.id}-antenna-mast`, target.level, target.x, y, target.z, 0.55, feetToMeters(18), "metal", ["antenna", "vertical-landmark", "roof-platform", `room:${target.id}`]));
+    }
+    if (target.tags.includes("radio-room")) {
+      scene.primitives.push(box(`${program.id}-radio-console`, target.level, target.x, y, target.z, 3.2, feetToMeters(4), 1.1, "metal", ["radio-console", "evidence", "cover", `room:${target.id}`]));
+    }
+    if (target.tags.includes("bunker")) {
+      scene.primitives.push(box(`${program.id}-bunker-stores`, target.level, target.x, y, target.z, 3.4, feetToMeters(3.5), 2, "wood", ["bunker", "emergency-stores", "cover", `room:${target.id}`]));
+    }
+  }
   if (program.archetype === "hospital") {
     for (const target of program.rooms.filter((room) => /clinical|treatment|patient ward/i.test(room.name))) {
       for (let index = 0; index < Math.max(2, Math.floor(target.depth / 3)); index += 1) {
@@ -182,9 +197,25 @@ export function compileBuildingProgram(program: BuildingProgram): GeneratedScene
     }
     const morgue = program.rooms.find((room) => /morgue/i.test(room.name));
     if (morgue) scene.primitives.push(box("hospital-autopsy-table", morgue.level, morgue.x, baseY(program, morgue.level, morgue.elevationFeet, morgue.absoluteElevationFeet) + FLOOR_SLAB_METERS, morgue.z, 2, 0.95, 4, "metal", ["hospital", "morgue", "autopsy", "evidence"]));
+    const basementLab = program.rooms.find((room) => /boiler|laboratory/i.test(room.name));
+    if (basementLab) {
+      const y = baseY(program, basementLab.level, basementLab.elevationFeet, basementLab.absoluteElevationFeet) + FLOOR_SLAB_METERS;
+      scene.primitives.push(
+        cylinder("hospital-basement-boiler-a", basementLab.level, basementLab.x - basementLab.width * 0.24, y, basementLab.z, 1.5, feetToMeters(7), "metal", ["hospital", "boiler", "machinery", "hazard", `room:${basementLab.id}`]),
+        cylinder("hospital-basement-boiler-b", basementLab.level, basementLab.x + basementLab.width * 0.24, y, basementLab.z, 1.5, feetToMeters(7), "metal", ["hospital", "boiler", "machinery", "cover", `room:${basementLab.id}`]),
+        box("hospital-secret-lab-table", basementLab.level, basementLab.x, y, basementLab.z - basementLab.depth * 0.25, 3.2, feetToMeters(3), 1.4, "metal", ["hospital", "secret-laboratory", "evidence", `room:${basementLab.id}`]),
+      );
+    }
   }
   if (program.archetype === "police") {
     scene.primitives.push(box("police-evidence-cages", 0, 29, baseY(program, 0) + FLOOR_SLAB_METERS, 25, 4, 2.4, 4, "metal", ["police", "evidence", "room-partition", "cover"]));
+    const evidenceVault = program.rooms.find((room) => /evidence vault/i.test(room.name));
+    if (evidenceVault) {
+      const y = baseY(program, evidenceVault.level, evidenceVault.elevationFeet, evidenceVault.absoluteElevationFeet) + FLOOR_SLAB_METERS;
+      for (let index = 0; index < 4; index += 1) {
+        scene.primitives.push(box(`police-vault-shelf-${index}`, evidenceVault.level, evidenceVault.x - evidenceVault.width * 0.28 + index * evidenceVault.width * 0.19, y, evidenceVault.z, 0.75, feetToMeters(6), evidenceVault.depth * 0.56, "metal", ["police", "evidence-shelf", "evidence", "cover", `room:${evidenceVault.id}`]));
+      }
+    }
   }
   if (program.archetype === "fortress") {
     const cx = program.bounds.x / 2;
@@ -209,13 +240,21 @@ export function compileBuildingProgram(program: BuildingProgram): GeneratedScene
     for (const [index, x, z] of [[0, x0, z0], [1, x1, z0], [2, x0, z1], [3, x1, z1]] as const) {
       scene.primitives.push(cylinder(`fortress-bastion-${index}`, 0, x, 0, z, 4.4, feetToMeters(25), "darkStone", ["corner-tower", "bastion", "high-ground", "fortress"]));
     }
+    const armory = program.rooms.find((room) => room.tags.includes("armory"));
+    if (armory) {
+      const y = baseY(program, armory.level, armory.elevationFeet, armory.absoluteElevationFeet) + FLOOR_SLAB_METERS;
+      for (let index = 0; index < 3; index += 1) {
+        scene.primitives.push(box(`fortress-armory-rack-${index}`, armory.level, armory.x - armory.width * 0.26 + index * armory.width * 0.26, y, armory.z + armory.depth * 0.22, 0.8, feetToMeters(6), armory.depth * 0.34, "wood", ["armory", "weapon-rack", "cover", `room:${armory.id}`]));
+      }
+      scene.primitives.push(box("fortress-armory-crates", armory.level, armory.x, y, armory.z - armory.depth * 0.24, 2.4, feetToMeters(3), 1.8, "wood", ["armory", "supply-crates", "cover", `room:${armory.id}`]));
+    }
   }
   if (program.archetype === "museum") {
     const roof = program.rooms.find((room) => room.tags.includes("roof-platform"));
     if (roof) {
       const y = baseY(program, roof.level, roof.elevationFeet, roof.absoluteElevationFeet);
       scene.primitives.push(
-        cylinder("museum-glass-dome", roof.level, roof.x, y, roof.z, Math.min(roof.width, roof.depth) * 0.42, feetToMeters(8), "warmLight", ["museum", "glass-dome", "landmark", "roof"]),
+        primitive("museum-glass-dome", "sphere", roof.level, roof.x, y, roof.z, Math.min(roof.width, roof.depth) * 0.72 * 1.524, feetToMeters(7), Math.min(roof.width, roof.depth) * 0.72 * 1.524, "warmLight", ["museum", "glass-dome", "landmark", "roof"]),
         box("museum-roof-parapet-north", roof.level, roof.x, y, roof.z - roof.depth / 2, roof.width, feetToMeters(3), 0.35, "stone", ["museum", "parapet", "roof-route", "cover"]),
         box("museum-roof-parapet-south", roof.level, roof.x, y, roof.z + roof.depth / 2, roof.width, feetToMeters(3), 0.35, "stone", ["museum", "parapet", "roof-route", "cover"]),
       );

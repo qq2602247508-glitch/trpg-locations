@@ -434,6 +434,8 @@ function renderSceneDetails(elements: AppElements, scene: GeneratedScene, stats:
 }
 
 function floorLabel(scene: GeneratedScene, level: number): string {
+  const authored = scene.floorLabels?.[level];
+  if (authored) return authored;
   const groundLevel = scene.primitives.find((primitive) => primitive.tags?.includes("ground-floor"))?.level;
   if (groundLevel === undefined) return `${level + 1}F`;
   if (level < groundLevel) return `B${groundLevel - level}`;
@@ -443,6 +445,10 @@ function floorLabel(scene: GeneratedScene, level: number): string {
 function roomFloorLabel(scene: GeneratedScene, room: GeneratedScene["rooms"][number]): string {
   if (room.center.y < -0.1) return "B1";
   return floorLabel(scene, room.level);
+}
+
+function formatCells(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, "");
 }
 
 function populateFloorOptions(select: HTMLSelectElement, scene: GeneratedScene): void {
@@ -525,7 +531,7 @@ function renderRooms(container: HTMLElement, scene: GeneratedScene): void {
       const name = document.createElement("strong");
       name.textContent = room.name;
       const type = document.createElement("small");
-      type.textContent = `${roomFloorLabel(scene, room)} · ${room.sizeCells.x} × ${room.sizeCells.z} 格`;
+      type.textContent = `${roomFloorLabel(scene, room)} · ${formatCells(room.sizeCells.x)} × ${formatCells(room.sizeCells.z)} 格`;
       detail.append(name, type);
       const role = document.createElement("span");
       role.className = "room-role";

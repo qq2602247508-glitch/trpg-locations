@@ -820,7 +820,13 @@ export function generateBuilding(context: GeneratorContext): GeneratedScene {
     (!hasKnownBuildingArchetype(context.request.prompt) && (context.sceneProgram.coverage.includes("institutional-rooms") || context.sceneProgram.coverage.includes("residential-rooms")))
     || context.sceneProgram.domain === "building" && !hasKnownBuildingArchetype(context.request.prompt)
   )) {
-    return generateProgramBuilding(context);
+    const semanticFixtureProgram = context.sceneProgram.regions.some((region) => region.features.some((feature) => ["telescope", "mirror-pool", "gear-train", "operating-room", "cold-room"].includes(feature)));
+    if (semanticFixtureProgram) return generateProgramBuilding(context);
+    // Unknown building nouns still receive a real room graph and asymmetric
+    // wings.  SceneProgram fixtures are useful, but its legacy single-shell
+    // realizer recreated the exact fallback box this architecture is meant to
+    // eliminate.
+    return generateComposedBuilding(context);
   }
   const archetype = classifyBuildingArchetype(context.request.prompt);
   if (["church", "temple", "manor", "fortress", "hospital", "museum", "police"].includes(archetype)) {

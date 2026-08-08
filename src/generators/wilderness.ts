@@ -1287,12 +1287,14 @@ function buildIndustrialRuin(scene: GeneratedScene, width: number, depth: number
   const factoryW = width * 0.32;
   const factoryD = depth * 0.36;
   const factories = [[width * 0.24, depth * 0.3], [width * 0.7, depth * 0.28], [width * 0.68, depth * 0.72]] as const;
+  const factoryHeightBands = [[18, 22], [27, 33], [13, 17]] as const;
   scene.primitives.push(box("industrial-yard-floor", 0, width * 0.5, 0, depth * 0.5, width - 4, FLOOR_SLAB_METERS, depth - 4, "earth", ["industrial", "yard", "floor", "terrain"]));
   factories.forEach(([x, z], index) => {
-    const w = factoryW * rng.float(0.82, 1.15);
-    const d = factoryD * rng.float(0.78, 1.12);
-    const shellOpenings = index === 1 ? { west: { widthCells: 3 }, north: { widthCells: 3 } } : { [index % 2 === 0 ? "south" : "north"]: { widthCells: 3 } };
-    scene.primitives.push(...rectangularShell(`industrial-factory-${index}`, 0, x, z, floorY, w, d, feetToMeters(rng.int(16, 26)), "metal", "darkStone", ["industrial", "factory", index === 2 ? "collapsed" : "warehouse"], shellOpenings));
+    const w = Math.round(factoryW * rng.float(0.82, 1.15) * 2) / 2;
+    const d = Math.round(factoryD * rng.float(0.78, 1.12) * 2) / 2;
+    const heightBand = factoryHeightBands[index] ?? factoryHeightBands[0];
+    const shellOpenings = index === 1 ? { west: { widthCells: 3 }, north: { widthCells: 3 } } : { [index === 0 ? "south" : "north"]: { widthCells: 3 } };
+    scene.primitives.push(...rectangularShell(`industrial-factory-${index}`, 0, x, z, floorY, w, d, feetToMeters(rng.int(heightBand[0], heightBand[1])), "metal", "darkStone", ["industrial", "factory", index === 2 ? "collapsed" : "warehouse"], shellOpenings));
     scene.rooms.push(createRoom(`industrial-factory-room-${index}`, index === 0 ? "Boiler hall" : index === 1 ? "Assembly floor" : "Collapsed loading shed", index === 2 ? "combat" : "service", 0, x, z, w - 2, d - 2));
   });
   connectRooms(scene.rooms, "industrial-factory-room-0", "industrial-factory-room-1");
@@ -1300,7 +1302,10 @@ function buildIndustrialRuin(scene: GeneratedScene, width: number, depth: number
   const bridgeY = feetToMeters(12);
   scene.primitives.push(corridor("industrial-conveyor-bridge", 0, width * 0.32, depth * 0.3, width * 0.66, depth * 0.28, bridgeY, 2.2, "metal", ["industrial", "conveyor-bridge", "high-ground", "vertical-route"]));
   scene.primitives.push(corridor("industrial-pipe-rack", 0, width * 0.14, depth * 0.58, width * 0.84, depth * 0.58, feetToMeters(9), 1.1, "metal", ["industrial", "rust-pipe", "catwalk"]));
-  scene.primitives.push(water("industrial-flooded-pit", 0, width * 0.47, -0.18, depth * 0.56, 7, 0.22, 8, ["industrial", "water", "hazard", "flooded-pit"]));
+  scene.primitives.push(water("industrial-flooded-pit", 0, width * 0.47, -0.18, depth * 0.56, 7, 0.22, 8, ["industrial", "hazard", "flooded-pit"]));
+  const catwalkStair = stairConnection("industrial-catwalk-stair", 0, { xCells: width * 0.24, zCells: depth * 0.34, yMeters: FLOOR_SLAB_METERS }, { xCells: width * 0.32, zCells: depth * 0.3, yMeters: bridgeY + FLOOR_SLAB_METERS }, 1.6, "metal", ["industrial", "catwalk-access", "vertical-opening"]);
+  scene.primitives.push(catwalkStair.primitive);
+  scene.routes.push(stairRoute("industrial-catwalk-route", catwalkStair));
   for (let index = 0; index < 3 + Math.round(density * 4); index += 1) scene.primitives.push(cylinder(`industrial-tank-${index}`, 0, width * (0.18 + index * 0.1), FLOOR_SLAB_METERS, depth * 0.78, 2.4, feetToMeters(7 + index % 3 * 3), "metal", ["industrial", "tank", "cover"]));
   scene.routes.push(createRoute("industrial-primary-route", "primary", [{ x: 4, z: depth * 0.5, y: 0 }, { x: width * 0.5, z: depth * 0.5, y: 0 }, { x: width - 4, z: depth * 0.5, y: 0 }]));
   scene.tactical.push(tacticalFeature("industrial-entrance", "entrance", 1, depth * 0.5, 0, 2, "A broken service road enters between flooded machinery and the boiler hall."), tacticalFeature("industrial-catwalk-highground", "highGround", width * 0.5, depth * 0.3, bridgeY, 3, "The conveyor bridge crosses the factory floor twelve feet above the yard."));
