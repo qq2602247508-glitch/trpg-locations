@@ -624,13 +624,27 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     return undefined;
   };
   let adaptedBuildings = 0;
+  const mangroveBuildingNodes = [
+    [program.bounds.x * 0.18, program.bounds.z * 0.48],
+    [program.bounds.x * 0.32, program.bounds.z * 0.62],
+    [program.bounds.x * 0.47, program.bounds.z * 0.46],
+    [program.bounds.x * 0.62, program.bounds.z * 0.58],
+    [program.bounds.x * 0.78, program.bounds.z * 0.42],
+    [program.bounds.x * 0.88, program.bounds.z * 0.56],
+  ] as const;
   for (const parcel of program.parcels) {
     if (terrain.summary.kind === "bridge-megastructure" && adaptedBuildings >= 9) continue;
     if (isMangrovePort && adaptedBuildings >= Math.max(12, Math.round(program.parcels.length * 0.68))) continue;
     const district = program.districts.find((candidate) => candidate.id === parcel.districtId);
     const clearance = Math.min(2, Math.max(parcel.buildingSize.x, parcel.buildingSize.z) * 0.18);
     const semanticPlacement = semanticTerrain ? terrain.placementFor(adaptedBuildings, program.parcels.length, parcel.center, clearance) : undefined;
-    const placement = semanticPlacement ?? nearestBuildable(parcel.center.x, parcel.center.z, clearance);
+    const mangroveNode = isMangrovePort ? mangroveBuildingNodes[adaptedBuildings % mangroveBuildingNodes.length] : undefined;
+    const mangroveSide = isMangrovePort ? (adaptedBuildings % 2 === 0 ? -1 : 1) : 0;
+    const mangrovePlacement: { x: number; z: number; elevationFeet?: number } | undefined = mangroveNode ? {
+      x: mangroveNode[0] + mangroveSide * (4.5 + (adaptedBuildings % 3) * 1.3),
+      z: mangroveNode[1] + Math.sin(adaptedBuildings * 1.7) * 2.2,
+    } : undefined;
+    const placement = mangrovePlacement ?? semanticPlacement ?? nearestBuildable(parcel.center.x, parcel.center.z, clearance);
     if (!placement) continue;
     const siteElevation = isFlooded ? feetToMeters(5) : placement.elevationFeet === undefined ? elevationAt(placement.x, placement.z) : feetToMeters(placement.elevationFeet);
     instantiateBuildingModule(scene, {
