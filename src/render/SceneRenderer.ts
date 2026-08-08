@@ -904,11 +904,34 @@ export class SceneRenderer {
       case "sphere":
         geometry = new THREE.SphereGeometry(0.5, 14, 10);
         break;
+      case "gable":
+        geometry = this.createGableGeometry();
+        break;
       case "stairs":
         geometry = this.createStairsGeometry();
         break;
     }
     this.geometryCache.set(shape, geometry);
+    return geometry;
+  }
+
+  private createGableGeometry(): THREE.BufferGeometry {
+    // Unit triangular prism: the ridge runs along local Z. Scaling supplies
+    // authored width, rise and length; rotationY turns the ridge for wide bays.
+    const vertices = new Float32Array([
+      -0.5, -0.5, -0.5,  0.5, -0.5, -0.5,  0, 0.5, -0.5,
+      -0.5, -0.5,  0.5,  0.5, -0.5,  0.5,  0, 0.5,  0.5,
+    ]);
+    const indices = [
+      0, 2, 1, 3, 4, 5,
+      0, 1, 4, 0, 4, 3,
+      0, 3, 5, 0, 5, 2,
+      1, 2, 5, 1, 5, 4,
+    ];
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
     return geometry;
   }
 

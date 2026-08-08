@@ -619,4 +619,12 @@ describe("scene generators", () => {
     expect(hasTag(scene, "station-platform")).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
   });
+
+  it("uses real gable-prism roof geometry for sacred and hospitality massing", () => {
+    const church = generateScene({ ...request("gable-church-r10"), prompt: "破败哥特式教堂，十字形中殿与两侧祷告室" }, "adaptive");
+    const inn = generateScene({ ...request("gable-inn-r10"), prompt: "D&D 三层酒馆旅店与后院马厩" }, "adaptive");
+    expect(church.primitives.filter((primitive) => primitive.shape === "gable" && primitive.tags?.includes("pitched-roof")).length).toBeGreaterThanOrEqual(3);
+    expect(inn.primitives.some((primitive) => primitive.shape === "gable" && primitive.tags?.includes("domestic"))).toBe(true);
+    expect(church.diagnostics.valid && inn.diagnostics.valid).toBe(true);
+  });
 });

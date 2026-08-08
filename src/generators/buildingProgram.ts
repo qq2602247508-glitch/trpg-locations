@@ -1,4 +1,4 @@
-import type { BuildingProgramSummary, GeneratedScene, MaterialKey, Room } from "../schema";
+import { GRID_METERS, type BuildingProgramSummary, type GeneratedScene, type MaterialKey, type Room } from "../schema";
 import {
   FLOOR_SLAB_METERS,
   baseScene,
@@ -112,8 +112,27 @@ function addFacadeAndMassing(scene: GeneratedScene, program: BuildingProgram): v
   if (tallestGround) {
     const roofY = roomBaseY(program, tallestGround) + feetToMeters(program.floorHeights[0] ?? 12);
     if (program.facadeStyle === "domestic" || program.facadeStyle === "sacred" || program.facadeStyle === "academic") {
-      for (let tier = 0; tier < 3; tier += 1) {
-        scene.primitives.push(box(`massing-roof-${tier}`, tallestGround.level, tallestGround.x, roofY + tier * 0.34, tallestGround.z, Math.max(2, tallestGround.width - tier * 1.6), 0.32, Math.max(2, tallestGround.depth - tier * 1.2), "roof", ["roof", "stepped-roof", program.facadeStyle]));
+      const ranked = groundRooms.toSorted((a, b) => b.width * b.depth - a.width * a.depth);
+      const roofCandidates = program.facadeStyle === "sacred"
+        ? ranked.filter((room) => room.tags.some((tag) => tag === "nave" || tag === "prayer-room" || tag === "altar")).slice(0, 4)
+        : ranked.slice(0, 3);
+      for (const [index, roofRoom] of roofCandidates.entries()) {
+        const roomRoofY = roomBaseY(program, roofRoom) + feetToMeters(program.floorHeights[roofRoom.level] ?? 12);
+        const ridgeAlongX = roofRoom.width > roofRoom.depth;
+        scene.primitives.push(primitive(
+          `massing-gable-${roofRoom.id}-${index}`,
+          "gable",
+          roofRoom.level,
+          roofRoom.x,
+          roomRoofY,
+          roofRoom.z,
+          (ridgeAlongX ? roofRoom.depth + 1.1 : roofRoom.width + 1.1) * GRID_METERS,
+          feetToMeters(program.facadeStyle === "sacred" ? 8 : 6),
+          (ridgeAlongX ? roofRoom.width + 1.1 : roofRoom.depth + 1.1) * GRID_METERS,
+          "roof",
+          ["roof", "pitched-roof", "gable-roof", program.facadeStyle, `room:${roofRoom.id}`],
+          ridgeAlongX ? Math.PI / 2 : 0,
+        ));
       }
     }
     if (program.facadeStyle === "industrial") {

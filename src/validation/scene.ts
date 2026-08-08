@@ -46,7 +46,7 @@ interface GeometryMetrics {
 }
 
 const SCENE_KINDS = ["tavern", "tower", "sewer", "cave", "dungeon", "building", "settlement", "wilderness", "adaptive"] as const satisfies readonly SceneKind[];
-const PRIMITIVE_SHAPES = ["box", "cylinder", "cone", "sphere", "stairs", "water"] as const satisfies readonly PrimitiveShape[];
+const PRIMITIVE_SHAPES = ["box", "cylinder", "cone", "sphere", "gable", "stairs", "water"] as const satisfies readonly PrimitiveShape[];
 const MATERIAL_KEYS = ["stone", "darkStone", "wood", "plaster", "roof", "metal", "water", "earth", "rock", "moss", "hazard", "warmLight"] as const satisfies readonly MaterialKey[];
 const ROOM_ROLES = ["public", "private", "service", "circulation", "combat", "natural"] as const satisfies readonly Room["role"][];
 const ROUTE_KINDS = ["primary", "alternate", "vertical", "waterflow"] as const satisfies readonly Route["kind"][];
