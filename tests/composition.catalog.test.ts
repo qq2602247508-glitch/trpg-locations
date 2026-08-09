@@ -333,6 +333,29 @@ describe("five-layer composition catalog", () => {
     expect(signature(dense)).not.toBe(signature(other));
   });
 
+  it("cuts glacier-crevasse prompts into two banks with only supported crossings", () => {
+    const scene = generateScene({
+      prompt: "巨大冰川裂缝从北到南完全切断冰原，只有两座狭窄冰桥可以跨越",
+      seed: "ice-main-crevasse-contract",
+      size: "large",
+      density: 0.82,
+    }, "adaptive");
+    const tagged = (tag: string) => scene.primitives.filter((primitive) => primitive.tags?.includes(tag));
+    expect(scene.archetype).toBe("ice");
+    expect(tagged("crevasse-west-bank").length).toBeGreaterThan(8);
+    expect(tagged("crevasse-east-bank").length).toBeGreaterThan(8);
+    expect(tagged("crevasse-wall").length).toBeGreaterThan(16);
+    expect(tagged("crevasse-bottom").every((primitive) => !primitive.tags?.includes("standable"))).toBe(true);
+    expect(tagged("crevasse-bridge")).toHaveLength(2);
+    expect(tagged("crevasse-bridge").every((primitive) => primitive.tags?.includes("supported") && primitive.tags?.includes("standable"))).toBe(true);
+    expect(scene.routes.filter((route) => route.id.startsWith("ice-main-crevasse-crossing-route-"))).toHaveLength(2);
+    const bottoms = tagged("crevasse-bottom");
+    const protectedProps = scene.primitives.filter((primitive) => primitive.tags?.includes("ice-shelf") || primitive.tags?.includes("natural-detail") || primitive.id.startsWith("standable-prop-"));
+    const overlaps = (left: typeof scene.primitives[number], right: typeof scene.primitives[number]) => Math.abs(left.position.x - right.position.x) < (left.size.x + right.size.x) / 2 && Math.abs(left.position.z - right.position.z) < (left.size.z + right.size.z) / 2;
+    expect(protectedProps.every((primitive) => bottoms.every((bottom) => !overlaps(primitive, bottom)))).toBe(true);
+    expect(scene.description).toContain("deep main-crevasse segments");
+  });
+
   it("generalizes unfamiliar research stations without falling back to a home envelope", () => {
     const prompt = "高山冻土湿地上的无线电研究站，有样本实验室、通信塔、发电机棚、架高栈道和地下样本库";
     const scene = generateScene({ prompt, seed: "unknown-field-station", size: "medium", density: 0.7 }, "adaptive");

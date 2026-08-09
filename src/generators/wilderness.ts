@@ -1086,10 +1086,12 @@ function buildBurialGround(scene: GeneratedScene, width: number, depth: number, 
   scene.description = `Burial-field morphology with rolling grave mounds, branching paths, ${graveCount} grouped graves, a mausoleum, a sunken crypt, and broken perimeter gaps.`;
 }
 
-function buildIce(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+function buildIce(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"], prompt: string): void {
   const macro = rng.fork("macro");
   const meso = rng.fork("meso");
   const tactical = rng.fork("tactical");
+  const normalizedPrompt = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const crevasseWanted = includesAny(normalizedPrompt, ["crevasse", "fissure", "ice crack", "冰缝", "冰隙", "冰裂", "裂缝", "裂隙"]);
   const phase = macro.float(-Math.PI, Math.PI);
   const lakeX = width * macro.float(0.42, 0.58);
   const lakeZ = depth * macro.float(0.48, 0.64);
@@ -1097,6 +1099,10 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
   const lakeDepth = depth * macro.float(0.2, 0.34);
   const basePlateRows = 7 + Math.round(density * 5);
   const basePlateDepth = (depth - 2) / basePlateRows;
+  const crevasseBottomY = -feetToMeters(28 + density * 32);
+  const crevasseAt = (z: number) => width * (0.5 + Math.sin(z / depth * Math.PI * 2.15 + phase) * (0.075 + density * 0.055) + Math.sin(z / depth * Math.PI * 5.4 - phase) * 0.025);
+  const crevasseWidthAt = (z: number) => 4.2 + density * 3.8 + Math.sin(z / depth * Math.PI * 4.6 + phase) * 1.1;
+  let crevasseSegments = 0;
   for (let row = 0; row < basePlateRows; row += 1) {
     const t = (row + 0.5) / basePlateRows;
     const edgeNoise = Math.sin(t * Math.PI * 3.2 + phase) * 0.5 + Math.sin(t * Math.PI * 7.4 - phase * 0.6) * 0.5;
@@ -1106,18 +1112,23 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
     const plateX = leftInset + plateWidth / 2;
     const plateZ = 1 + basePlateDepth * (row + 0.5);
     const plateRise = feetToMeters(macro.float(0.15, 1.25 + density * 0.8));
-    scene.primitives.push(box(
-      `ice-base-plate-${row}`,
-      0,
-      plateX,
-      0,
-      plateZ,
-      plateWidth,
-      FLOOR_SLAB_METERS + plateRise,
-      basePlateDepth + 0.24,
-      "ice",
-      ["floor", "terrain", "ice", "ice-base-plate", "eroded-ice-edge", "standable"],
-    ));
+    const plateTags = ["floor", "terrain", "ice", "ice-base-plate", "eroded-ice-edge", "standable"];
+    if (!crevasseWanted) scene.primitives.push(box(`ice-base-plate-${row}`, 0, plateX, 0, plateZ, plateWidth, FLOOR_SLAB_METERS + plateRise, basePlateDepth + 0.24, "ice", plateTags));
+    else {
+      const fissureX = crevasseAt(plateZ);
+      const halfGap = crevasseWidthAt(plateZ) / 2;
+      const leftEdge = leftInset; const rightEdge = width - rightInset;
+      const leftWidth = Math.max(0, fissureX - halfGap - leftEdge);
+      const rightWidth = Math.max(0, rightEdge - fissureX - halfGap);
+      if (leftWidth > 1.4) scene.primitives.push(box(`ice-base-plate-${row}-west`, 0, leftEdge + leftWidth / 2, 0, plateZ, leftWidth, FLOOR_SLAB_METERS + plateRise, basePlateDepth + 0.24, "ice", [...plateTags, "crevasse-west-bank"]));
+      if (rightWidth > 1.4) scene.primitives.push(box(`ice-base-plate-${row}-east`, 0, fissureX + halfGap + rightWidth / 2, 0, plateZ, rightWidth, FLOOR_SLAB_METERS + plateRise, basePlateDepth + 0.24, "ice", [...plateTags, "crevasse-east-bank"]));
+      scene.primitives.push(
+        box(`ice-main-crevasse-shadow-${row}`, 0, fissureX, crevasseBottomY, plateZ, halfGap * 2, feetToMeters(0.8), basePlateDepth + 0.32, "darkStone", ["ice", "ice-meso", "main-crevasse", "crevasse-bottom", "void", "hazard"]),
+        box(`ice-main-crevasse-wall-west-${row}`, 0, fissureX - halfGap, crevasseBottomY, plateZ, 0.38, plateRise + FLOOR_SLAB_METERS - crevasseBottomY, basePlateDepth + 0.28, "ice", ["ice", "ice-meso", "main-crevasse", "crevasse-wall", "vertical-face", "crevasse-west-bank"]),
+        box(`ice-main-crevasse-wall-east-${row}`, 0, fissureX + halfGap, crevasseBottomY, plateZ, 0.38, plateRise + FLOOR_SLAB_METERS - crevasseBottomY, basePlateDepth + 0.28, "ice", ["ice", "ice-meso", "main-crevasse", "crevasse-wall", "vertical-face", "crevasse-east-bank"]),
+      );
+      crevasseSegments += 1;
+    }
     if (row % 3 === 1) {
       const spurOnLeft = edgeNoise < 0;
       const spurWidth = macro.float(2.2, 4.8 + density * 2.2);
@@ -1158,9 +1169,25 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
   let ridgeSegments = 0;
   let ridgeFocus = { x: width * 0.5, z: depth * 0.5 };
   for (let index = 0; index < ridgeCount; index += 1) {
-    const startX = meso.float(3, width * 0.42);
-    const endX = meso.float(width * 0.58, width - 3);
     const baseZ = depth * (0.14 + (index + 0.5) / (ridgeCount + 1) * 0.7) + Math.sin(index * 1.7 + phase) * depth * 0.06;
+    let startX: number;
+    let endX: number;
+    if (!crevasseWanted) {
+      startX = meso.float(3, width * 0.42);
+      endX = meso.float(width * 0.58, width - 3);
+    } else {
+      const fissureX = crevasseAt(baseZ);
+      const bankMargin = crevasseWidthAt(baseZ) / 2 + 2.5;
+      if (index % 2 === 0) {
+        const westLimit = Math.max(9, fissureX - bankMargin);
+        startX = meso.float(3, Math.max(4.5, westLimit * 0.42));
+        endX = meso.float(Math.max(startX + 3, westLimit * 0.58), westLimit);
+      } else {
+        const eastLimit = Math.min(width - 9, fissureX + bankMargin);
+        startX = meso.float(eastLimit, Math.min(width - 6, eastLimit + (width - eastLimit) * 0.38));
+        endX = meso.float(Math.max(startX + 3, eastLimit + (width - eastLimit) * 0.62), width - 3);
+      }
+    }
     const rise = feetToMeters(meso.float(2.5, 6.5 + density * 4));
     const segmentCount = 4 + Math.round(density * 3) + meso.int(0, 2);
     const ridgePhase = meso.float(-Math.PI, Math.PI);
@@ -1222,10 +1249,11 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
   }
   const thawPoolCount = 1 + Math.round(density * 5);
   for (let index = 0; index < thawPoolCount; index += 1) {
-    const x = meso.float(5, width - 5);
     const z = meso.float(depth * 0.18, depth * 0.86);
     const poolWidth = meso.float(2.5, 5.5 + density * 3);
     const poolDepth = meso.float(2.2, 4.8 + density * 2.5);
+    let x = meso.float(5, width - 5);
+    if (crevasseWanted) for (let attempt = 0; attempt < 12 && Math.abs(x - crevasseAt(z)) < crevasseWidthAt(z) / 2 + poolWidth / 2 + 1.5; attempt += 1) x = meso.float(5, width - 5);
     for (const [fragment, dx, dz, scaleX, scaleZ, rotation] of [
       [0, -0.16, 0.02, 0.7, 0.78, -0.18],
       [1, 0.1, -0.08, 0.72, 0.62, 0.15],
@@ -1248,11 +1276,12 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
   }
   const islands = 4 + Math.round(density * 9);
   for (let index = 0; index < islands; index += 1) {
-    const x = tactical.float(4, width - 4);
     const z = tactical.float(4, depth - 4);
     const rise = feetToMeters(tactical.float(1.5, 5.5));
     const shelfWidth = tactical.int(3, 7);
     const shelfDepth = tactical.int(3, 6);
+    let x = tactical.float(4, width - 4);
+    if (crevasseWanted) for (let attempt = 0; attempt < 12 && Math.abs(x - crevasseAt(z)) < crevasseWidthAt(z) / 2 + shelfWidth / 2 + 1.5; attempt += 1) x = tactical.float(4, width - 4);
     scene.primitives.push(
       box(`ice-island-${index}-core`, 0, x, rise, z, shelfWidth * 0.72, FLOOR_SLAB_METERS + rise, shelfDepth, "ice", ["floor", "terrain", "ice", "ice-meso", "ice-island", "ice-shelf", "standable", "cover"], tactical.float(-0.16, 0.16)),
       box(`ice-island-${index}-spur`, 0, x + shelfWidth * tactical.float(-0.22, 0.22), rise * 0.82, z + shelfDepth * tactical.float(-0.22, 0.22), shelfWidth * 0.58, FLOOR_SLAB_METERS + rise * 0.82, shelfDepth * 0.58, "ice", ["floor", "terrain", "ice", "ice-meso", "ice-island", "ice-shelf", "standable", "cover"], tactical.float(-0.3, 0.3)),
@@ -1269,21 +1298,41 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
       corridor(`ice-secondary-crack-water-${index}`, 0, startX, z, endX, z + tactical.float(-5, 5), -feetToMeters(1.8), tactical.float(0.35, 0.72), "water", ["ice", "ice-meso", "secondary-crevasse", "water", "hazard"]),
     );
   }
+  if (crevasseWanted) {
+    for (const [index, zRatio] of [0.31, 0.72].entries()) {
+      const z = depth * zRatio;
+      const x = crevasseAt(z);
+      const halfGap = crevasseWidthAt(z) / 2;
+      const bridgeY = FLOOR_SLAB_METERS + feetToMeters(0.45 + index * 0.35);
+      scene.primitives.push(
+        corridor(`ice-main-crevasse-bridge-${index}`, 0, x - halfGap - 1.2, z, x + halfGap + 1.2, z, bridgeY, 1.45, "ice", ["ice", "main-crevasse", "crevasse-bridge", "natural-ice-bridge", "bridge", "standable", "supported", "surface-grid"]),
+        box(`ice-main-crevasse-bridge-anchor-west-${index}`, 0, x - halfGap - 0.55, 0, z, 1.5, bridgeY + FLOOR_SLAB_METERS, 2.1, "ice", ["ice", "main-crevasse", "bridge-anchor", "supported"]),
+        box(`ice-main-crevasse-bridge-anchor-east-${index}`, 0, x + halfGap + 0.55, 0, z, 1.5, bridgeY + FLOOR_SLAB_METERS, 2.1, "ice", ["ice", "main-crevasse", "bridge-anchor", "supported"]),
+      );
+      scene.routes.push(createRoute(`ice-main-crevasse-crossing-route-${index}`, index === 0 ? "primary" : "alternate", [
+        { x: x - halfGap - 2, z, y: bridgeY },
+        { x, z, y: bridgeY },
+        { x: x + halfGap + 2, z, y: bridgeY },
+      ]));
+      scene.tactical.push(tacticalFeature(`ice-main-crevasse-bridge-choke-${index}`, "chokepoint", x, z, bridgeY, 1.5, "A narrow supported bridge is one of only two crossings over the glacier-spanning crevasse."));
+    }
+    scene.tactical.push(tacticalFeature("ice-main-crevasse-hazard", "hazard", crevasseAt(depth * 0.52), depth * 0.52, crevasseBottomY, 4, "A deep glacier-spanning void completely separates the east and west ice banks outside the two authored crossings."));
+  }
   scene.rooms.push(createRoom("ice-north-field", "Wind-scoured ice", "natural", 0, width / 2, depth * 0.2, width - 4, 8), createRoom("ice-lake-room", "Frozen underground lake", "natural", 0, width / 2, depth * 0.56, width * 0.7, depth * 0.35), createRoom("ice-south-field", "Broken floe field", "natural", 0, width / 2, depth * 0.84, width - 4, 6));
   connectRooms(scene.rooms, "ice-north-field", "ice-lake-room");
   connectRooms(scene.rooms, "ice-lake-room", "ice-south-field");
-  scene.routes.push(createRoute("ice-primary-route", "primary", [{ x: 1, z: depth * 0.2 }, { x: width * 0.28, z: depth * 0.4 }, { x: width * 0.72, z: depth * 0.7 }, { x: width - 1, z: depth * 0.84 }]));
-  if (density >= 0.45) scene.routes.push(createRoute("ice-ridge-route", "alternate", [{ x: 2, z: depth * 0.72, y: feetToMeters(2) }, { x: width * 0.38, z: depth * 0.64, y: feetToMeters(4) }, { x: width * 0.66, z: depth * 0.35, y: feetToMeters(3) }, { x: width - 2, z: depth * 0.28, y: feetToMeters(2) }]));
+  if (!crevasseWanted) scene.routes.push(createRoute("ice-primary-route", "primary", [{ x: 1, z: depth * 0.2 }, { x: width * 0.28, z: depth * 0.4 }, { x: width * 0.72, z: depth * 0.7 }, { x: width - 1, z: depth * 0.84 }]));
+  if (density >= 0.45 && !crevasseWanted) scene.routes.push(createRoute("ice-ridge-route", "alternate", [{ x: 2, z: depth * 0.72, y: feetToMeters(2) }, { x: width * 0.38, z: depth * 0.64, y: feetToMeters(4) }, { x: width * 0.66, z: depth * 0.35, y: feetToMeters(3) }, { x: width - 2, z: depth * 0.28, y: feetToMeters(2) }]));
   scene.tactical.push(tacticalFeature("ice-thin-surface", "hazard", width * 0.5, depth * 0.56, -0.02, 3, "Thin ice turns the lake into a moving hazard zone."), tacticalFeature("ice-entrance", "entrance", 1, depth * 0.2, 0, 2, "A whiteout trail enters from the north."));
   scene.viewProgram = {
     version: 1,
     mode: "scene",
-    focusCells: ridgeFocus,
+    focusCells: crevasseWanted ? { x: crevasseAt(depth * 0.52), z: depth * 0.52 } : ridgeFocus,
     radiusCells: Math.max(9, Math.min(12, 9 + density * 3)),
-    includeTags: ["snow-ridge", "snow-ridge-leeward", "secondary-crevasse", "thaw-pool"],
-    reason: "Keep the overview on the complete ice field while the low-angle audit focuses an authored asymmetric ridge and nearby fracture system.",
+    includeTags: ["snow-ridge", "snow-ridge-leeward", "secondary-crevasse", "main-crevasse", "crevasse-bridge", "thaw-pool"],
+    reason: crevasseWanted ? "Keep both separated glacier banks and their two authored crossings visible while the low-angle audit exposes the full crevasse depth." : "Keep the overview on the complete ice field while the low-angle audit focuses an authored asymmetric ridge and nearby fracture system.",
   };
-  scene.description = `Layered ice terrain with ${basePlateRows} eroded base plates, ${ridgeCount} continuous asymmetric ridge systems (${ridgeSegments} linked crest segments), ${thawPoolCount} thaw pools, ${islands} raised shelves, ${crackCount} secondary crevasses, and ${scene.routes.length} authored tactical routes.`;
+  scene.description = `Layered ice terrain with ${basePlateRows} eroded base plate rows${crevasseWanted ? ` split by ${crevasseSegments} deep main-crevasse segments and two supported crossings` : ""}, ${ridgeCount} continuous asymmetric ridge systems (${ridgeSegments} linked crest segments), ${thawPoolCount} thaw pools, ${islands} raised shelves, ${crackCount} secondary crevasses, and ${scene.routes.length} authored tactical routes.`;
 }
 
 function buildRuin(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
@@ -2450,16 +2499,31 @@ function buildSwamp(scene: GeneratedScene, width: number, depth: number, density
   scene.description = `Wetland basin with ${rendered.walkable} dry-ground cells, ${rendered.cliffs} hummock faces, ${pools.length} irregular pools, a continuous channel, and a supported raised boardwalk.`;
 }
 
+function overlapsReservedTerrainVoid(scene: GeneratedScene, xCells: number, zCells: number, paddingCells = 1): boolean {
+  return scene.primitives.some((primitiveEntry) => {
+    if (!primitiveEntry.tags?.includes("crevasse-bottom")) return false;
+    const centerX = primitiveEntry.position.x / CELL;
+    const centerZ = primitiveEntry.position.z / CELL;
+    const halfWidth = primitiveEntry.size.x / CELL / 2 + paddingCells;
+    const halfDepth = primitiveEntry.size.z / CELL / 2 + paddingCells;
+    return Math.abs(xCells - centerX) <= halfWidth && Math.abs(zCells - centerZ) <= halfDepth;
+  });
+}
+
 /** Adds a second layer of authored natural structure instead of leaving large
  * wilderness maps as a few empty slabs. These pieces intentionally remain
  * generic terrain vocabulary so new biomes can reuse the same composition pass. */
 function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const obstacleCount = rng.int(Math.round(3 + density * 16), Math.round(6 + density * 26));
   for (let index = 0; index < obstacleCount; index += 1) {
-    const x = rng.float(2.5, width - 2.5);
-    const z = rng.float(2.5, depth - 2.5);
+    let x = rng.float(2.5, width - 2.5);
+    let z = rng.float(2.5, depth - 2.5);
     const widthCells = rng.float(0.8, 2.8);
     const depthCells = rng.float(0.8, 2.8);
+    for (let attempt = 0; attempt < 12 && overlapsReservedTerrainVoid(scene, x, z, Math.max(widthCells, depthCells)); attempt += 1) {
+      x = rng.float(2.5, width - 2.5);
+      z = rng.float(2.5, depth - 2.5);
+    }
     const height = archetype === "rift" || archetype === "mountain" ? feetToMeters(rng.int(4, 12)) : feetToMeters(rng.int(2, 7));
     const shape: "box" | "cone" | "sphere" = archetype === "ice" ? "box" : index % 3 === 0 ? "cone" : "sphere";
     scene.primitives.push(primitive(`natural-detail-${index}`, shape, 0, x, FLOOR_SLAB_METERS, z, widthCells * 1.524, height, depthCells * 1.524, archetype === "ice" ? "rock" : "rock", ["natural-detail", "natural-cover", index % 4 === 0 ? "terrain" : "cover"]));
@@ -2482,8 +2546,9 @@ function addSemanticThemeStructure(scene: GeneratedScene, archetype: WildernessA
     scene.tactical.push(tacticalFeature("river-waterfall-hazard", "hazard", fallX, depth * 0.32, feetToMeters(1), 2, "A waterfall drops from the upper bank into a turbulent basin."));
   } else if (archetype === "ice") {
     for (let index = 0; index < 4; index += 1) {
-      const x = width * (0.18 + index * 0.2) + rng.float(-2, 2);
+      let x = width * (0.18 + index * 0.2) + rng.float(-2, 2);
       const z = depth * (0.3 + (index % 2) * 0.38);
+      for (let attempt = 0; attempt < 12 && overlapsReservedTerrainVoid(scene, x, z, 5); attempt += 1) x = rng.float(4, width - 4);
       scene.primitives.push(box(`ice-shelf-${index}`, 0, x, feetToMeters(5 + (index % 3) * 5), z, rng.int(5, 10), FLOOR_SLAB_METERS, rng.int(4, 8), "rock", ["floor", "terrain", "ice-shelf", "high-ground"]));
       scene.tactical.push(tacticalFeature(`ice-shelf-feature-${index}`, "highGround", x, z, feetToMeters(5 + (index % 3) * 5), 2, "A raised ice shelf creates a clean elevation break and exposed crossing."));
     }
@@ -2721,7 +2786,7 @@ function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype
     // boulder can block a route visually, but it must not make a vertical
     // connection fail validation or become an accidental floor collision.
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      if (!nearAuthoredRoute(x, z)) break;
+      if (!nearAuthoredRoute(x, z) && !overlapsReservedTerrainVoid(scene, x, z, Math.max(spec.width, spec.depth))) break;
       x = rng.float(3, width - 3);
       z = rng.float(3, depth - 3);
     }
@@ -2820,7 +2885,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "burial-ground") buildBurialGround(scene, profile.width, profile.depth, profile.density, context.rng.fork("burial-ground"));
   else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, profile.density, context.rng.fork("rift"));
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
-  else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, profile.density, context.rng.fork("ice"));
+  else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, profile.density, context.rng.fork("ice"), context.request.prompt);
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));
   else if (archetype === "forest") buildForest(scene, profile.width, profile.depth, profile.density, context.rng.fork("forest"), context.request.prompt);
   else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, profile.density, context.rng.fork("swamp"));
