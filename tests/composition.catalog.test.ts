@@ -98,6 +98,21 @@ describe("five-layer composition catalog", () => {
     expect(signature(replay)).not.toBe(signature(other));
   });
 
+  it("realizes waterfront building details as supported geometry", () => {
+    const scene = generateScene({
+      prompt: "河道水城，水上市集、船坞、仓库和沿岸不规则街巷",
+      seed: "waterfront-building-detail",
+      size: "medium",
+      density: 0.72,
+    }, "adaptive");
+    const waterfront = scene.primitives.filter((primitive) => primitive.tags?.includes("waterfront-building"));
+    expect(waterfront.length).toBeGreaterThan(8);
+    expect(waterfront.some((primitive) => primitive.tags?.includes("cargo-crane"))).toBe(true);
+    expect(waterfront.some((primitive) => primitive.tags?.includes("dockside-awning"))).toBe(true);
+    expect(waterfront.some((primitive) => primitive.tags?.includes("dockside-piling"))).toBe(true);
+    expect(scene.tactical.some((feature) => feature.id.includes("dockside-choke"))).toBe(true);
+  });
+
   it("changes mangrove parent topology across seeds, not only building props", () => {
     const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、半淹档案库和水下温室";
     const first = generateScene({ prompt, seed: "mangrove-macro-a", size: "medium", density: 0.62 }, "adaptive");

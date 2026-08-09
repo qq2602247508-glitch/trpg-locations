@@ -133,6 +133,45 @@ function functionalTags(lot: BuildingLot): string[] {
   return (lot.functionalModules ?? []).flatMap((module) => [module.kind, ...module.tags]);
 }
 
+/**
+ * Water-city frontage is a building grammar, not a paint pass. Harbor and
+ * industrial lots receive a supported loading edge, timber awning, crane and
+ * pilings; commercial lots receive a market canopy. All pieces inherit the
+ * lot's rotation/base elevation so they remain attached to the independent
+ * building and can affect cover and routes.
+ */
+function addWaterfrontExterior(scene: GeneratedScene, lot: BuildingLot, generated: ReturnType<typeof profile>, baseY: number, totalHeight: number): void {
+  if (!["harbor", "industrial", "commercial"].includes(lot.district)) return;
+  const point = (x: number, z: number) => localPoint(lot, x, z);
+  const tags = ["settlement-building", "waterfront-building", `building:${lot.kind}`, `building-instance:${lot.id}`, `district:${lot.district}`, "waterfront-detail"];
+  const frontage = lot.depth * 0.46;
+  const y = baseY + FLOOR_SLAB_METERS + 0.06;
+  const edge = point(0, frontage);
+  if (lot.district === "commercial") {
+    const canopy = point(0, frontage + 0.72);
+    scene.primitives.push(
+      box(`${lot.id}-waterfront-market-canopy`, 0, canopy.x, y + feetToMeters(7.2), canopy.z, Math.min(lot.width * 0.72, 7.5), 0.16, 1.8, "wood", [...tags, "market-canopy", "cover"], lot.rotation),
+      box(`${lot.id}-waterfront-market-counter`, 0, edge.x, y + feetToMeters(2.2), edge.z, Math.min(lot.width * 0.58, 5.2), feetToMeters(2.2), 0.7, "wood", [...tags, "market-counter", "cover"], lot.rotation),
+    );
+    return;
+  }
+  const loadingWidth = Math.min(lot.width * 0.78, 8.5);
+  scene.primitives.push(
+    box(`${lot.id}-dockside-loading-platform`, 0, edge.x, y, edge.z, loadingWidth, 0.22, 1.8, "wood", [...tags, "dockside-platform", "loading-platform", "standable", "cover"], lot.rotation),
+    box(`${lot.id}-dockside-awning`, 0, edge.x, y + feetToMeters(8.2), edge.z - 0.55, loadingWidth, 0.16, 1.7, "wood", [...tags, "dockside-awning", "pitched-roof"], lot.rotation),
+  );
+  const mast = point(-lot.width * 0.34, frontage + 0.4);
+  scene.primitives.push(
+    cylinder(`${lot.id}-dockside-crane-mast`, 0, mast.x, y, mast.z, 0.22, Math.max(feetToMeters(8), totalHeight * 0.42), "wood", [...tags, "cargo-crane", "vertical-landmark", "cover"]),
+    box(`${lot.id}-dockside-crane-boom`, 0, mast.x + Math.cos(lot.rotation) * 2.2, y + Math.max(feetToMeters(8), totalHeight * 0.42), mast.z - Math.sin(lot.rotation) * 2.2, 4.6, 0.18, 0.18, "wood", [...tags, "cargo-crane", "horizontal-boom"], lot.rotation),
+  );
+  for (const [index, offset] of [-0.34, 0, 0.34].entries()) {
+    const pile = point(lot.width * offset, frontage + 1.25);
+    scene.primitives.push(cylinder(`${lot.id}-dockside-piling-${index + 1}`, 0, pile.x, y - feetToMeters(2.2), pile.z, 0.16, feetToMeters(5.2), "wood", [...tags, "dockside-piling", "cover"]));
+  }
+  scene.tactical.push(tacticalFeature(`${lot.id}-dockside-choke`, "chokepoint", edge.x, edge.z, y, 1, "The loading edge and crane create a narrow exposed waterfront approach."));
+}
+
 function summarizeBuildingProgram(program: SettlementBuildingProgram, tags: string[]): NonNullable<BuildingInstance["buildingProgram"]> {
   return {
     archetype: program.archetype,
@@ -390,6 +429,7 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },
   };
   addFunctionalModuleGeometry(scene, lot, generated);
+  addWaterfrontExterior(scene, lot, generated, baseY, generated.floorHeightFeet.reduce((sum, height) => sum + feetToMeters(height), 0));
   for (const [index, module] of (lot.functionalModules ?? []).entries()) {
     const roomProgram = interiorProgram.rooms.find((room) => room.id === `function-${module.kind}-${index + 1}`);
     if (!roomProgram) continue;
@@ -521,6 +561,7 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
 
   addFocusInteriorBlueprint(scene, lot, generated, envelope, interiorProgram);
   addFunctionalModuleGeometry(scene, lot, generated);
+  addWaterfrontExterior(scene, lot, generated, y, totalHeight);
 
   scene.rooms.push(createRoom(`${lot.id}-room`, `${lot.kind} at ${lot.district}`, lot.kind === "warehouse" ? "service" : lot.kind === "tower" ? "combat" : "public", 0, lot.x, lot.z, lot.width, lot.depth));
   for (const [index, module] of (lot.functionalModules ?? []).entries()) {
