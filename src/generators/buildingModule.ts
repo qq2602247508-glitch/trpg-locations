@@ -447,6 +447,7 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   addRotatedBox("partition-b", primaryOffset.x - width * 0.2, primaryOffset.z - depth * 0.38, 0.13, wallHeight, depth * 0.18, baseY, generated.material, ["wall", "room-partition", "door-frame"]);
   const upperWidth = width * 0.72;
   const upperDepth = depth * 0.64;
+  const labels = fullInteriorLabels(lot.kind, lot.siteProfile);
   addRotatedBox("upper-floor", primaryOffset.x + 0.08, primaryOffset.z - 0.05, upperWidth, FLOOR_SLAB_METERS, upperDepth, upperY, "wood", ["floor", "standable", "upper-floor"], 1);
   addRotatedBox("upper-north", primaryOffset.x + 0.08, primaryOffset.z - upperDepth / 2 - 0.05, upperWidth, wallHeight * 0.82, 0.2, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
   addRotatedBox("upper-west", primaryOffset.x - upperWidth / 2 + 0.08, primaryOffset.z - 0.05, 0.2, wallHeight * 0.82, upperDepth, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
@@ -465,11 +466,59 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   addRotatedBox("basement-west-south", -width * 0.32, (cellarOpeningCenter + cellarOpeningWidth / 2 + basementDepth / 2) / 2, 0.22, feetToMeters(9), westSouthDepth, basementY, "darkStone", ["wall", "underground", "door-frame"], 3);
   addRotatedBox("basement-east", width * 0.32, 0, 0.22, feetToMeters(9), depth * 0.58, basementY, "darkStone", ["wall", "underground", "focus-cutaway"], 3);
   addRotatedBox("basement-store", width * 0.12, -depth * 0.08, Math.max(1.1, width * 0.18), feetToMeters(4), Math.max(1, depth * 0.16), basementY + FLOOR_SLAB_METERS, "wood", ["underground", "storage", "cover"], 3);
+  const cellarRole = labels.tags[3] ?? "cellar";
+  const cellarRoleTags = cellarRole === "underground" ? [] : [cellarRole];
+  for (const [rackIndex, zOffset] of [-0.2, 0.2].entries()) {
+    const rackWidth = Math.max(1.35, width * 0.27);
+    const rackX = width * 0.16;
+    const rackZ = depth * zOffset;
+    const rackMaterial = lot.kind === "clinic" || lot.siteProfile === "field-station" ? "metal" : "wood";
+    for (const [postIndex, xDirection] of [-1, 1].entries()) addRotatedBox(
+      `basement-rack-${rackIndex + 1}-post-${postIndex + 1}`,
+      rackX + xDirection * rackWidth * 0.46,
+      rackZ,
+      0.13,
+      feetToMeters(5.2),
+      0.5,
+      basementY + FLOOR_SLAB_METERS,
+      rackMaterial,
+      ["underground", "basement-fixture", "cellar-rack", "rack-upright", ...cellarRoleTags, "cover"],
+      3,
+    );
+    for (const [shelfIndex, heightFeet] of [0.9, 2.7, 4.5].entries()) addRotatedBox(
+      `basement-rack-${rackIndex + 1}-shelf-${shelfIndex + 1}`,
+      rackX,
+      rackZ,
+      rackWidth,
+      feetToMeters(0.22),
+      0.58,
+      basementY + feetToMeters(heightFeet),
+      rackMaterial,
+      ["underground", "basement-fixture", "cellar-rack", "rack-shelf", ...cellarRoleTags, "cover"],
+      3,
+    );
+  }
+  for (const [crateIndex, xOffset, zOffset] of [[1, 0.02, -0.03], [2, 0.18, 0.02], [3, 0.06, 0.16]] as const) {
+    addRotatedBox(
+      `basement-crate-${crateIndex}`,
+      width * xOffset,
+      depth * zOffset,
+      crateIndex === 2 ? 0.78 : 0.64,
+      feetToMeters(crateIndex === 3 ? 2.5 : 1.8),
+      crateIndex === 1 ? 0.78 : 0.62,
+      basementY + FLOOR_SLAB_METERS,
+      lot.kind === "clinic" ? "metal" : "wood",
+      ["underground", "basement-fixture", "cellar-crate", ...cellarRoleTags, "cover"],
+      3,
+    );
+  }
+  const barrelP = point(width * 0.22, depth * 0.02);
+  scene.primitives.push(cylinder(`${lot.id}-basement-barrel`, 3, barrelP.x, basementY + FLOOR_SLAB_METERS, barrelP.z, 0.72, feetToMeters(3.2), lot.kind === "clinic" ? "metal" : "wood", [...tags, "underground", "basement-fixture", "cellar-barrel", ...cellarRoleTags, "cover"]));
+  scene.tactical.push(tacticalFeature(`${lot.id}-basement-storage-cover`, "cover", barrelP.x, barrelP.z, basementY, 1.4, "Shelving, stacked stores and a barrel divide the cellar into searchable cover lanes."));
   const stairP = point(width * 0.28, depth * 0.08);
   scene.primitives.push(stairs(`${lot.id}-upper-stair`, 0, stairP.x, baseY, stairP.z, 1.2, wallHeight, 4.2, "wood", [...tags, "building-stair", "vertical-opening"], lot.rotation));
   const cellarP = point(-width * 0.3, depth * 0.08);
   scene.primitives.push(stairs(`${lot.id}-cellar-stair`, 3, cellarP.x, basementY, cellarP.z, 1.2, baseY - basementY, 4.2, "stone", [...tags, "building-stair", "vertical-opening", "underground"], lot.rotation));
-  const labels = fullInteriorLabels(lot.kind, lot.siteProfile);
   const publicP = point(width * 0.13, 0);
   const serviceP = point(-width * 0.36, 0);
   const upperP = point(0.08, -0.05);
@@ -510,8 +559,42 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       { x: cellarP.x, z: cellarP.z, y: basementY },
     ]),
   );
-  addRotatedBox("furnishing-public", width * 0.15, 0, Math.max(1.5, width * 0.28), feetToMeters(3), 1.2, baseY + FLOOR_SLAB_METERS, lot.kind === "clinic" ? "metal" : "wood", [labels.tags[0] ?? "furniture", "cover"]);
-  addRotatedBox("furnishing-service", -width * 0.34, -depth * 0.12, Math.max(1.1, width * 0.16), feetToMeters(4), 1.1, baseY + FLOOR_SLAB_METERS, lot.kind === "factory" || lot.kind === "blacksmith" ? "metal" : "wood", [labels.tags[1] ?? "service", "cover"]);
+  if (lot.kind === "home") {
+    addRotatedBox("home-hearth", width * 0.23, -depth * 0.36, 1.45, feetToMeters(4.2), 1.08, baseY + FLOOR_SLAB_METERS, "darkStone", ["home-fixture", "hearth", "cover"]);
+    const chimneyP = point(width * 0.23, -depth * 0.39);
+    scene.primitives.push(cylinder(`${lot.id}-home-chimney`, 0, chimneyP.x, baseY + feetToMeters(4), chimneyP.z, 0.42, feetToMeters(8), "darkStone", [...tags, "home-fixture", "chimney", "vertical-landmark"]));
+    const homeTableX = -width * 0.05;
+    const homeTableZ = depth * 0.19;
+    addRotatedBox("home-table-top", homeTableX, homeTableZ, Math.max(1.55, width * 0.24), feetToMeters(0.28), 1.15, baseY + feetToMeters(2.8), "wood", ["home-fixture", "table", "cover"]);
+    for (const [legIndex, xOffset, zOffset] of [[1, -0.09, -0.11], [2, 0.09, -0.11], [3, -0.09, 0.11], [4, 0.09, 0.11]] as const) addRotatedBox(
+      `home-table-leg-${legIndex}`,
+      homeTableX + width * xOffset,
+      homeTableZ + depth * zOffset,
+      0.16,
+      feetToMeters(2.8),
+      0.16,
+      baseY + FLOOR_SLAB_METERS,
+      "wood",
+      ["home-fixture", "table-leg"],
+    );
+    for (const [benchIndex, zDirection] of [-1, 1].entries()) addRotatedBox(
+      `home-bench-${benchIndex + 1}`,
+      homeTableX,
+      homeTableZ + zDirection * 1.05,
+      Math.max(1.4, width * 0.21),
+      feetToMeters(1.55),
+      0.48,
+      baseY + FLOOR_SLAB_METERS,
+      "wood",
+      ["home-fixture", "bench", "cover"],
+    );
+    addRotatedBox("home-workbench", -width * 0.34, -depth * 0.12, Math.max(1.1, width * 0.16), feetToMeters(3.2), 0.82, baseY + FLOOR_SLAB_METERS, "wood", ["home-fixture", "workbench", "service", "cover"]);
+    addRotatedBox("home-tool-rack", -width * 0.42, -depth * 0.3, 0.18, feetToMeters(5.2), Math.max(1.1, depth * 0.18), baseY + FLOOR_SLAB_METERS, "wood", ["home-fixture", "tool-rack", "service"]);
+    addRotatedBox("home-loft-bunk", upperWidth * 0.22, -upperDepth * 0.24, Math.max(1.2, upperWidth * 0.28), feetToMeters(2.1), 1.55, upperY + FLOOR_SLAB_METERS, "wood", ["home-fixture", "bunk", "private", "cover"], 1);
+  } else {
+    addRotatedBox("furnishing-public", width * 0.15, 0, Math.max(1.5, width * 0.28), feetToMeters(3), 1.2, baseY + FLOOR_SLAB_METERS, lot.kind === "clinic" ? "metal" : "wood", [labels.tags[0] ?? "furniture", "cover"]);
+    addRotatedBox("furnishing-service", -width * 0.34, -depth * 0.12, Math.max(1.1, width * 0.16), feetToMeters(4), 1.1, baseY + FLOOR_SLAB_METERS, lot.kind === "factory" || lot.kind === "blacksmith" ? "metal" : "wood", [labels.tags[1] ?? "service", "cover"]);
+  }
   if (lot.siteProfile === "field-station" || lot.siteProfile === "weather-station") {
     for (const [benchIndex, offsetZ] of [-0.18, 0.18].entries()) {
       addRotatedBox(

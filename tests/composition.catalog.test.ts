@@ -199,6 +199,13 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("canopy-observatory")).toBe(true);
     expect(scene.rooms.some((room) => room.id.startsWith("forest-clearing-"))).toBe(true);
     expect(scene.routes.some((route) => route.id === "wilderness-forest-footbridge-route")).toBe(true);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("cellar-rack")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("cellar-crate")).length).toBeGreaterThanOrEqual(3);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("cellar-barrel"))).toBe(true);
+    expect(scene.tactical.some((feature) => feature.id.includes("basement-storage-cover"))).toBe(true);
+    for (const fixture of ["hearth", "table", "bench", "workbench", "tool-rack", "bunk"]) {
+      expect(scene.primitives.some((primitive) => primitive.tags?.includes(fixture))).toBe(true);
+    }
   });
 
   it("keeps a wetland ranger-station compound connected", () => {

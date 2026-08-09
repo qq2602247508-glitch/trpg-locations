@@ -1356,6 +1356,7 @@ export class SceneRenderer {
     if (tags.includes("ancient-crown-lobe")) return new THREE.Color("#356440");
     if (tags.includes("understory-tree") || tags.includes("young-tree")) return new THREE.Color("#5b7d49");
     if (tags.includes("tree") && material === "wood") return new THREE.Color("#5a4534");
+    if (tags.includes("home-fixture") && material === "wood") return new THREE.Color("#704a2d");
     if (tags.includes("block-surface")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0, -0.08, 0.045);
     if (tags.includes("parcel-yard")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0.02, -0.12, 0.08);
     if (tags.includes("terrain") || tags.includes("floor") || tags.includes("semantic-grid") || tags.includes("macro-region")) {
