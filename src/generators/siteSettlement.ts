@@ -245,12 +245,23 @@ function addHollowTreeCity(scene: GeneratedScene, width: number, depth: number):
   );
 }
 
-function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: number): void {
-  const channelZ = depth * 0.52;
-  const tidalBranches = [
-    [[width * 0.08, depth * 0.63], [width * 0.25, depth * 0.48], [width * 0.42, depth * 0.58]],
-    [[width * 0.58, depth * 0.43], [width * 0.78, depth * 0.55], [width * 0.95, depth * 0.4]],
-  ] as const;
+function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+  // The wetland is a parent terrain grammar, not a fixed decorative layer.
+  // This macro stream chooses a different channel topology per seed while
+  // keeping every branch connected to the central tidal basin.
+  const macro = rng.fork("mangrove-macro");
+  const channelZ = depth * macro.float(0.42, 0.62);
+  const channelX = width * macro.float(0.44, 0.58);
+  const branchCount = macro.int(2, 4);
+  const tidalBranches = Array.from({ length: branchCount }, (_, index) => {
+    const side = index % 2 === 0 ? -1 : 1;
+    const startX = side < 0 ? width * macro.float(0.04, 0.18) : width * macro.float(0.82, 0.96);
+    const endX = side < 0 ? width * macro.float(0.3, 0.46) : width * macro.float(0.54, 0.7);
+    const startZ = depth * macro.float(0.22, 0.78);
+    const midZ = channelZ + depth * macro.float(-0.15, 0.15);
+    const endZ = channelZ + depth * macro.float(-0.08, 0.08);
+    return [[startX, startZ], [width * macro.float(side < 0 ? 0.2 : 0.7, side < 0 ? 0.38 : 0.8), midZ], [endX, endZ]] as const;
+  });
   for (const [branchIndex, branch] of tidalBranches.entries()) {
     for (let segment = 1; segment < branch.length; segment += 1) {
       const from = branch[segment - 1]!;
@@ -272,15 +283,23 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
     }
   }
   scene.primitives.push(
-    water("mangrove-central-tidal-bay", 0, width * 0.5, -0.24, channelZ, width * 0.24, 0.28, depth * 0.22, ["mangrove", "tidal-channel", "tidal-bay", "watercourse", "hazard", "site-program"]),
-    water("mangrove-tidal-branch-west", 0, width * 0.22, -0.16, depth * 0.27, 3.4, 0.25, depth * 0.42, ["mangrove", "tidal-channel", "watercourse", "site-program"]),
-    water("mangrove-tidal-branch-east", 0, width * 0.78, -0.16, depth * 0.72, 3.8, 0.25, depth * 0.38, ["mangrove", "tidal-channel", "watercourse", "site-program"]),
+    water("mangrove-central-tidal-bay", 0, channelX, -0.24, channelZ, width * macro.float(0.2, 0.3), 0.28, depth * macro.float(0.18, 0.27), ["mangrove", "tidal-channel", "tidal-bay", "watercourse", "hazard", "site-program"]),
+    water("mangrove-tidal-branch-west", 0, width * macro.float(0.16, 0.28), -0.16, depth * macro.float(0.18, 0.34), 3.4, 0.25, depth * macro.float(0.32, 0.5), ["mangrove", "tidal-channel", "watercourse", "site-program"]),
+    water("mangrove-tidal-branch-east", 0, width * macro.float(0.72, 0.86), -0.16, depth * macro.float(0.62, 0.82), 3.8, 0.25, depth * macro.float(0.3, 0.46), ["mangrove", "tidal-channel", "watercourse", "site-program"]),
   );
-  const boardwalks = [
-    [[width * 0.08, depth * 0.25], [width * 0.18, depth * 0.11], [width * 0.35, depth * 0.18], [width * 0.3, depth * 0.36], [width * 0.15, depth * 0.43], [width * 0.08, depth * 0.25]],
-    [[width * 0.38, depth * 0.59], [width * 0.52, depth * 0.47], [width * 0.68, depth * 0.55], [width * 0.71, depth * 0.71], [width * 0.54, depth * 0.8], [width * 0.4, depth * 0.68], [width * 0.38, depth * 0.59]],
-    [[width * 0.68, depth * 0.2], [width * 0.82, depth * 0.1], [width * 0.95, depth * 0.23], [width * 0.87, depth * 0.4], [width * 0.71, depth * 0.34], [width * 0.68, depth * 0.2]],
-  ] as const;
+  const loopCount = macro.int(2, 4);
+  const boardwalks = Array.from({ length: loopCount }, (_, index) => {
+    const cx = width * macro.float(0.14, 0.86);
+    const cz = depth * macro.float(0.18, 0.82);
+    const rx = width * macro.float(0.08, 0.2);
+    const rz = depth * macro.float(0.08, 0.2);
+    const points = Array.from({ length: 6 }, (_, pointIndex) => {
+      const angle = (Math.PI * 2 * pointIndex) / 5 + macro.float(-0.2, 0.2);
+      return [cx + Math.cos(angle) * rx, cz + Math.sin(angle) * rz] as const;
+    });
+    points.push(points[0]!);
+    return points;
+  });
   for (const [index, points] of boardwalks.entries()) {
     const walkPoints: Array<{ x: number; z: number }> = [{ x: points[0]![0], z: points[0]![1] }];
     for (let segment = 1; segment < points.length; segment += 1) {
@@ -300,8 +319,8 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
     }
     scene.routes.push(createRoute(`mangrove-boardwalk-route-${index + 1}`, "alternate", walkPoints.map(({ x, z }) => ({ x, z, y: FLOOR_SLAB_METERS + 0.7 })), { purpose: "service", traffic: 0.58, schedule: "all" }));
   }
-  const ferryFrom = { x: width * 0.34, z: depth * 0.68 };
-  const ferryTo = { x: width * 0.28, z: depth * 0.4 };
+  const ferryFrom = { x: width * macro.float(0.26, 0.44), z: depth * macro.float(0.58, 0.78) };
+  const ferryTo = { x: width * macro.float(0.18, 0.36), z: depth * macro.float(0.3, 0.5) };
   const ferryPoints = addOrthogonalAccess(
     scene,
     "mangrove-ferry-bridge-west",
@@ -313,18 +332,19 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
     ["mangrove", "root-boardwalk", "bridge", "standable", "site-program"],
   );
   scene.routes.push(createRoute("mangrove-ferry-route", "alternate", ferryPoints, { purpose: "movement", traffic: 0.36, schedule: "all" }));
-  for (let index = 0; index < 30; index += 1) {
-    const x = width * (0.1 + ((index * 0.173) % 0.8));
-    const z = depth * (0.12 + ((index * 0.287) % 0.74));
+  const rootCount = macro.int(24, 42);
+  for (let index = 0; index < rootCount; index += 1) {
+    const x = width * macro.float(0.06, 0.94);
+    const z = depth * macro.float(0.08, 0.92);
     scene.primitives.push(
       cylinder(`mangrove-root-pillar-${index + 1}`, 0, x, 0, z, 0.55 + (index % 3) * 0.18, feetToMeters(7 + index % 4 * 2), "wood", ["mangrove", "prop-root", "cover", "standable", "site-program"]),
       primitive(`mangrove-canopy-${index + 1}`, "sphere", 2, x + Math.sin(index) * 1.2, feetToMeters(12 + index % 3 * 2), z + Math.cos(index) * 1.2, 2.2 + (index % 3) * 0.42, 1.35, 2.1 + (index % 2) * 0.4, "moss", ["mangrove", "canopy", "blocks-sight", "site-program"]),
     );
   }
   scene.primitives.push(
-    corridor("mangrove-wreck-dock", 0, width * 0.72, channelZ, width * 0.72, depth * 0.88, FLOOR_SLAB_METERS + 0.9, 1.8, "wood", ["mangrove", "smuggler-dock", "wreck-field", "standable", "site-program"]),
-    box("mangrove-underwater-entry", 0, width * 0.2, -feetToMeters(4), channelZ, 3.4, feetToMeters(5), 2.2, "darkStone", ["mangrove", "underwater-entry", "portal", "hazard", "site-program"]),
-    cylinder("mangrove-patrol-tower", 1, width * 0.84, feetToMeters(9), depth * 0.3, 1.6, feetToMeters(18), "wood", ["mangrove", "patrol-tower", "high-ground", "site-program"]),
+    corridor("mangrove-wreck-dock", 0, width * macro.float(0.6, 0.84), channelZ, width * macro.float(0.58, 0.86), depth * macro.float(0.78, 0.94), FLOOR_SLAB_METERS + 0.9, 1.8, "wood", ["mangrove", "smuggler-dock", "wreck-field", "standable", "site-program"]),
+    box("mangrove-underwater-entry", 0, width * macro.float(0.12, 0.3), -feetToMeters(4), channelZ, 3.4, feetToMeters(5), 2.2, "darkStone", ["mangrove", "underwater-entry", "portal", "hazard", "site-program"]),
+    cylinder("mangrove-patrol-tower", 1, width * macro.float(0.72, 0.9), feetToMeters(9), depth * macro.float(0.18, 0.38), 1.6, feetToMeters(18), "wood", ["mangrove", "patrol-tower", "high-ground", "site-program"]),
   );
   scene.tactical.push(
     tacticalFeature("mangrove-channel-choke", "chokepoint", width * 0.5, channelZ, -0.2, 3, "The tidal channel divides the village and forces movement onto exposed root boardwalks."),
@@ -418,15 +438,15 @@ function addTerrainBoundMaintenanceBridge(scene: GeneratedScene, crossing: Terra
     const from = { x: crossing.from.x + dx * t0, z: crossing.from.z + dz * t0 };
     const to = { x: crossing.from.x + dx * t1, z: crossing.from.z + dz * t1 };
     scene.primitives.push(
-      corridor(`terrain-maintenance-bridge-deck-${segment + 1}`, 1, from.x, from.z, to.x, to.z, deckY, 1.7, "metal", [...commonTags, "bridge-deck"]),
-      corridor(`terrain-maintenance-bridge-rail-a-${segment + 1}`, 1, from.x + normal.x * 0.72, from.z + normal.z * 0.72, to.x + normal.x * 0.72, to.z + normal.z * 0.72, deckY + feetToMeters(3.2), 0.12, "metal", [...commonTags, "guardrail"]),
-      corridor(`terrain-maintenance-bridge-rail-b-${segment + 1}`, 1, from.x - normal.x * 0.72, from.z - normal.z * 0.72, to.x - normal.x * 0.72, to.z - normal.z * 0.72, deckY + feetToMeters(3.2), 0.12, "metal", [...commonTags, "guardrail"]),
+      corridor(`terrain-maintenance-bridge-deck-${segment + 1}`, 1, from.x, from.z, to.x, to.z, deckY, 2.25, "metal", [...commonTags, "bridge-deck", "wide-crossing"]),
+      corridor(`terrain-maintenance-bridge-rail-a-${segment + 1}`, 1, from.x + normal.x * 0.96, from.z + normal.z * 0.96, to.x + normal.x * 0.96, to.z + normal.z * 0.96, deckY + feetToMeters(3.8), 0.16, "metal", [...commonTags, "guardrail"]),
+      corridor(`terrain-maintenance-bridge-rail-b-${segment + 1}`, 1, from.x - normal.x * 0.96, from.z - normal.z * 0.96, to.x - normal.x * 0.96, to.z - normal.z * 0.96, deckY + feetToMeters(3.8), 0.16, "metal", [...commonTags, "guardrail"]),
     );
   }
   for (const [side, point] of [["a", crossing.from], ["b", crossing.to]] as const) {
     const groundY = feetToMeters(point.elevationFeet);
     const supportHeight = Math.max(feetToMeters(5), deckY + feetToMeters(5) - groundY);
-    for (const lateral of [-0.66, 0.66]) {
+    for (const lateral of [-0.98, 0.98]) {
       scene.primitives.push(cylinder(
         `terrain-maintenance-bridge-gantry-${side}-${lateral < 0 ? "left" : "right"}`,
         1,
@@ -442,16 +462,19 @@ function addTerrainBoundMaintenanceBridge(scene: GeneratedScene, crossing: Terra
     scene.primitives.push(corridor(
       `terrain-maintenance-bridge-gantry-beam-${side}`,
       1,
-      point.x + normal.x * 0.9,
-      point.z + normal.z * 0.9,
-      point.x - normal.x * 0.9,
-      point.z - normal.z * 0.9,
+      point.x + normal.x * 1.18,
+      point.z + normal.z * 1.18,
+      point.x - normal.x * 1.18,
+      point.z - normal.z * 1.18,
       deckY + feetToMeters(5),
       0.28,
       "metal",
       [...commonTags, "gantry-beam"],
     ));
   }
+  scene.primitives.push(
+    primitive("terrain-maintenance-bridge-warning-beacon", "cylinder", 1, crossing.midpoint.x, deckY + feetToMeters(4.8), crossing.midpoint.z, 0.22, feetToMeters(1.2), 0.22, "warmLight", [...commonTags, "bridge-beacon", "landmark"]),
+  );
   scene.primitives.push(corridor(
     "terrain-maintenance-bridge-service-pipe",
     1,
@@ -725,7 +748,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   if (!legacySpecialElevation) terrain.render(scene);
   else if (!isFloating) scene.primitives.push(box("site-terrain-base", 0, program.bounds.x / 2, 0, landDepth / 2, program.bounds.x, FLOOR_SLAB_METERS, landDepth, "earth", ["floor", "terrain", "site-program", `site:${program.siteType}`]));
   if (isHollowTree) addHollowTreeCity(scene, program.bounds.x, program.bounds.z);
-  if (isMangrovePort) addMangroveSmugglerPort(scene, program.bounds.x, program.bounds.z);
+  if (isMangrovePort) addMangroveSmugglerPort(scene, program.bounds.x, program.bounds.z, context.rng.fork("mangrove-parent"));
   // Districts are planning ownership, not giant coloured floor decals. Their
   // identity is made legible by parcel use, landmarks and road hierarchy.
   const semanticTerrain = ["river", "impact-crater", "caldera", "ice-crevasse", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind) || isFloating || isHollowTree || isMangrovePort;
@@ -773,26 +796,16 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     return undefined;
   };
   let adaptedBuildings = 0;
-  const mangroveBuildingNodes = [
-    [program.bounds.x * 0.18, program.bounds.z * 0.48],
-    [program.bounds.x * 0.32, program.bounds.z * 0.62],
-    [program.bounds.x * 0.47, program.bounds.z * 0.46],
-    [program.bounds.x * 0.62, program.bounds.z * 0.58],
-    [program.bounds.x * 0.78, program.bounds.z * 0.42],
-    [program.bounds.x * 0.88, program.bounds.z * 0.56],
-  ] as const;
-  const mangroveElevationFeet = [5, 10, 5, 15, 10, 5] as const;
-  const mangroveRootWaypoints = [
-    [program.bounds.x * 0.1, program.bounds.z * 0.18],
-    [program.bounds.x * 0.24, program.bounds.z * 0.31],
-    [program.bounds.x * 0.36, program.bounds.z * 0.47],
-    [program.bounds.x * 0.39, program.bounds.z * 0.67],
-    [program.bounds.x * 0.54, program.bounds.z * 0.52],
-    [program.bounds.x * 0.7, program.bounds.z * 0.34],
-    [program.bounds.x * 0.66, program.bounds.z * 0.18],
-    [program.bounds.x * 0.78, program.bounds.z * 0.31],
-    [program.bounds.x * 0.91, program.bounds.z * 0.51],
-  ] as const;
+  const mangroveMacro = context.rng.fork("mangrove-placement");
+  const mangroveBuildingNodes = Array.from({ length: 8 }, (_, index) => [
+    program.bounds.x * mangroveMacro.float(0.12, 0.88),
+    program.bounds.z * mangroveMacro.float(0.24, 0.76),
+  ] as const);
+  const mangroveElevationFeet = Array.from({ length: 8 }, () => mangroveMacro.int(4, 18));
+  const mangroveRootWaypoints = Array.from({ length: 12 }, () => [
+    program.bounds.x * mangroveMacro.float(0.06, 0.94),
+    program.bounds.z * mangroveMacro.float(0.08, 0.92),
+  ] as const);
   for (const parcel of program.parcels) {
     if (terrain.summary.kind === "bridge-megastructure" && adaptedBuildings >= 9) continue;
     if (isMangrovePort && adaptedBuildings >= Math.max(12, Math.round(program.parcels.length * 0.68))) continue;

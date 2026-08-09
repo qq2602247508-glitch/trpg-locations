@@ -52,4 +52,17 @@ describe("five-layer composition catalog", () => {
     expect(hollowTree.motifIds).toContain("motif.hollow-tree-city");
     expect(hollowTree.motifIds).not.toContain("motif.mangrove-smuggler-port");
   });
+
+  it("changes mangrove parent topology across seeds, not only building props", () => {
+    const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、半淹档案库和水下温室";
+    const first = generateScene({ prompt, seed: "mangrove-macro-a", size: "medium", density: 0.62 }, "adaptive");
+    const second = generateScene({ prompt, seed: "mangrove-macro-b", size: "medium", density: 0.62 }, "adaptive");
+    const signature = (scene: typeof first) => scene.primitives
+      .filter((entry) => entry.tags?.includes("tidal-channel") || entry.tags?.includes("root-boardwalk"))
+      .map((entry) => `${entry.id}:${entry.position.x.toFixed(2)}:${entry.position.z.toFixed(2)}:${entry.size.x.toFixed(2)}:${entry.size.z.toFixed(2)}`)
+      .join("|");
+    expect(signature(first)).not.toBe(signature(second));
+    expect(first.primitives.filter((entry) => entry.tags?.includes("tidal-channel")).length).toBeGreaterThan(3);
+    expect(second.primitives.filter((entry) => entry.tags?.includes("root-boardwalk")).length).toBeGreaterThan(4);
+  });
 });
