@@ -1077,24 +1077,107 @@ function buildInfernalWaste(scene: GeneratedScene, width: number, depth: number,
 }
 
 function buildFloatingIslands(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const layoutRng = rng.fork("island-layout");
   const islands = [
-    { id: "lower", x: width * 0.25, z: depth * 0.68, y: 0, w: width * 0.36, d: depth * 0.3 },
-    { id: "middle", x: width * 0.58, z: depth * 0.48, y: feetToMeters(20), w: width * 0.34, d: depth * 0.28 },
-    { id: "upper", x: width * 0.38, z: depth * 0.2, y: feetToMeters(40), w: width * 0.3, d: depth * 0.24 },
+    {
+      id: "lower",
+      x: width * layoutRng.float(0.2, 0.3),
+      z: depth * layoutRng.float(0.62, 0.74),
+      y: feetToMeters(layoutRng.int(26, 30)),
+      w: width * layoutRng.float(0.32, 0.4),
+      d: depth * layoutRng.float(0.26, 0.34),
+    },
+    {
+      id: "middle",
+      x: width * layoutRng.float(0.5, 0.66),
+      z: depth * layoutRng.float(0.4, 0.55),
+      y: feetToMeters(layoutRng.int(50, 58)),
+      w: width * layoutRng.float(0.3, 0.38),
+      d: depth * layoutRng.float(0.24, 0.32),
+    },
+    {
+      id: "upper",
+      x: width * layoutRng.float(0.3, 0.46),
+      z: depth * layoutRng.float(0.14, 0.27),
+      y: feetToMeters(layoutRng.int(76, 88)),
+      w: width * layoutRng.float(0.26, 0.34),
+      d: depth * layoutRng.float(0.21, 0.28),
+    },
   ];
   for (const [level, island] of islands.entries()) {
     const cols = Math.max(8, Math.floor(island.w));
     const rows = Math.max(7, Math.floor(island.d));
+    const mask = Array.from({ length: cols * rows }, () => false);
+    const phase = rng.float(-Math.PI, Math.PI);
     for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
       const nx = (x - cols / 2) / (cols / 2);
       const nz = (z - rows / 2) / (rows / 2);
       const present = Math.hypot(nx, nz * 1.08) < 0.92 + Math.sin(x * 0.8 + z * 0.31 + level) * 0.08 && !(Math.sin(x * 1.7 + z * 0.43 + level * 2) > 0.88 && (x + z) % 3 === 0);
-      if (!present) continue;
+      mask[z * cols + x] = present;
+    }
+    const underbellyCount = 3 + Math.round(density * 2);
+    for (let massIndex = 0; massIndex < underbellyCount; massIndex += 1) {
+      const angle = phase + (Math.PI * 2 * massIndex) / underbellyCount + rng.float(-0.28, 0.28);
+      const distance = massIndex === 0 ? 0 : rng.float(0.06, 0.19);
+      const massWidthCells = island.w * rng.float(0.32, 0.52);
+      const massDepthCells = island.d * rng.float(0.34, 0.56);
+      const massHeight = Math.min(
+        feetToMeters(rng.float(13, 24) + (massIndex === 0 ? 7 : 0)),
+        Math.max(feetToMeters(10), island.y - feetToMeters(3)),
+      );
+      scene.primitives.push(primitive(
+        `floating-${island.id}-underbelly-mass-${massIndex}`,
+        "sphere",
+        level,
+        island.x + Math.cos(angle) * island.w * distance,
+        island.y - massHeight,
+        island.z + Math.sin(angle) * island.d * distance,
+        massWidthCells * CELL,
+        massHeight,
+        massDepthCells * CELL,
+        massIndex % 2 === 0 ? "rock" : "darkStone",
+        ["floating-island", "island-underbelly-mass", "island-core", "erosion-mass", `island:${island.id}`],
+      ));
+    }
+    const isPresent = (x: number, z: number) => x >= 0 && z >= 0 && x < cols && z < rows && mask[z * cols + x] === true;
+    for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+      if (!isPresent(x, z)) continue;
+      const nx = (x - cols / 2) / (cols / 2);
+      const nz = (z - rows / 2) / (rows / 2);
       const px = island.x + x - cols / 2;
       const pz = island.z + z - rows / 2;
-      const thickness = feetToMeters(rng.int(7, 13));
+      const radial = Math.min(1, Math.hypot(nx, nz * 1.08));
+      const edgeCell = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => !isPresent(x + dx!, z + dz!));
+      const thicknessFeet = Math.max(4.5, 5.5 + (1 - radial) * (5 + density * 3) + Math.sin(x * 0.53 + z * 0.41 + phase) * 1.5);
+      const thickness = feetToMeters(thicknessFeet);
       scene.primitives.push(box(`floating-${island.id}-surface-${x}-${z}`, level, px, island.y, pz, 1.02, FLOOR_SLAB_METERS, 1.02, level === 0 ? "rock" : "darkStone", ["floor", "terrain", "floating-island", `island:${island.id}`]));
-      if ((x + z) % 4 === 0) scene.primitives.push(box(`floating-${island.id}-cliff-${x}-${z}`, level, px, island.y - thickness / 2, pz, 1.03, thickness, 1.03, "rock", ["vertical-face", "floating-island", "cliff"]));
+      scene.primitives.push(box(
+        `floating-${island.id}-underside-${x}-${z}`,
+        level,
+        px,
+        island.y - thickness,
+        pz,
+        edgeCell ? 1.05 : 0.98,
+        thickness,
+        edgeCell ? 1.05 : 0.98,
+        "rock",
+        ["floating-island", "island-underside", edgeCell ? "vertical-face" : "island-core", edgeCell ? "cliff" : "mass", `island:${island.id}`],
+      ));
+      if (edgeCell && (x * 3 + z + level) % 5 === 0) {
+        const spurHeight = feetToMeters(3 + ((x + z + level) % 4));
+        scene.primitives.push(box(
+          `floating-${island.id}-hanging-spur-${x}-${z}`,
+          level,
+          px,
+          island.y - thickness - spurHeight,
+          pz,
+          0.52,
+          spurHeight,
+          0.52,
+          "darkStone",
+          ["floating-island", "hanging-rock", "vertical-silhouette", `island:${island.id}`],
+        ));
+      }
     }
     scene.rooms.push(createRoom(`floating-${island.id}-room`, `${level + 1}F ${island.id} island`, "combat", level, island.x, island.z, island.w * 0.62, island.d * 0.62, island.y));
     scene.tactical.push(tacticalFeature(`floating-${island.id}-highground`, "highGround", island.x, island.z, island.y, Math.ceil(Math.max(island.w, island.d) * 0.25), `${level + 1}层浮空岛屿是有真实垂直边界的战术高地。`));
@@ -1103,8 +1186,87 @@ function buildFloatingIslands(scene: GeneratedScene, width: number, depth: numbe
     const lower = islands[index];
     const upper = islands[index + 1];
     if (!lower || !upper) continue;
-    const stair = stairConnection(`floating-vertical-${index}`, index, { xCells: lower.x, zCells: lower.z, yMeters: lower.y + FLOOR_SLAB_METERS }, { xCells: upper.x, zCells: upper.z, yMeters: upper.y + FLOOR_SLAB_METERS }, 1.4, "metal", ["vertical-route", "vertical-opening", "floating-island", "rope-bridge"]);
-    scene.primitives.push(stair.primitive);
+    const dx = upper.x - lower.x;
+    const dz = upper.z - lower.z;
+    const distance = Math.max(1, Math.hypot(dx, dz));
+    const ux = dx / distance;
+    const uz = dz / distance;
+    const nx = -uz;
+    const nz = ux;
+    const bottom = {
+      xCells: lower.x + ux * lower.w * 0.3,
+      zCells: lower.z + uz * lower.d * 0.3,
+      yMeters: lower.y + FLOOR_SLAB_METERS,
+    };
+    const top = {
+      xCells: upper.x - ux * upper.w * 0.3,
+      zCells: upper.z - uz * upper.d * 0.3,
+      yMeters: upper.y + FLOOR_SLAB_METERS,
+    };
+    const stair = stairConnection(`floating-vertical-${index}`, index, bottom, top, 1.6, "wood", ["vertical-route", "vertical-opening", "floating-island", "suspension-bridge", "supported"]);
+    scene.primitives.push(
+      stair.primitive,
+      box(`floating-vertical-${index}-bottom-landing`, index, bottom.xCells, bottom.yMeters, bottom.zCells, 3.2, FLOOR_SLAB_METERS, 3.2, "wood", ["bridge-landing", "standable", "supported", "floating-island"]),
+      box(`floating-vertical-${index}-top-landing`, index + 1, top.xCells, top.yMeters, top.zCells, 3.2, FLOOR_SLAB_METERS, 3.2, "wood", ["bridge-landing", "standable", "supported", "floating-island"]),
+      cylinder(`floating-vertical-${index}-bottom-pylon-left`, index, bottom.xCells + nx * 1.15, bottom.yMeters, bottom.zCells + nz * 1.15, 0.34, feetToMeters(13), "metal", ["bridge-pylon", "suspension-bridge", "support"]),
+      cylinder(`floating-vertical-${index}-bottom-pylon-right`, index, bottom.xCells - nx * 1.15, bottom.yMeters, bottom.zCells - nz * 1.15, 0.34, feetToMeters(13), "metal", ["bridge-pylon", "suspension-bridge", "support"]),
+      cylinder(`floating-vertical-${index}-top-pylon-left`, index + 1, top.xCells + nx * 1.15, top.yMeters, top.zCells + nz * 1.15, 0.34, feetToMeters(13), "metal", ["bridge-pylon", "suspension-bridge", "support"]),
+      cylinder(`floating-vertical-${index}-top-pylon-right`, index + 1, top.xCells - nx * 1.15, top.yMeters, top.zCells - nz * 1.15, 0.34, feetToMeters(13), "metal", ["bridge-pylon", "suspension-bridge", "support"]),
+    );
+
+    const cablePoints = Array.from({ length: 7 }, (_, pointIndex) => {
+      const t = pointIndex / 6;
+      const deckY = bottom.yMeters + (top.yMeters - bottom.yMeters) * t;
+      const cableLift = feetToMeters(3.4 + Math.pow(Math.abs(t * 2 - 1), 1.65) * 9.6);
+      return {
+        t,
+        x: bottom.xCells + (top.xCells - bottom.xCells) * t,
+        z: bottom.zCells + (top.zCells - bottom.zCells) * t,
+        deckY,
+        cableY: deckY + cableLift,
+      };
+    });
+    for (const side of [-1, 1]) {
+      for (let segment = 1; segment < cablePoints.length; segment += 1) {
+        const previous = cablePoints[segment - 1]!;
+        const current = cablePoints[segment]!;
+        scene.primitives.push(
+          corridor(
+            `floating-vertical-${index}-main-cable-${side < 0 ? "left" : "right"}-${segment}`,
+            index,
+            previous.x + nx * 0.98 * side,
+            previous.z + nz * 0.98 * side,
+            current.x + nx * 0.98 * side,
+            current.z + nz * 0.98 * side,
+            (previous.cableY + current.cableY) / 2,
+            0.1,
+            "metal",
+            ["suspension-cable", "bridge-support", "floating-island", "non-walkable"],
+          ),
+          corridor(
+            `floating-vertical-${index}-guardrail-${side < 0 ? "left" : "right"}-${segment}`,
+            index,
+            previous.x + nx * 0.9 * side,
+            previous.z + nz * 0.9 * side,
+            current.x + nx * 0.9 * side,
+            current.z + nz * 0.9 * side,
+            (previous.deckY + current.deckY) / 2 + feetToMeters(3),
+            0.12,
+            "metal",
+            ["bridge-guardrail", "suspension-bridge", "non-walkable"],
+          ),
+        );
+      }
+    }
+    for (let support = 1; support < cablePoints.length - 1; support += 1) {
+      const point = cablePoints[support]!;
+      const hangerBottom = point.deckY + feetToMeters(2.2);
+      const chainHeight = Math.max(feetToMeters(1.2), point.cableY - hangerBottom);
+      scene.primitives.push(
+        cylinder(`floating-vertical-${index}-chain-left-${support}`, index, point.x + nx * 0.92, hangerBottom, point.z + nz * 0.92, 0.16, chainHeight, "metal", ["suspension-chain", "bridge-support", "floating-island"]),
+        cylinder(`floating-vertical-${index}-chain-right-${support}`, index, point.x - nx * 0.92, hangerBottom, point.z - nz * 0.92, 0.16, chainHeight, "metal", ["suspension-chain", "bridge-support", "floating-island"]),
+      );
+    }
     scene.routes.push(stairRoute(`floating-vertical-route-${index}`, stair));
   }
   connectRooms(scene.rooms, "floating-lower-room", "floating-middle-room");
@@ -1125,9 +1287,20 @@ function buildFloatingIslands(scene: GeneratedScene, width: number, depth: numbe
   }
   scene.tactical.push(tacticalFeature("floating-entry", "entrance", islands[0]?.x ?? 1, islands[0]?.z ?? depth - 2, islands[0]?.y ?? 0, 2, "A chained landing reaches the lowest island."));
   scene.tactical.push(tacticalFeature("floating-void-hazard", "hazard", width * 0.5, depth * 0.5, feetToMeters(8), 6, "岛屿之间是可见的垂直深渊；失足会坠落。"));
+  scene.viewProgram = {
+    version: 1,
+    mode: "scene",
+    focusCells: {
+      x: islands.reduce((total, island) => total + island.x, 0) / islands.length,
+      z: islands.reduce((total, island) => total + island.z, 0) / islands.length,
+    },
+    radiusCells: Math.max(25, Math.min(30, width * 0.33)),
+    includeTags: ["floating-island", "island-underside", "suspension-bridge", "bridge-pylon", "suspension-cable"],
+    reason: "Frame all three suspended island masses while keeping their exposed undersides and supported crossings readable from low angles.",
+  };
   scene.description = `Three-tier floating-island battlefield with broken footprints, exposed vertical undersides, void gaps, and two vertical routes.`;
   scene.floors = 3;
-  scene.floorHeightFeet = [20, 20, 20];
+  scene.floorHeightFeet = [28, 26, 28];
 }
 
 function buildBurialGround(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {

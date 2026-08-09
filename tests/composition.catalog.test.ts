@@ -144,6 +144,49 @@ describe("five-layer composition catalog", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("builds coherent floating-island mass and supported suspension crossings", () => {
+    const prompt = "三层破碎浮空岩岛群，岛屿有暴露底面、风剪深渊、悬索桥、垂直升降路线和上层观测平台";
+    const request = { prompt, seed: "round60-floating-mass", size: "large" as const, density: 0.78 };
+    const scene = generateScene(request, "adaptive");
+    const surfaces = scene.primitives.filter((primitive) => primitive.id.includes("-surface-") && primitive.tags?.includes("floating-island"));
+    const undersides = scene.primitives.filter((primitive) => primitive.tags?.includes("island-underside"));
+    expect(undersides.length).toBe(surfaces.length);
+    expect(new Set(undersides.map((primitive) => Math.round(primitive.size.y * 100))).size).toBeGreaterThanOrEqual(8);
+    expect(new Set(undersides.filter((primitive) => primitive.tags?.includes("vertical-face")).map((primitive) => primitive.level))).toEqual(new Set([0, 1, 2]));
+    const underbellyMasses = scene.primitives.filter((primitive) => primitive.tags?.includes("island-underbelly-mass"));
+    expect(underbellyMasses.length).toBeGreaterThanOrEqual(9);
+    expect(Math.min(...underbellyMasses.map((primitive) => primitive.position.y))).toBeGreaterThan(0);
+    for (const underside of undersides) {
+      const surface = surfaces.find((candidate) => candidate.id === underside.id.replace("-underside-", "-surface-"));
+      expect(surface, underside.id).toBeDefined();
+      expect(underside.position.y + underside.size.y).toBeCloseTo(surface!.position.y, 5);
+    }
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("bridge-pylon")).length).toBeGreaterThanOrEqual(8);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("bridge-guardrail")).length).toBeGreaterThanOrEqual(4);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("suspension-chain")).length).toBeGreaterThanOrEqual(12);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("bridge-landing") && primitive.tags?.includes("standable") && primitive.tags?.includes("supported")).length).toBeGreaterThanOrEqual(4);
+
+    const replay = generateScene(request, "adaptive");
+    const signature = (candidate: typeof scene) => candidate.primitives
+      .filter((primitive) => primitive.tags?.includes("island-underside"))
+      .map((primitive) => [primitive.id, primitive.position.y, primitive.size.y]);
+    const layoutSignature = (candidate: typeof scene) => {
+      const firstSurfaceByIsland = new Map<string, [number, number]>();
+      for (const primitive of candidate.primitives) {
+        if (!primitive.id.includes("-surface-") || !primitive.tags?.includes("floating-island")) continue;
+        const islandId = primitive.id.split("-surface-")[0]!;
+        if (!firstSurfaceByIsland.has(islandId)) firstSurfaceByIsland.set(islandId, [primitive.position.x, primitive.position.z]);
+      }
+      return [...firstSurfaceByIsland.entries()].map(([islandId, [x, z]]) => [islandId, x, z]);
+    };
+    expect(signature(replay)).toEqual(signature(scene));
+
+    const variant = generateScene({ ...request, seed: "round60-floating-variant" }, "adaptive");
+    expect(signature(variant)).not.toEqual(signature(scene));
+    expect(layoutSignature(variant)).not.toEqual(layoutSignature(scene));
+    expect(variant.diagnostics.valid).toBe(true);
+  });
+
   it("selects compound motifs by prompt instead of loading every motif in a domain", () => {
     const mangrove = compileSceneComposition({ prompt: "红树林走私港村", seed: "motif-mangrove", size: "medium", density: 0.62 });
     expect(mangrove.motifIds).toContain("motif.mangrove-smuggler-port");

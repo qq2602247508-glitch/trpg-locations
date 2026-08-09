@@ -487,7 +487,11 @@ export class SceneRenderer {
       target.set(focusX, focusY, focusZ);
       this.controls.target.copy(target);
     }
-    this.camera.position.set(target.x + span * 1.18, target.y + Math.max(6, span * 0.42), target.z + span * 0.96);
+    this.camera.position.set(
+      target.x + span * 0.96,
+      target.y + Math.max(4.2, span * 0.24),
+      target.z + span * 0.78,
+    );
     this.camera.lookAt(target);
     this.controls.update();
   }
