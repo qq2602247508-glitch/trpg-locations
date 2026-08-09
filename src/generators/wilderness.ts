@@ -1,4 +1,4 @@
-import type { GeneratedScene, GeneratorContext, MaterialKey, SemanticGenerationHints } from "../schema";
+import type { GeneratedScene, GeneratorContext, MaterialKey, ScenePrimitive, SemanticGenerationHints } from "../schema";
 import type { BuildingFunctionalModuleProgram } from "../site-program/schema";
 import { embeddedFacilityCapabilities, embeddedFacilityProfile } from "../semantic/siteIntent";
 import { resolveCapabilityDomain } from "../composition/capabilityDomain";
@@ -83,6 +83,52 @@ function analyzeTerrainMorphology(prompt: string, hints?: SemanticGenerationHint
     wetland: includesAny(normalized, WILDERNESS_TERMS.swamp),
     ruin: includesAny(normalized, WILDERNESS_TERMS.ruin) || hints?.environment === "ruin",
   };
+}
+
+/** Publish parent-terrain ownership before later semantic and building passes.
+ * Linear hazards use a conservative cell-space AABB so child modules can
+ * reject the whole rotated span without knowing its renderer geometry. */
+function reserveLinearTerrain(
+  scene: GeneratedScene,
+  id: string,
+  kind: "void" | "water" | "lava" | "unstable",
+  fromX: number,
+  fromZ: number,
+  toX: number,
+  toZ: number,
+  widthCells: number,
+  clearanceCells: number,
+  reason: string,
+): void {
+  (scene.terrainReservations ??= []).push({
+    id,
+    kind,
+    centerCells: { x: (fromX + toX) / 2, z: (fromZ + toZ) / 2 },
+    sizeCells: { x: widthCells, z: Math.max(1, Math.hypot(toX - fromX, toZ - fromZ)) },
+    rotationY: Math.atan2(toX - fromX, toZ - fromZ),
+    clearanceCells,
+    reason,
+  });
+}
+
+function reserveRadialTerrain(
+  scene: GeneratedScene,
+  id: string,
+  kind: "void" | "water" | "lava" | "unstable",
+  x: number,
+  z: number,
+  diameterCells: number,
+  clearanceCells: number,
+  reason: string,
+): void {
+  (scene.terrainReservations ??= []).push({
+    id,
+    kind,
+    centerCells: { x, z },
+    sizeCells: { x: diameterCells, z: diameterCells },
+    clearanceCells,
+    reason,
+  });
 }
 
 export function classifyWildernessArchetype(prompt: string, hints?: SemanticGenerationHints, capabilityIds: readonly string[] = []): WildernessArchetype {
@@ -251,6 +297,7 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
     const dz = toZ - fromZ;
     const waterY = (fromX + toX) / 2 < waterfallX ? upperWaterY : lowerWaterY;
     scene.primitives.push(water(`river-semantic-channel-${index}`, 0, (fromX + toX) / 2, waterY, (fromZ + toZ) / 2, channelHalfWidth * 2, 0.34, Math.hypot(dx, dz) + 0.8, ["river", "watercourse", "terrain", "meandering-channel", waterY === upperWaterY ? "upper-water" : "lower-water"], Math.atan2(dx, dz)));
+    reserveLinearTerrain(scene, `river-channel-reservation-${index}`, "water", fromX, fromZ, toX, toZ, channelHalfWidth * 2, 0.65, "The main river owns this channel; ordinary foundations and loose props must remain on supported banks.");
   }
   for (const [branchIndex, branch] of tributaries.entries()) {
     const startX = branch.fromNorth ? cols * 0.08 : cols * 0.92;
@@ -261,12 +308,14 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
       const z1 = branch.startZ + (branch.joinZ - branch.startZ) * t1 + Math.sin(t1 * Math.PI * 2 + phaseB) * 1.2;
       const z2 = branch.startZ + (branch.joinZ - branch.startZ) * t2 + Math.sin(t2 * Math.PI * 2 + phaseB) * 1.2;
       scene.primitives.push(water(`river-tributary-${branchIndex}-${index}`, 0, (x1 + x2) / 2, upperWaterY + feetToMeters(1.5), (z1 + z2) / 2, branch.width * 2, 0.26, Math.hypot(x2 - x1, z2 - z1) + 0.55, ["river", "tributary", "watercourse", "waterflow"], Math.atan2(x2 - x1, z2 - z1)));
+      reserveLinearTerrain(scene, `river-tributary-reservation-${branchIndex}-${index}`, "water", x1, z1, x2, z2, branch.width * 2, 0.55, "A tributary owns its wet channel and bank clearance.");
     }
   }
   const fallsZ = riverLineAt(waterfallX);
   const fallsHeight = upperWaterY - lowerWaterY;
   scene.primitives.push(box("river-waterfall-face", 0, waterfallX, lowerWaterY, fallsZ, 0.32, fallsHeight, channelHalfWidth * 2.25, "water", ["river", "waterfall", "vertical-water", "hazard"]));
   scene.primitives.push(water("river-deep-pool", 0, waterfallX + 2.4, lowerWaterY - 0.18, riverLineAt(waterfallX + 2.4), channelHalfWidth * 3.4, 0.62, 5.8, ["river", "deep-pool", "waterfall-basin", "hazard"]));
+  reserveRadialTerrain(scene, "river-deep-pool-reservation", "water", waterfallX + 2.4, riverLineAt(waterfallX + 2.4), Math.max(channelHalfWidth * 3.4, 5.8), 0.85, "The waterfall plunge pool is deep water and cannot receive an ordinary building pad.");
   const crossingX = cols * rng.float(0.36, 0.52);
   const crossingZ = riverLineAt(crossingX);
   scene.primitives.push(corridor("river-semantic-old-bridge", 0, crossingX, crossingZ - 4, crossingX, crossingZ + 4, yOf(1), 2.4, "stone", ["bridge", "semantic-grid", "old-bridge"]));
@@ -298,6 +347,23 @@ function buildRift(scene: GeneratedScene, width: number, depth: number, density:
     else { const high = x < riftAt(z) ? 5 : 4; heights.push(Math.min(6, high + (Math.sin(z * 0.17 + (x < riftAt(z) ? 0 : 1.4)) > 0.72 ? 1 : 0))); }
   }
   const rendered = renderMorphologyField(scene, { prefix: "rift", cols, rows, heights, stepFeet: 5, materialFor: (level) => level === 0 ? "darkStone" : level >= 5 ? "rock" : "earth", tagsFor: (level) => ["rift", "crevasse", level === 0 ? "rift-bottom" : "rift-bank", level >= 5 ? "high-ground" : "standable"] });
+  const reservationSegments = Math.max(8, Math.round(rows / 5));
+  for (let index = 0; index < reservationSegments; index += 1) {
+    const fromZ = (rows * index) / reservationSegments;
+    const toZ = (rows * (index + 1)) / reservationSegments;
+    reserveLinearTerrain(
+      scene,
+      `rift-unstable-reservation-${index}`,
+      "unstable",
+      riftAt(fromZ),
+      fromZ,
+      riftAt(toZ),
+      toZ,
+      halfGap * 2,
+      1.1,
+      "The fractured rift corridor owns its void, collapsing walls, and immediate setback; only authored crossings may span it.",
+    );
+  }
   const westEdge = (z: number) => riftAt(z) - halfGap - 0.4; const eastEdge = (z: number) => riftAt(z) + halfGap + 0.4;
   const bridgeRows = [rows * 0.28, rows * 0.72];
   for (const [index, z] of bridgeRows.entries()) scene.primitives.push(corridor(`rift-bridge-${index}`, 0, westEdge(z), z, eastEdge(z), z, rendered.yOf(index === 0 ? 5 : 4), index === 0 ? 1.8 : 1.35, index === 0 ? "rock" : "wood", ["bridge", index === 0 ? "natural-bridge" : "rope-bridge", "supported", "rift-crossing"]));
@@ -829,6 +895,16 @@ function buildImpactCrater(scene: GeneratedScene, width: number, depth: number, 
     materialFor: (level, x, z) => Math.hypot(x - cx, z - cz) < radius * 0.24 ? "metal" : level >= 5 ? "darkStone" : level <= 1 ? "earth" : "rock",
     tagsFor: (level, x, z) => ["impact-crater", level >= 5 ? "crater-rim" : Math.hypot(x - cx, z - cz) < radius * 0.48 ? "crater-basin" : "ejecta-field", level >= 5 ? "impact-rim" : "impact-basin"],
   });
+  reserveRadialTerrain(
+    scene,
+    "impact-core-unstable-reservation",
+    "unstable",
+    cx,
+    cz,
+    radius * 0.58,
+    1.2,
+    "The meteor core and shattered inner basin are unstable ground reserved for the encounter objective rather than ordinary foundations.",
+  );
   scene.primitives.push(
     primitive("impact-meteor-core", "sphere", 0, cx, rendered.yOf(0), cz, feetToMeters(9), feetToMeters(7), feetToMeters(9), "metal", ["meteor-core", "impact-landmark", "cover"]),
     corridor("impact-rim-breach", 0, cx - radius * 1.1, cz + radius * 0.2, cx - radius * 0.42, cz + radius * 0.08, rendered.yOf(3), 2.2, "rock", ["impact-route", "rim-breach", "semantic-grid"]),
@@ -842,7 +918,13 @@ function buildImpactCrater(scene: GeneratedScene, width: number, depth: number, 
   }
   for (const [index, angle] of rayAngles.entries()) {
     const inner = radius * 0.34; const outer = radius * 1.25;
-    scene.primitives.push(corridor(`impact-radial-fracture-marker-${index}`, 0, cx + Math.cos(angle) * inner, cz + Math.sin(angle) * inner, cx + Math.cos(angle) * outer, cz + Math.sin(angle) * outer, rendered.yOf(0) + 0.03, 0.45 + density * 0.35, "darkStone", ["impact-crater", "radial-fracture", "hazard", "morphology-operator"]));
+    const fromX = cx + Math.cos(angle) * inner;
+    const fromZ = cz + Math.sin(angle) * inner;
+    const toX = cx + Math.cos(angle) * outer;
+    const toZ = cz + Math.sin(angle) * outer;
+    const fractureWidth = 0.45 + density * 0.35;
+    scene.primitives.push(corridor(`impact-radial-fracture-marker-${index}`, 0, fromX, fromZ, toX, toZ, rendered.yOf(0) + 0.03, fractureWidth, "darkStone", ["impact-crater", "radial-fracture", "hazard", "morphology-operator"]));
+    reserveLinearTerrain(scene, `impact-radial-fracture-reservation-${index}`, "unstable", fromX, fromZ, toX, toZ, fractureWidth, 0.7, "A radial impact fracture owns its collapse seam and foundation setback.");
   }
   scene.rooms.push(createRoom("impact-approach", "Ejecta approach", "natural", 0, cols * 0.16, rows * 0.72, cols * 0.24, rows * 0.28, rendered.yOf(2)), createRoom("impact-rim", "Broken impact rim", "combat", 0, cx, cz, radius * 2, radius * 2, rendered.yOf(6)), createRoom("impact-basin", "Crater basin", "natural", 0, cx, cz, radius * 0.9, radius * 0.9, rendered.yOf(1)), createRoom("impact-core", "Meteor core", "combat", 0, cx, cz, radius * 0.35, radius * 0.35, rendered.yOf(0)));
   connectRooms(scene.rooms, "impact-approach", "impact-rim");
@@ -916,15 +998,28 @@ function buildVolcanic(scene: GeneratedScene, width: number, depth: number, dens
     stepFeet: 5,
   });
   const levelAt = (x: number, z: number) => heights[Math.max(0, Math.min(rows - 1, Math.round(z))) * cols + Math.max(0, Math.min(cols - 1, Math.round(x)))] ?? 0;
+  const outletFromX = cx + radius * 0.15;
+  const outletFromZ = cz;
+  const outletToX = cols - 1;
+  const outletToZ = cz + Math.tan(outletAngle) * (cols - cx);
+  const outletWidth = 2.8 + density * 2.2;
   scene.primitives.push(
     primitive("volcanic-crater-lava", "cylinder", 0, cx, -0.35, cz, radius * 0.32 * CELL, 0.45, radius * 0.32 * CELL, "hazard", ["lava", "crater", "hazard", "morphology-operator"]),
-    corridor("volcanic-lava-outlet", 0, cx + radius * 0.15, cz, cols - 1, cz + Math.tan(outletAngle) * (cols - cx), -0.28, 2.8 + density * 2.2, "hazard", ["lava", "lava-flow", "hazard", "morphology-operator"]),
+    corridor("volcanic-lava-outlet", 0, outletFromX, outletFromZ, outletToX, outletToZ, -0.28, outletWidth, "hazard", ["lava", "lava-flow", "hazard", "morphology-operator"]),
     corridor("volcanic-basalt-bridge", 0, cx + radius * 0.54, cz - 3.5, cx + radius * 0.54, cz + 3.5, rendered.yOf(5), 1.8, "darkStone", ["bridge", "basalt-bridge", "semantic-grid"]),
   );
+  reserveRadialTerrain(scene, "volcanic-crater-lava-reservation", "lava", cx, cz, radius * 0.32, 1.2, "The active crater lake owns its heat and collapse zone.");
+  reserveLinearTerrain(scene, "volcanic-lava-outlet-reservation", "lava", outletFromX, outletFromZ, outletToX, outletToZ, outletWidth, 1.1, "The main lava outlet is a no-foundation hazard except at authored basalt crossings.");
   for (let index = 0; index < lavaBranchCount; index += 1) {
     const angle = lavaAngles[index]!;
     const inner = radius * rng.float(0.12, 0.24); const outer = radius * rng.float(1.05, 1.45);
-    scene.primitives.push(corridor(`volcanic-lava-branch-${index}`, 0, cx + Math.cos(angle) * inner, cz + Math.sin(angle) * inner, cx + Math.cos(angle) * outer, cz + Math.sin(angle) * outer, -0.24, 1.6 + density * 1.8, "hazard", ["lava", "lava-flow", "lava-branch", "hazard", "morphology-operator"]));
+    const branchFromX = cx + Math.cos(angle) * inner;
+    const branchFromZ = cz + Math.sin(angle) * inner;
+    const branchToX = cx + Math.cos(angle) * outer;
+    const branchToZ = cz + Math.sin(angle) * outer;
+    const branchWidth = 1.6 + density * 1.8;
+    scene.primitives.push(corridor(`volcanic-lava-branch-${index}`, 0, branchFromX, branchFromZ, branchToX, branchToZ, -0.24, branchWidth, "hazard", ["lava", "lava-flow", "lava-branch", "hazard", "morphology-operator"]));
+    reserveLinearTerrain(scene, `volcanic-lava-branch-reservation-${index}`, "lava", branchFromX, branchFromZ, branchToX, branchToZ, branchWidth, 0.85, "Branching lava owns this dangerous channel and thermal setback.");
   }
   const obsidianRidges = 2 + Math.round(density * 4);
   for (let index = 0; index < obsidianRidges; index += 1) {
@@ -958,10 +1053,16 @@ function buildVolcanic(scene: GeneratedScene, width: number, depth: number, dens
 function buildInfernalWaste(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   buildDryRiverbed(scene, width, depth, density, rng.fork("infernal-base"));
   const riverZ = depth * rng.float(0.42, 0.58);
+  const fissureFromX = width * 0.18;
+  const fissureFromZ = riverZ;
+  const fissureToX = width * 0.86;
+  const fissureToZ = riverZ + rng.float(-5, 5);
+  const fissureWidth = 3.4;
   scene.primitives.push(
     corridor("infernal-war-road", 0, 2, depth * 0.24, width - 2, depth * 0.31, feetToMeters(12), 3.2, "metal", ["infernal-war-road", "high-ground", "scene-program"]),
-    corridor("infernal-lava-fissure", 0, width * 0.18, riverZ, width * 0.86, riverZ + rng.float(-5, 5), -0.25, 3.4, "hazard", ["lava", "lava-flow", "infernal", "hazard"]),
+    corridor("infernal-lava-fissure", 0, fissureFromX, fissureFromZ, fissureToX, fissureToZ, -0.25, fissureWidth, "hazard", ["lava", "lava-flow", "infernal", "hazard"]),
   );
+  reserveLinearTerrain(scene, "infernal-lava-fissure-reservation", "lava", fissureFromX, fissureFromZ, fissureToX, fissureToZ, fissureWidth, 1.1, "The infernal lava fissure owns its thermal setback below the elevated war road.");
   const wreckCount = Math.round(7 + density * 17);
   for (let index = 0; index < wreckCount; index += 1) {
     const x = rng.float(width * 0.15, width * 0.85);
@@ -1763,7 +1864,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station", "驿站",
     "quarantine station", "weather station", "meteorological station", "research station", "field station", "radio station",
   ].some((term) => text.includes(term));
-  if (!wantsBuilding || !["forest", "river-valley", "mountain", "swamp", "ice"].includes(archetype)) return;
+  if (!wantsBuilding || !["forest", "river-valley", "mountain", "swamp", "ice", "volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype)) return;
   const alchemical = ["炼金", "alchemy", "alchemist"].some((term) => text.includes(term));
   const hunter = ["猎人", "hunter"].some((term) => text.includes(term));
   const quarantine = facilityProfile === "quarantine";
@@ -1806,7 +1907,8 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const requestedZ = archetype === "river-valley"
     ? Math.max(8, Math.min(depth - 8, riverZ + shoreDirection * 7.5))
     : archetype === "forest" ? depth * 0.5 : depth * 0.28;
-  const safePlacement = findReservedSafePlacement(scene, requestedX, requestedZ, 13, 12);
+  const engineeredFoundation = ["volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype);
+  const safePlacement = findReservedSafePlacement(scene, requestedX, requestedZ, 13, 12, engineeredFoundation ? "engineered" : "full");
   if (!safePlacement) return;
   const x = safePlacement.x;
   const z = safePlacement.z;
@@ -1903,7 +2005,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     baseY,
     functionalModules,
     siteProfile: quarantine ? "quarantine-station" : weatherStation ? "weather-station" : researchStation ? "field-station" : borderOutpost ? "border-outpost" : rangerStation ? "ranger-station" : undefined,
-    climateProfile: archetype === "ice" ? "polar" : archetype === "swamp" ? "wetland" : archetype === "mountain" || archetype === "rift" ? "alpine" : archetype === "forest" ? "forest" : archetype === "river-valley" ? "coastal" : "temperate",
+    climateProfile: archetype === "ice" ? "polar" : archetype === "swamp" ? "wetland" : archetype === "volcanic" || archetype === "infernal-waste" ? "volcanic" : archetype === "mountain" || archetype === "rift" || archetype === "impact-crater" ? "alpine" : archetype === "forest" ? "forest" : archetype === "river-valley" ? "coastal" : "temperate",
   }, context.rng.fork("wilderness-building"));
   scene.viewProgram = {
     version: 1,
@@ -1914,6 +2016,57 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     reason: "Keep the single authored wilderness compound readable while retaining its immediate parent-terrain context.",
   };
   const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
+
+  if (archetype === "volcanic" && (researchStation || weatherStation)) {
+    const craterZone = scene.terrainReservations?.find((zone) => zone.id === "volcanic-crater-lava-reservation");
+    if (craterZone) {
+      const craterDx = craterZone.centerCells.x - x;
+      const craterDz = craterZone.centerCells.z - z;
+      const craterDistance = Math.max(0.1, Math.hypot(craterDx, craterDz));
+      const directionX = craterDx / craterDistance;
+      const directionZ = craterDz / craterDistance;
+      const requestedTargetX = x + directionX * Math.min(13.5, craterDistance * 0.42);
+      const requestedTargetZ = z + directionZ * Math.min(13.5, craterDistance * 0.42);
+      const targetPlacement = findReservedSafePlacement(scene, requestedTargetX, requestedTargetZ, 4.8, 4.8, "engineered");
+      if (targetPlacement) {
+      const targetX = targetPlacement.x;
+      const targetZ = targetPlacement.z;
+      const targetSurfaceY = terrainSurfaceY(scene, targetX, targetZ, terrainBaseY);
+      const targetY = targetSurfaceY + feetToMeters(2.2);
+      const startX = x + directionX * 6.1;
+      const startZ = z + directionZ * 5.5;
+      const startY = baseY + FLOOR_SLAB_METERS;
+      const span = Math.hypot(targetX - startX, targetZ - startZ);
+      scene.primitives.push(cylinder("volcanic-station-inspection-platform", 0, targetX, targetSurfaceY, targetZ, 4.8, feetToMeters(2.2), "darkStone", ["site-program", "volcanic-inspection-platform", "basalt-platform", "platform", "supported", "standable", "high-ground"]));
+      if (Math.abs(targetY - startY) < 0.35) {
+        scene.primitives.push(corridor("volcanic-station-inspection-bridge", 0, startX, startZ, targetX, targetZ, Math.min(startY, targetY), 1.45, "darkStone", ["site-program", "volcanic-maintenance-bridge", "bridge", "supported", "standable", "authorized-hazard-crossing"]));
+      } else {
+        const lower = targetY < startY ? { xCells: targetX, zCells: targetZ, yMeters: targetY } : { xCells: startX, zCells: startZ, yMeters: startY };
+        const upper = targetY < startY ? { xCells: startX, zCells: startZ, yMeters: startY } : { xCells: targetX, zCells: targetZ, yMeters: targetY };
+        const inspectionBridge = stairConnection("volcanic-station-inspection-bridge", 0, lower, upper, 1.45, "darkStone", ["site-program", "volcanic-maintenance-bridge", "bridge", "supported", "standable", "authorized-hazard-crossing"]);
+        scene.primitives.push(inspectionBridge.primitive);
+      }
+      const supportCount = Math.max(2, Math.min(4, Math.round(span / 3.5)));
+      for (let supportIndex = 1; supportIndex <= supportCount; supportIndex += 1) {
+        const ratio = supportIndex / (supportCount + 1);
+        const supportX = startX + (targetX - startX) * ratio;
+        const supportZ = startZ + (targetZ - startZ) * ratio;
+        const supportTop = startY + (targetY - startY) * ratio;
+        const supportBottom = -0.45;
+        scene.primitives.push(cylinder(`volcanic-station-bridge-support-${supportIndex}`, 0, supportX, supportBottom, supportZ, 0.42, Math.max(FLOOR_SLAB_METERS, supportTop - supportBottom), "darkStone", ["site-program", "volcanic-maintenance-bridge", "bridge-support", "structural-support", "authorized-hazard-crossing"]));
+      }
+      scene.routes.push(createRoute("volcanic-station-inspection-route", "alternate", [
+        { x: startX, z: startZ, y: startY },
+        { x: targetX, z: targetZ, y: targetY },
+      ], { purpose: "service", traffic: 0.18, schedule: "all" }));
+      const inspectionRoom = createRoom("volcanic-station-inspection-room", "Basalt caldera observation platform", "combat", 0, targetX, targetZ, 4.8, 4.8, targetY);
+      scene.rooms.push(inspectionRoom);
+      if (wildernessRoot) connectRooms(scene.rooms, wildernessRoot.id, inspectionRoom.id);
+      scene.tactical.push(tacticalFeature("volcanic-station-bridge-choke", "chokepoint", (startX + targetX) / 2, (startZ + targetZ) / 2, (startY + targetY) / 2, 1, "A supported basalt inspection bridge is the exposed service route between the station and the caldera instruments."));
+      scene.tactical.push(tacticalFeature("volcanic-station-inspection-high", "highGround", targetX, targetZ, targetY, 2, "A cooled basalt instrument platform overlooks the active lava network without occupying it."));
+      }
+    }
+  }
 
   if (archetype === "swamp") {
     const reedRoute = scene.routes.find((route) => route.id === "swamp-reed-route");
@@ -2214,6 +2367,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const siteAnchor = scene.rooms
     .filter((room) => room.level === 0
       && room.id !== wildernessRoot?.id
+      && room.id !== "volcanic-station-inspection-room"
       && !room.id.startsWith("core-wilderness-core-building-")
       && !room.id.startsWith("wilderness-")
       && (archetype !== "forest" || room.id.startsWith("forest-clearing-")))
@@ -2527,8 +2681,16 @@ function buildSwamp(scene: GeneratedScene, width: number, depth: number, density
 }
 
 function overlapsReservedTerrainVoid(scene: GeneratedScene, xCells: number, zCells: number, paddingCells = 1): boolean {
-  if (scene.terrainReservations?.some((zone) => Math.abs(xCells - zone.centerCells.x) <= zone.sizeCells.x / 2 + zone.clearanceCells + paddingCells
-    && Math.abs(zCells - zone.centerCells.z) <= zone.sizeCells.z / 2 + zone.clearanceCells + paddingCells)) return true;
+  if (scene.terrainReservations?.some((zone) => {
+    const dx = xCells - zone.centerCells.x;
+    const dz = zCells - zone.centerCells.z;
+    const cosine = Math.cos(zone.rotationY ?? 0);
+    const sine = Math.sin(zone.rotationY ?? 0);
+    const localX = dx * cosine - dz * sine;
+    const localZ = dx * sine + dz * cosine;
+    return Math.abs(localX) <= zone.sizeCells.x / 2 + zone.clearanceCells + paddingCells
+      && Math.abs(localZ) <= zone.sizeCells.z / 2 + zone.clearanceCells + paddingCells;
+  })) return true;
   return scene.primitives.some((primitiveEntry) => {
     if (!primitiveEntry.tags?.includes("crevasse-bottom")) return false;
     const centerX = primitiveEntry.position.x / CELL;
@@ -2539,31 +2701,98 @@ function overlapsReservedTerrainVoid(scene: GeneratedScene, xCells: number, zCel
   });
 }
 
-function terrainSupportsPoint(scene: GeneratedScene, xCells: number, zCells: number): boolean {
-  return scene.primitives.some((primitiveEntry) => {
-    if (!primitiveEntry.tags?.includes("floor") || !primitiveEntry.tags?.includes("terrain") || primitiveEntry.tags?.includes("hazard")) return false;
+function overlapsReservedTerrainFootprint(
+  scene: GeneratedScene,
+  xCells: number,
+  zCells: number,
+  halfWidthCells: number,
+  halfDepthCells: number,
+  paddingCells = 0,
+): boolean {
+  return scene.terrainReservations?.some((zone) => {
+    const dx = xCells - zone.centerCells.x;
+    const dz = zCells - zone.centerCells.z;
+    const cosine = Math.cos(zone.rotationY ?? 0);
+    const sine = Math.sin(zone.rotationY ?? 0);
+    const localX = dx * cosine - dz * sine;
+    const localZ = dx * sine + dz * cosine;
+    // Project the axis-aligned building footprint onto both axes of the
+    // rotated reservation. This is materially less wasteful than treating a
+    // 13×12-cell building as a 13-cell-radius circle beside a narrow river.
+    const projectedHalfX = halfWidthCells * Math.abs(cosine) + halfDepthCells * Math.abs(sine);
+    const projectedHalfZ = halfWidthCells * Math.abs(sine) + halfDepthCells * Math.abs(cosine);
+    return Math.abs(localX) <= zone.sizeCells.x / 2 + zone.clearanceCells + projectedHalfX + paddingCells
+      && Math.abs(localZ) <= zone.sizeCells.z / 2 + zone.clearanceCells + projectedHalfZ + paddingCells;
+  }) ?? false;
+}
+
+const terrainSupportIndexCache = new WeakMap<GeneratedScene, Map<string, ScenePrimitive[]>>();
+
+function terrainSupportIndex(scene: GeneratedScene): Map<string, ScenePrimitive[]> {
+  const cached = terrainSupportIndexCache.get(scene);
+  if (cached) return cached;
+  const index = new Map<string, ScenePrimitive[]>();
+  for (const primitiveEntry of scene.primitives) {
+    if (!primitiveEntry.tags?.includes("floor") || !primitiveEntry.tags?.includes("terrain") || primitiveEntry.tags?.includes("hazard")) continue;
     const centerX = primitiveEntry.position.x / CELL;
     const centerZ = primitiveEntry.position.z / CELL;
-    return Math.abs(xCells - centerX) <= primitiveEntry.size.x / CELL / 2 - 0.15
-      && Math.abs(zCells - centerZ) <= primitiveEntry.size.z / CELL / 2 - 0.15;
+    const halfWidth = primitiveEntry.size.x / CELL / 2;
+    const halfDepth = primitiveEntry.size.z / CELL / 2;
+    const minX = Math.floor(centerX - halfWidth + 0.02);
+    const maxX = Math.floor(centerX + halfWidth - 0.02);
+    const minZ = Math.floor(centerZ - halfDepth + 0.02);
+    const maxZ = Math.floor(centerZ + halfDepth - 0.02);
+    for (let z = minZ; z <= maxZ; z += 1) for (let x = minX; x <= maxX; x += 1) {
+      const key = `${x}:${z}`;
+      const bucket = index.get(key);
+      if (bucket) bucket.push(primitiveEntry);
+      else index.set(key, [primitiveEntry]);
+    }
+  }
+  terrainSupportIndexCache.set(scene, index);
+  return index;
+}
+
+function terrainSupportsPoint(scene: GeneratedScene, xCells: number, zCells: number): boolean {
+  const candidates = terrainSupportIndex(scene).get(`${Math.floor(xCells)}:${Math.floor(zCells)}`) ?? [];
+  return candidates.some((primitiveEntry) => {
+    const centerX = primitiveEntry.position.x / CELL;
+    const centerZ = primitiveEntry.position.z / CELL;
+    // Height fields are tiled from adjacent 1-cell slabs. A footprint sample
+    // near a shared cell edge is still supported; subtracting 0.15 cells here
+    // created artificial unsupported seams and made every large river-bank
+    // building fail placement despite a continuous bank.
+    return Math.abs(xCells - centerX) <= Math.max(0.05, primitiveEntry.size.x / CELL / 2 - 0.02)
+      && Math.abs(zCells - centerZ) <= Math.max(0.05, primitiveEntry.size.z / CELL / 2 - 0.02);
   });
 }
 
-function findReservedSafePlacement(scene: GeneratedScene, requestedX: number, requestedZ: number, widthCells: number, depthCells: number): { x: number; z: number } | undefined {
+function findReservedSafePlacement(scene: GeneratedScene, requestedX: number, requestedZ: number, widthCells: number, depthCells: number, supportPolicy: "full" | "engineered" = "full"): { x: number; z: number } | undefined {
   if (!scene.terrainReservations?.length) return { x: requestedX, z: requestedZ };
   const halfX = widthCells / 2; const halfZ = depthCells / 2;
+  const supportInsetX = Math.max(0.4, halfX - 0.55);
+  const supportInsetZ = Math.max(0.4, halfZ - 0.55);
   const withinBounds = (x: number, z: number) => x >= halfX + 1 && x <= scene.boundsCells.x - halfX - 1 && z >= halfZ + 1 && z <= scene.boundsCells.z - halfZ - 1;
-  const supported = (x: number, z: number) => [
-    [x, z],
-    [x - halfX, z - halfZ], [x + halfX, z - halfZ],
-    [x - halfX, z + halfZ], [x + halfX, z + halfZ],
-  ].every(([px, pz]) => terrainSupportsPoint(scene, px!, pz!));
+  const supported = (x: number, z: number) => {
+    const sampleX = supportPolicy === "engineered" ? Math.min(2.2, supportInsetX * 0.38) : supportInsetX;
+    const sampleZ = supportPolicy === "engineered" ? Math.min(2.2, supportInsetZ * 0.38) : supportInsetZ;
+    return [
+      [x, z],
+      [x - sampleX, z - sampleZ], [x + sampleX, z - sampleZ],
+      [x - sampleX, z + sampleZ], [x + sampleX, z + sampleZ],
+    ].every(([px, pz]) => terrainSupportsPoint(scene, px!, pz!));
+  };
   const valid = (x: number, z: number) => withinBounds(x, z)
-    && !overlapsReservedTerrainVoid(scene, x, z, Math.max(halfX, halfZ) + 0.75)
+    && !overlapsReservedTerrainFootprint(scene, x, z, halfX, halfZ, 0.75)
     && supported(x, z);
   if (valid(requestedX, requestedZ)) return { x: requestedX, z: requestedZ };
   const candidates: Array<{ x: number; z: number; score: number }> = [];
-  for (let z = halfZ + 1; z <= scene.boundsCells.z - halfZ - 1; z += 2) for (let x = halfX + 1; x <= scene.boundsCells.x - halfX - 1; x += 2) {
+  // Morphology fields are authored on half-cell centres. Search that same
+  // lattice; integer-only candidates can sit exactly between four otherwise
+  // valid terrain cells and falsely report that no support exists.
+  const firstX = Math.ceil(halfX + 1) + 0.5;
+  const firstZ = Math.ceil(halfZ + 1) + 0.5;
+  for (let z = firstZ; z <= scene.boundsCells.z - halfZ - 1; z += 2) for (let x = firstX; x <= scene.boundsCells.x - halfX - 1; x += 2) {
     if (!valid(x, z)) continue;
     candidates.push({ x, z, score: Math.hypot(x - requestedX, z - requestedZ) });
   }
@@ -2711,6 +2940,7 @@ function addPromptDrivenTheme(scene: GeneratedScene, prompt: string, width: numb
   if (hasFalls) {
     const x = width * rng.float(0.6, 0.82);
     scene.primitives.push(water("prompt-waterfall", 0, x, feetToMeters(9), depth * 0.22, 1.2, feetToMeters(18), 4, ["waterfall", "prompt-trait", "landmark"]), primitive("prompt-waterfall-cave", "sphere", 0, x + 3, feetToMeters(6), depth * 0.2, feetToMeters(8), feetToMeters(10), feetToMeters(6), "darkStone", ["cave-mouth", "prompt-trait", "landmark"]));
+    reserveRadialTerrain(scene, "prompt-waterfall-basin-reservation", "water", x, depth * 0.28, 5.5, 0.75, "The waterfall basin owns its plunge and spray zone.");
     scene.tactical.push(tacticalFeature("prompt-waterfall-basin", "hazard", x, depth * 0.28, 0, 3, "The waterfall basin is hazardous, but conceals a route toward the cave mouth."));
   }
   if (hasCrystal) {
@@ -2720,9 +2950,14 @@ function addPromptDrivenTheme(scene: GeneratedScene, prompt: string, width: numb
       scene.primitives.push(primitive(`prompt-crystal-${index}`, "cone", 0, x, feetToMeters(rng.int(3, 8)), z, feetToMeters(rng.float(0.6, 1.4)), feetToMeters(rng.int(5, 13)), feetToMeters(rng.float(0.6, 1.4)), "warmLight", ["crystal", "prompt-trait", index % 3 === 0 ? "cover" : "landmark"]));
     }
   }
-  if (hasLava) {
+  // A volcanic/infernal parent already owns a coherent lava network. Do not
+  // lay a second generic cross-map channel over it merely because the prompt
+  // repeats the word "lava"; that duplicate used to erase all safe sites.
+  if (hasLava && !scene.primitives.some((primitiveEntry) => primitiveEntry.tags?.includes("lava-flow") && primitiveEntry.tags?.includes("morphology-operator"))) {
     const z = depth * rng.float(0.42, 0.62);
-    scene.primitives.push(corridor("prompt-lava-channel", 0, 2, z, width - 2, z + rng.float(-4, 4), -0.3, 3.2, "hazard", ["lava", "hazard", "prompt-trait"]));
+    const lavaEndZ = z + rng.float(-4, 4);
+    scene.primitives.push(corridor("prompt-lava-channel", 0, 2, z, width - 2, lavaEndZ, -0.3, 3.2, "hazard", ["lava", "hazard", "prompt-trait"]));
+    reserveLinearTerrain(scene, "prompt-lava-channel-reservation", "lava", 2, z, width - 2, lavaEndZ, 3.2, 0.9, "A prompt-authored lava channel owns a thermal no-build setback.");
     scene.tactical.push(tacticalFeature("prompt-lava-hazard", "hazard", width * 0.5, z, -0.3, 3, "A lava channel cuts across the terrain grammar and forces a crossing decision."));
     if (hasFungal) {
       for (let index = 0; index < 4; index += 1) {

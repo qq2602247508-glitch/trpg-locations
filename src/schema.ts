@@ -160,6 +160,8 @@ export interface TerrainReservationZone {
   kind: "void" | "water" | "lava" | "unstable" | "clearance";
   centerCells: Vec2;
   sizeCells: Vec2;
+  /** Optional orientation for linear channels; local Z is the long axis. */
+  rotationY?: number;
   clearanceCells: number;
   reason: string;
 }

@@ -198,13 +198,18 @@ const CATEGORY_RULES: Readonly<Record<KnownSceneKind, readonly KeywordRule[]>> =
     { term: "cemetery", weight: 4 },
     { term: "graveyard", weight: 4 },
     { term: "riverbed", weight: 4 },
+    { term: "impact crater", weight: 5 },
+    { term: "meteor crater", weight: 5 },
+    { term: "陨石坑", weight: 5 },
+    { term: "撞击坑", weight: 5 },
+    { term: "流星坑", weight: 5 },
   ],
 };
 
 const ENVIRONMENT_RULES: readonly SignalRule<AdaptiveEnvironment>[] = [
   { value: "underground", terms: ["underground", "dungeon", "crypt", "catacomb", "tunnel", "mine", "地牢", "地下", "墓穴", "墓室", "隧道", "矿井"] },
   { value: "coastal", terms: ["coast", "shore", "beach", "harbor", "dock", "sea", "ocean", "riverbank", "海岸", "海边", "码头", "港口", "河岸"] },
-  { value: "wilderness", terms: ["forest", "jungle", "swamp", "mountain", "valley", "desert", "meadow", "volcano", "cemetery", "graveyard", "riverbed", "wild", "森林", "丛林", "沼泽", "山谷", "沙漠", "火山", "墓地", "墓园", "河床", "荒野"] },
+  { value: "wilderness", terms: ["forest", "jungle", "swamp", "mountain", "valley", "rift", "chasm", "impact crater", "meteor crater", "desert", "meadow", "volcano", "cemetery", "graveyard", "riverbed", "wild", "森林", "丛林", "沼泽", "山谷", "裂谷", "深渊", "陨石坑", "撞击坑", "流星坑", "沙漠", "火山", "墓地", "墓园", "河床", "荒野"] },
   { value: "urban", terms: ["city", "street", "market", "district", "plaza", "alley", "town", "城市", "街道", "市场", "广场", "巷", "城镇"] },
   { value: "ruin", terms: ["ruin", "ruined", "temple", "shrine", "fortress", "ancient", "遗迹", "废墟", "神殿", "祠堂", "古老", "残破"] },
   { value: "interior", terms: ["hall", "chamber", "room", "house", "manor", "castle", "indoors", "大厅", "房间", "宅邸", "城堡", "室内"] },

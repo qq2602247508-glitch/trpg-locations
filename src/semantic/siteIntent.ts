@@ -10,8 +10,10 @@ export interface EmbeddedFacilityCapabilities {
 const NATURAL_PARENT_TERMS = [
   "森林", "树林", "林间", "巨树", "树根", "山地", "高山", "山脊", "峰顶", "山坡", "岩坡", "裸岩", "峭壁", "山谷", "河谷", "峡谷", "高原", "荒原", "草原", "沙漠",
   "沼泽", "湿地", "泥炭", "泥沼", "红树林", "海岸", "海崖", "岛屿", "冻土", "冰原", "冰盖", "冰帽", "雪原", "极地", "冰川", "火山", "熔岩",
+  "裂谷", "地裂", "深渊", "陨石坑", "撞击坑", "流星坑",
   "forest", "woodland", "tree", "mountain", "ridge", "summit", "rock slope", "bare rock", "cliff", "valley", "canyon", "plateau", "moor", "steppe", "desert",
   "swamp", "wetland", "bog", "peat", "mangrove", "coast", "cliff", "island", "tundra", "ice", "ice sheet", "ice cap", "snowfield", "polar", "glacier", "volcanic", "lava",
+  "rift", "chasm", "fissure", "impact crater", "meteor crater",
 ] as const;
 
 const SHELTER_TERMS = [
@@ -52,7 +54,7 @@ export function embeddedFacilityProfile(prompt: string): EmbeddedFacilityProfile
   // Generalize unknown field disciplines without treating every railway,
   // police or power "station" as a wilderness facility. The discipline must
   // describe observation/research work immediately before the site noun.
-  if (/(?:监测|观测|研究|科研|实验|测量|测绘|勘探|地震|水文|生态|环境|野外)[^，。；;]{0,5}(?:站|所|哨)/u.test(text)) return "research";
+  if (/(?:监测|观测|研究|科研|实验|测量|测绘|勘探|地震|水文|生态|环境|野外|地热)[^，。；;]{0,6}(?:站|所|哨|工坊|基地|实验室|设施)/u.test(text)) return "research";
   if (/(?:monitoring|observation|research|field|experimental|survey|seismic|hydrolog(?:y|ical)|ecological)\s+(?:station|post|laboratory|lab)/u.test(text)) return "research";
   if (includesAny(text, SHELTER_TERMS)) return "shelter";
   return undefined;

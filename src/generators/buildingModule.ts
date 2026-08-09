@@ -41,7 +41,7 @@ export interface BuildingLot {
   state?: "active" | "abandoned" | "flooded" | "temporary";
   functionalModules?: readonly BuildingFunctionalModuleProgram[];
   siteProfile?: SiteBuildingProfile;
-  climateProfile?: "polar" | "wetland" | "alpine" | "forest" | "coastal" | "temperate";
+  climateProfile?: "polar" | "wetland" | "alpine" | "forest" | "coastal" | "volcanic" | "temperate";
 }
 
 function localPoint(lot: BuildingLot, localX: number, localZ: number): { x: number; z: number } {
@@ -191,6 +191,19 @@ function addSiteClimateFacadeGeometry(scene: GeneratedScene, lot: BuildingLot, b
     }
     const screen = point(facadeCenterX, (primary?.offset.z ?? 0) - (primary?.size.z ?? lot.depth) * 0.5 - 0.28);
     scene.primitives.push(box(`${lot.id}-alpine-wind-screen`, 0, screen.x, baseY, screen.z, Math.min(5.8, facadeWidth * 0.7), feetToMeters(5.4), 0.28, "darkStone", [...common, "alpine-wind-screen"], lot.rotation));
+    return;
+  }
+  if (climate === "volcanic") {
+    const shield = point(facadeCenterX, (primary?.offset.z ?? 0) - (primary?.size.z ?? lot.depth) * 0.5 - 0.42);
+    const serviceApron = point(facadeCenterX, frontZ + 0.92);
+    scene.primitives.push(
+      box(`${lot.id}-volcanic-heat-shield`, 0, shield.x, baseY, shield.z, Math.min(6.4, facadeWidth * 0.78), feetToMeters(6.8), 0.42, "darkStone", [...common, "heat-shield", "basalt-cladding", "cover"], lot.rotation),
+      box(`${lot.id}-volcanic-service-apron`, 0, serviceApron.x, baseY, serviceApron.z, Math.min(6.2, facadeWidth * 0.76), feetToMeters(1.1), 2.1, "darkStone", [...common, "cooled-stone-apron", "standable", "service-threshold"], lot.rotation),
+    );
+    for (const offset of [-0.28, 0.28]) {
+      const vent = point(facadeCenterX + facadeWidth * offset, (primary?.offset.z ?? 0) - (primary?.size.z ?? lot.depth) * 0.34);
+      scene.primitives.push(cylinder(`${lot.id}-volcanic-cooling-vent-${offset}`, 1, vent.x, baseY + totalHeight * 0.42, vent.z, 0.48, feetToMeters(9), "metal", [...common, "cooling-vent", "exhaust-stack", "vertical-landmark"]));
+    }
     return;
   }
   if (climate === "forest") {

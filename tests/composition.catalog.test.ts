@@ -370,13 +370,111 @@ describe("five-layer composition catalog", () => {
       const pz = primitive.position.z / GRID_METERS;
       const halfX = primitive.size.x / GRID_METERS / 2;
       const halfZ = primitive.size.z / GRID_METERS / 2;
-      return Math.abs(px - zone.centerCells.x) < halfX + zone.sizeCells.x / 2 + zone.clearanceCells
-        && Math.abs(pz - zone.centerCells.z) < halfZ + zone.sizeCells.z / 2 + zone.clearanceCells;
+      const dx = px - zone.centerCells.x;
+      const dz = pz - zone.centerCells.z;
+      const cosine = Math.cos(zone.rotationY ?? 0);
+      const sine = Math.sin(zone.rotationY ?? 0);
+      const localX = dx * cosine - dz * sine;
+      const localZ = dx * sine + dz * cosine;
+      const footprintPadding = Math.max(halfX, halfZ);
+      return Math.abs(localX) < footprintPadding + zone.sizeCells.x / 2 + zone.clearanceCells
+        && Math.abs(localZ) < footprintPadding + zone.sizeCells.z / 2 + zone.clearanceCells;
     };
     expect(protectedPieces.length).toBeGreaterThan(5);
     expect(protectedPieces.every((primitive) => zones.every((zone) => !overlapsZone(primitive, zone)))).toBe(true);
     expect(scene.primitives.filter((primitive) => primitive.tags?.includes("crevasse-bridge"))).toHaveLength(2);
     expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
+  it("composes an unfamiliar geothermal workshop outside reserved lava channels", () => {
+    const prompt = "活火山破碎火山口边缘的地热观测工坊，有样本实验室、通信塔、发电机棚、地下冷却样本库、两条熔岩沟和玄武岩检修桥";
+    const scene = generateScene({ prompt, seed: "volcanic-workshop-reservation", size: "large", density: 0.84 }, "adaptive");
+    expect(scene.archetype).toBe("volcanic");
+    const zones = (scene.terrainReservations ?? []).filter((zone) => zone.kind === "lava");
+    expect(zones.length).toBeGreaterThanOrEqual(4);
+    expect(scene.buildingInstances?.some((building) => building.id === "wilderness-core-building" && building.archetype === "guild")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("climate:volcanic") && primitive.tags?.includes("heat-shield"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("cooled-stone-apron"))).toBe(true);
+    const inspectionBridge = scene.primitives.find((primitive) => primitive.tags?.includes("volcanic-maintenance-bridge"));
+    expect(inspectionBridge).toBeDefined();
+    expect((inspectionBridge?.size.z ?? Number.POSITIVE_INFINITY) / GRID_METERS).toBeLessThan(15);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("volcanic-inspection-platform") && primitive.tags?.includes("standable"))).toBe(true);
+    const protectedPieces = scene.primitives.filter((primitive) => ["building-pad", "generator-shed", "communications-tower"].some((tag) => primitive.tags?.includes(tag)) && !primitive.tags?.includes("vertical-route"));
+    const overlapsZone = (primitive: typeof scene.primitives[number], zone: typeof zones[number]) => {
+      const px = primitive.position.x / GRID_METERS;
+      const pz = primitive.position.z / GRID_METERS;
+      const halfX = primitive.size.x / GRID_METERS / 2;
+      const halfZ = primitive.size.z / GRID_METERS / 2;
+      const dx = px - zone.centerCells.x;
+      const dz = pz - zone.centerCells.z;
+      const cosine = Math.cos(zone.rotationY ?? 0);
+      const sine = Math.sin(zone.rotationY ?? 0);
+      const localX = dx * cosine - dz * sine;
+      const localZ = dx * sine + dz * cosine;
+      const footprintPadding = Math.max(halfX, halfZ);
+      return Math.abs(localX) < footprintPadding + zone.sizeCells.x / 2 + zone.clearanceCells
+        && Math.abs(localZ) < footprintPadding + zone.sizeCells.z / 2 + zone.clearanceCells;
+    };
+    expect(protectedPieces.length).toBeGreaterThan(5);
+    expect(protectedPieces.every((primitive) => zones.every((zone) => !overlapsZone(primitive, zone)))).toBe(true);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
+  it("publishes narrow water ownership zones for river valleys", () => {
+    const scene = generateScene({
+      prompt: "弯曲河谷中的水文测量站，有瀑布、支流、深潭、样本实验室和通信塔",
+      seed: "river-water-reservation-contract",
+      size: "large",
+      density: 0.76,
+    }, "adaptive");
+    const waterZones = (scene.terrainReservations ?? []).filter((zone) => zone.kind === "water");
+    expect(scene.archetype).toBe("river-valley");
+    expect(waterZones.length).toBeGreaterThan(8);
+    expect(waterZones.some((zone) => zone.rotationY !== undefined && zone.sizeCells.z > zone.sizeCells.x)).toBe(true);
+    expect(waterZones.some((zone) => zone.id === "river-deep-pool-reservation")).toBe(true);
+  });
+
+  it("keeps unfamiliar crater and rift facilities outside unstable terrain", () => {
+    const cases = [
+      {
+        prompt: "巨大陨石撞击坑边缘的地震观测站，有样本实验室、通信塔、发电机棚和地下样本库",
+        seed: "impact-facility-unstable-contract",
+        archetype: "impact-crater",
+        minimumZones: 5,
+      },
+      {
+        prompt: "深裂谷西岸的地质研究站，有样本实验室、通信塔、发电机棚和地下样本库",
+        seed: "rift-facility-unstable-contract",
+        archetype: "rift",
+        minimumZones: 8,
+      },
+    ] as const;
+    for (const entry of cases) {
+      const scene = generateScene({ prompt: entry.prompt, seed: entry.seed, size: "large", density: 0.78 }, "adaptive");
+      const zones = (scene.terrainReservations ?? []).filter((zone) => zone.kind === "unstable");
+      expect(scene.archetype).toBe(entry.archetype);
+      expect(zones.length).toBeGreaterThanOrEqual(entry.minimumZones);
+      expect(scene.buildingInstances?.some((building) => building.id === "wilderness-core-building")).toBe(true);
+      const protectedPieces = scene.primitives.filter((primitive) => ["building-pad", "generator-shed", "communications-tower"].some((tag) => primitive.tags?.includes(tag)) && !primitive.tags?.includes("vertical-route"));
+      const overlapsZone = (primitive: typeof scene.primitives[number], zone: typeof zones[number]) => {
+        const px = primitive.position.x / GRID_METERS;
+        const pz = primitive.position.z / GRID_METERS;
+        const halfX = primitive.size.x / GRID_METERS / 2;
+        const halfZ = primitive.size.z / GRID_METERS / 2;
+        const dx = px - zone.centerCells.x;
+        const dz = pz - zone.centerCells.z;
+        const cosine = Math.cos(zone.rotationY ?? 0);
+        const sine = Math.sin(zone.rotationY ?? 0);
+        const localX = dx * cosine - dz * sine;
+        const localZ = dx * sine + dz * cosine;
+        const footprintPadding = Math.max(halfX, halfZ);
+        return Math.abs(localX) < footprintPadding + zone.sizeCells.x / 2 + zone.clearanceCells
+          && Math.abs(localZ) < footprintPadding + zone.sizeCells.z / 2 + zone.clearanceCells;
+      };
+      expect(protectedPieces.length).toBeGreaterThan(5);
+      expect(protectedPieces.every((primitive) => zones.every((zone) => !overlapsZone(primitive, zone)))).toBe(true);
+      expect(scene.diagnostics.warnings).toHaveLength(0);
+    }
   });
 
   it("generalizes unfamiliar research stations without falling back to a home envelope", () => {

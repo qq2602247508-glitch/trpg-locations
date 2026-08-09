@@ -278,9 +278,13 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   const explicitBuildingNouns = ["精神病院", "医院", "警察局", "警局", "博物馆", "酒店", "旅店", "教堂", "神殿", "庄园", "宅邸", "堡垒", "要塞", "发电站", "修道院", "学院", "火车站", "hospital", "sanatorium", "police station", "museum", "hotel", "church", "temple", "manor", "fortress", "power station", "monastery", "academy", "railway station"];
   const hasExplicitBuilding = explicitBuildingNouns.some((term) => programText.includes(term));
   const strongSettlementNouns = ["城镇", "村庄", "村落", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "营地", "采矿营地", "矿业营地", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇", "town", "village", "market village", "district", "harbor", "port town", "camp", "mining camp", "water city", "canal city", "tower city", "megastructure city", "settlement"];
-  const wildernessBuildingOwnsSite = shouldComposeWildernessFacility(programText);
+  const hasStrongSettlement = strongSettlementNouns.some((term) => programText.includes(term));
+  // A named village/town/city remains the parent even when one child happens
+  // to be a cabin, observatory, shrine, or field station. Composite wilderness
+  // ownership applies only when the prompt describes a lone embedded facility.
+  const wildernessBuildingOwnsSite = !hasStrongSettlement && shouldComposeWildernessFacility(programText);
   const industrialDistrictOwnsSite = programText.includes("工业区") && !["废弃工业区", "工业遗址", "industrial ruin"].some((term) => programText.includes(term));
-  const ownsSite = !wildernessBuildingOwnsSite && (strongSettlementNouns.some((term) => programText.includes(term)) || industrialDistrictOwnsSite || (!hasExplicitBuilding && ["城市", "city"].some((term) => programText.includes(term))));
+  const ownsSite = !wildernessBuildingOwnsSite && (hasStrongSettlement || industrialDistrictOwnsSite || (!hasExplicitBuilding && ["城市", "city"].some((term) => programText.includes(term))));
   // Parent-site ownership is a hard schema constraint, not a model opinion.
   // A semantic provider may notice "crypt" or "chapel" inside a monastery
   // settlement, but those are child programs and cannot replace the site.
