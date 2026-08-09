@@ -412,7 +412,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       if (planningLabel) planningLabel.textContent = "规划分层 · 全部";
       renderer.setRouteVisibility(routeDebug);
       renderer.setTacticalVisibility(tacticalDebug);
-      renderSceneDetails(elements, scene, lastStats);
+      renderSceneDetails(elements, scene, lastStats, elements.prompt.value);
       if (scene.siteProgram && elements.floor.value === "cut") elements.floor.value = "roof";
       const floorView = elements.floor.value;
       renderer.setFloorView(floorView === "cut" || floorView === "roof" ? floorView : Number(floorView));
@@ -505,12 +505,12 @@ function setStatus(
   elements.status.dataset.state = state;
 }
 
-function renderSceneDetails(elements: AppElements, scene: GeneratedScene, stats: RenderStats): void {
+function renderSceneDetails(elements: AppElements, scene: GeneratedScene, stats: RenderStats, prompt = ""): void {
   elements.stageTitle.textContent = scene.title;
   elements.stageDescription.textContent = scene.description;
   elements.seedBadge.textContent = `SEED ${scene.seed}`;
   populateFloorOptions(elements.floor, scene);
-  populateBuildingOptions(elements.buildingFocus, scene);
+  populateBuildingOptions(elements.buildingFocus, scene, prompt);
   renderMetrics(elements.metrics, scene, stats);
   renderDiagnostics(elements.diagnostics, scene);
   renderRooms(elements.roomList, scene);
@@ -522,7 +522,7 @@ function renderSceneDetails(elements: AppElements, scene: GeneratedScene, stats:
   roomCount.textContent = `${scene.rooms.length} 间`;
 }
 
-function populateBuildingOptions(select: HTMLSelectElement, scene: GeneratedScene): void {
+function populateBuildingOptions(select: HTMLSelectElement, scene: GeneratedScene, prompt = ""): void {
   select.replaceChildren();
   const buildings = scene.buildingInstances ?? [];
   if (buildings.length === 0) {
@@ -531,10 +531,33 @@ function populateBuildingOptions(select: HTMLSelectElement, scene: GeneratedScen
     return;
   }
   select.disabled = false;
+  const normalizedPrompt = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const featureTerms: Array<[string, string[]]> = [
+    ["laboratory", ["实验室", "实验屋", "研究室", "炼金", "laboratory", "research"]],
+    ["archive", ["档案", "书库", "藏经", "archive", "records"]],
+    ["greenhouse", ["温室", "菌类", "植物", "greenhouse", "fungal"]],
+    ["distillation", ["冷凝", "蒸馏", "炼金塔", "distillation", "condenser"]],
+    ["observation", ["观测", "天线", "观星", "observation", "radio"]],
+    ["submerged-room", ["水下", "半淹", "潮池", "submerged", "flooded"]],
+  ];
+  const requestedFeatures = new Set(
+    featureTerms.filter(([, terms]) => terms.some((term) => normalizedPrompt.includes(term))).map(([feature]) => feature),
+  );
+  let bestId: string | undefined;
+  let bestScore = 0;
   for (const [index, building] of buildings.entries()) {
     const detail = building.detailLevel === "full-interior" ? "完整" : building.detailLevel === "facade" ? "按需内部" : "远景/按需";
-    select.add(new Option(`${index + 1}. ${building.archetype} · ${building.district} · ${detail}`, building.id));
+    const features = building.buildingProgram?.requiredFeatures ?? [];
+    const matched = [...new Set(features.filter((feature) => requestedFeatures.has(feature)))];
+    const featureLabel = matched.length > 0 ? ` · ${matched.join("/")}` : "";
+    select.add(new Option(`${index + 1}. ${building.archetype} · ${building.district} · ${detail}${featureLabel}`, building.id));
+    const score = matched.length * 10 + (building.detailLevel === "full-interior" ? 2 : building.detailLevel === "facade" ? 1 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestId = building.id;
+    }
   }
+  if (bestId !== undefined) select.value = bestId;
 }
 
 function floorLabel(scene: GeneratedScene, level: number): string {
