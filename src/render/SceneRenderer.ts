@@ -372,15 +372,21 @@ export class SceneRenderer {
     this.cameraMode = "perspective";
     this.controls.enabled = true;
     this.controls.target.copy(target);
+    // Focused interiors are tactical inspection views, not district
+    // overviews.  The previous 1.58× orbit distance left small settlement
+    // rooms occupying only a fraction of the canvas, which made real shelves,
+    // tables and door gaps look like decoration.  Keep enough diagonal
+    // context for walls and stairs while bringing the selected floor into a
+    // readable combat scale.
     this.camera.position.set(
-      target.x + viewX * span * 1.58,
-      target.y + Math.max(verticalSpan * 0.9, span * 0.58),
-      target.z + viewZ * span * 1.58,
+      target.x + viewX * span * 1.18,
+      target.y + Math.max(verticalSpan * 0.72, span * 0.42),
+      target.z + viewZ * span * 1.18,
     );
     this.camera.near = 0.1;
     this.camera.far = Math.max(300, span * 20);
-    this.controls.minDistance = Math.max(1.8, span * 0.35);
-    this.controls.maxDistance = Math.max(30, span * 8);
+    this.controls.minDistance = Math.max(1.5, span * 0.28);
+    this.controls.maxDistance = Math.max(24, span * 6);
     this.camera.lookAt(target);
     this.camera.updateProjectionMatrix();
     this.controls.update();

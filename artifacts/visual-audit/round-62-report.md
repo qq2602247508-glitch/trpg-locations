@@ -83,6 +83,7 @@ Seed：`round62-sluice-academy`
 - `sluice-academy-top.png`：陌生组合顶视；
 - `sluice-academy-guild-interior.png`：陌生组合的独立建筑内部。
 - `sluice-academy-guild-interior-v2.png`：增加类型化档案架、地图桌和书写台后的内部回归。
+- `sluice-academy-guild-interior-focused-camera.png`：收紧聚焦取景后的同一建筑回归，房间与家具占据主要画布。
 
 ## 仍未通过
 
