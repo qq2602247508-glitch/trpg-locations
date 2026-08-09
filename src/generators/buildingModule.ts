@@ -657,6 +657,64 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     addRotatedBox("furnishing-public", width * 0.15, 0, Math.max(1.5, width * 0.28), feetToMeters(3), 1.2, baseY + FLOOR_SLAB_METERS, lot.kind === "clinic" ? "metal" : "wood", [labels.tags[0] ?? "furniture", "cover"]);
     addRotatedBox("furnishing-service", -width * 0.34, -depth * 0.12, Math.max(1.1, width * 0.16), feetToMeters(4), 1.1, baseY + FLOOR_SLAB_METERS, lot.kind === "factory" || lot.kind === "blacksmith" ? "metal" : "wood", [labels.tags[1] ?? "service", "cover"]);
   }
+  // Full-interior settlement buildings need a small, type-specific tactical
+  // kit.  A single generic chest and table made every independent building
+  // read as the same white-box shell once the roof was hidden.  These pieces
+  // are deliberately constrained to the authored room envelope, leave a
+  // walkable centre lane, and become cover/obstacles rather than decorative
+  // metadata.
+  if (lot.kind === "guild") {
+    for (const [index, zOffset] of [-0.28, 0.28].entries()) {
+      addRotatedBox(`guild-archive-shelf-${index + 1}`, width * 0.34, depth * zOffset, 0.22, feetToMeters(5.8), Math.max(1.2, depth * 0.34), baseY + FLOOR_SLAB_METERS, "wood", ["archive", "reserve-vault", "shelf", "cover"]);
+    }
+    addRotatedBox("guild-map-table", -width * 0.08, depth * 0.18, Math.max(1.8, width * 0.28), feetToMeters(2.8), 1.2, baseY + FLOOR_SLAB_METERS, "wood", ["guild-fixture", "map-table", "cover"]);
+    addRotatedBox("guild-scribe-desk", width * 0.08, -depth * 0.22, Math.max(1.3, width * 0.2), feetToMeters(2.6), 0.72, baseY + FLOOR_SLAB_METERS, "wood", ["guild-fixture", "scribe-desk", "archive", "cover"]);
+  } else if (lot.kind === "tower") {
+    addRotatedBox("tower-watch-console", 0, -depth * 0.2, Math.max(1.2, width * 0.34), feetToMeters(3.2), 0.7, upperY + FLOOR_SLAB_METERS, "wood", ["tower-fixture", "watch-console", "high-ground", "cover"], 1);
+    addRotatedBox("tower-supply-rack", -width * 0.3, depth * 0.18, 0.22, feetToMeters(5.4), Math.max(0.9, depth * 0.22), baseY + FLOOR_SLAB_METERS, "wood", ["tower-fixture", "supply-rack", "cover"]);
+  } else if (lot.kind === "shrine") {
+    addRotatedBox("shrine-altar", width * 0.18, -depth * 0.25, Math.max(1.3, width * 0.22), feetToMeters(3.2), 0.9, baseY + FLOOR_SLAB_METERS, "stone", ["shrine-fixture", "altar", "landmark", "cover"]);
+    for (const [index, zOffset] of [-0.18, 0, 0.18].entries()) addRotatedBox(
+      `shrine-pew-${index + 1}`,
+      -width * 0.12,
+      depth * zOffset,
+      Math.max(1.4, width * 0.3),
+      feetToMeters(1.8),
+      0.45,
+      baseY + FLOOR_SLAB_METERS,
+      "wood",
+      ["shrine-fixture", "pew", "cover"],
+    );
+  } else if (lot.kind === "factory" || lot.kind === "warehouse") {
+    addRotatedBox("industrial-workbench", -width * 0.18, depth * 0.2, Math.max(1.8, width * 0.3), feetToMeters(3.4), 1.1, baseY + FLOOR_SLAB_METERS, "metal", ["industrial-fixture", "workbench", "machinery", "cover"]);
+    for (const [index, zOffset] of [-0.25, 0.25].entries()) addRotatedBox(
+      `industrial-rack-${index + 1}`,
+      width * 0.32,
+      depth * zOffset,
+      0.22,
+      feetToMeters(5.6),
+      Math.max(1.2, depth * 0.28),
+      baseY + FLOOR_SLAB_METERS,
+      "metal",
+      ["industrial-fixture", "storage-rack", "cover"],
+    );
+  } else if (lot.kind === "tavern") {
+    addRotatedBox("tavern-bar-counter", -width * 0.28, -depth * 0.18, Math.max(1.6, width * 0.3), feetToMeters(3.5), 0.82, baseY + FLOOR_SLAB_METERS, "wood", ["tavern-fixture", "bar", "cover"]);
+    for (const [index, xOffset] of [-0.12, 0.12].entries()) addRotatedBox(
+      `tavern-table-${index + 1}`,
+      width * xOffset,
+      depth * 0.2,
+      1.15,
+      feetToMeters(2.5),
+      1.15,
+      baseY + FLOOR_SLAB_METERS,
+      "wood",
+      ["tavern-fixture", "table", "cover"],
+    );
+  } else if (lot.kind === "manor") {
+    addRotatedBox("manor-dining-table", width * 0.08, depth * 0.1, Math.max(2, width * 0.34), feetToMeters(2.8), 1.2, baseY + FLOOR_SLAB_METERS, "wood", ["manor-fixture", "dining-table", "cover"]);
+    addRotatedBox("manor-hearth", -width * 0.3, -depth * 0.28, 1.1, feetToMeters(4.4), 0.8, baseY + FLOOR_SLAB_METERS, "darkStone", ["manor-fixture", "hearth", "cover"]);
+  }
   if (lot.siteProfile === "field-station" || lot.siteProfile === "weather-station") {
     for (const [benchIndex, offsetZ] of [-0.18, 0.18].entries()) {
       addRotatedBox(
