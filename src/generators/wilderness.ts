@@ -1039,10 +1039,11 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   const micro = rng.fork("micro");
   const phaseA = macro.float(-Math.PI, Math.PI);
   const phaseB = macro.float(-Math.PI, Math.PI);
+  const clearingScale = 1.18 - density * 0.42;
   const clearings = [
-    { x: cols * macro.float(0.27, 0.35), z: rows * macro.float(0.27, 0.36), rx: cols * 0.105, rz: rows * 0.11 },
-    { x: cols * macro.float(0.58, 0.68), z: rows * macro.float(0.43, 0.54), rx: cols * 0.12, rz: rows * 0.1 },
-    { x: cols * macro.float(0.32, 0.44), z: rows * macro.float(0.7, 0.8), rx: cols * 0.1, rz: rows * 0.09 },
+    { x: cols * macro.float(0.27, 0.35), z: rows * macro.float(0.27, 0.36), rx: cols * 0.105 * clearingScale, rz: rows * 0.11 * clearingScale },
+    { x: cols * macro.float(0.58, 0.68), z: rows * macro.float(0.43, 0.54), rx: cols * 0.12 * clearingScale, rz: rows * 0.1 * clearingScale },
+    { x: cols * macro.float(0.32, 0.44), z: rows * macro.float(0.7, 0.8), rx: cols * 0.1 * clearingScale, rz: rows * 0.09 * clearingScale },
   ];
   const streamWanted = ["浅溪", "溪流", "小溪", "stream", "creek"].some((term) => prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term));
   const streamAt = (x: number) => rows * 0.61 + Math.sin(x * 0.14 + phaseB) * rows * 0.055 + Math.sin(x * 0.043 - phaseA) * rows * 0.04;
@@ -1054,7 +1055,9 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
     const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
     if (edge === 0 || (streamWanted && Math.abs(z - streamAt(x)) < 1.25)) { heights.push(undefined); continue; }
-    const broad = Math.sin(x * 0.105 + phaseA) * 0.9 + Math.cos(z * 0.12 + phaseB) * 0.75 + Math.sin((x + z) * 0.055) * 0.45;
+    const elevationWarp = 0.76 + density * 0.72;
+    const broad = (Math.sin(x * 0.105 + phaseA) * 0.9 + Math.cos(z * 0.12 + phaseB) * 0.75 + Math.sin((x + z) * 0.055) * 0.45) * elevationWarp
+      + Math.sin(x * 0.047 - z * 0.032 + phaseB) * (0.25 + density * 0.4);
     const level = broad > 1.15 ? 3 : broad > 0.3 ? 2 : broad > -0.65 ? 1 : 0;
     const clearing = clearingAt(x, z);
     heights.push(clearing >= 0 ? Math.max(0, Math.min(2, level)) : level);
@@ -1113,11 +1116,16 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
     scene.primitives.push(box(`forest-fallen-log-${index}`, 0, x, surfaceY(x, z) + feetToMeters(0.8), z, 0.75, feetToMeters(1.5), length, "wood", ["forest", "fallen-log", "cover", "climbable", "standable"], angle));
   }
   const ancientCount = 2 + Math.round(density * 2);
+  const ancientPlatforms: Array<{ x: number; z: number; y: number; platformY: number }> = [];
   for (let index = 0; index < ancientCount; index += 1) {
     const anchor = clearings[index % clearings.length]!; const x = anchor.x + anchor.rx * 0.72; const z = anchor.z - anchor.rz * 0.46; const y = surfaceY(x, z); const height = feetToMeters(45 + index * 4); const platformY = y + feetToMeters(15 + index * 3);
+    ancientPlatforms.push({ x, z, y, platformY });
     scene.primitives.push(cylinder(`forest-ancient-tree-${index}`, 0, x, y, z, 2.2 + index * 0.15, height, "wood", ["forest", "tree", "giant-tree", "landmark", "support"]));
     scene.primitives.push(primitive(`forest-ancient-canopy-${index}`, "sphere", 0, x, y + height * 0.76, z, feetToMeters(30), feetToMeters(18), feetToMeters(30), "moss", ["forest", "canopy", "closed-canopy", "landmark"]));
     scene.primitives.push(cylinder(`forest-canopy-platform-${index}`, 0, x, platformY, z, 3.3, feetToMeters(1), "wood", ["forest", "canopy-platform", "platform", "high-ground", "standable", "supported"]));
+    for (const [rootIndex, angle] of [0.2, 2.25, 4.3].entries()) {
+      scene.primitives.push(box(`forest-ancient-root-${index}-${rootIndex}`, 0, x + Math.cos(angle) * 2.1, y + feetToMeters(1.2), z + Math.sin(angle) * 2.1, 1.05, feetToMeters(2.4), 4.8, "wood", ["forest", "giant-tree", "root-buttress", "cover", "climbable"], angle));
+    }
     const outwardX = x - anchor.x; const outwardZ = z - anchor.z; const outwardLength = Math.max(0.1, Math.hypot(outwardX, outwardZ));
     const nx = outwardX / outwardLength; const nz = outwardZ / outwardLength;
     const stairStartX = x + nx * 4.2; const stairStartZ = z + nz * 4.2;
@@ -1125,6 +1133,22 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
     const stair = stairConnection(`forest-tree-ascent-${index}`, 0, { xCells: stairStartX, zCells: stairStartZ, yMeters: surfaceY(stairStartX, stairStartZ) }, { xCells: stairEndX, zCells: stairEndZ, yMeters: platformY + FLOOR_SLAB_METERS }, 1.15, "wood", ["forest", "vertical-route", "vertical-opening", "tree-ascent", "supported"]);
     scene.primitives.push(stair.primitive); scene.routes.push(stairRoute(`forest-canopy-route-${index}`, stair));
     scene.tactical.push(tacticalFeature(`forest-canopy-highground-${index}`, "highGround", x, z, platformY, 2, "A reachable platform in an ancient tree overlooks the clearing."));
+  }
+  for (let index = 1; index < ancientPlatforms.length; index += 1) {
+    const from = ancientPlatforms[index - 1]!;
+    const to = ancientPlatforms[index]!;
+    const span = Math.hypot(to.x - from.x, to.z - from.z);
+    if (span > 30) continue;
+    const bridgeY = Math.min(from.platformY, to.platformY) + Math.abs(from.platformY - to.platformY) * 0.35;
+    scene.primitives.push(
+      corridor(`forest-canopy-bridge-${index}`, 0, from.x, from.z, to.x, to.z, bridgeY, 1.25, "wood", ["forest", "canopy-bridge", "high-ground", "standable", "supported", "surface-grid"]),
+      box(`forest-canopy-bridge-rail-${index}`, 0, (from.x + to.x) / 2, bridgeY + feetToMeters(2.2), (from.z + to.z) / 2, span, 0.18, 0.18, "wood", ["forest", "canopy-bridge", "railing", "cover"], Math.atan2(to.z - from.z, to.x - from.x)),
+    );
+    scene.routes.push(createRoute(`forest-canopy-bridge-route-${index}`, "alternate", [
+      { x: from.x, z: from.z, y: bridgeY },
+      { x: to.x, z: to.z, y: bridgeY },
+    ], { purpose: "movement", traffic: 0.48, schedule: "all" }));
+    scene.tactical.push(tacticalFeature(`forest-canopy-bridge-choke-${index}`, "chokepoint", (from.x + to.x) / 2, (from.z + to.z) / 2, bridgeY, 1, "A narrow supported canopy bridge creates an elevated alternate route."));
   }
   scene.rooms.push(
     createRoom("forest-edge", "Forest edge", "natural", 0, cols * 0.5, rows * 0.12, cols - 4, 6, surfaceY(cols * 0.5, rows * 0.12)),

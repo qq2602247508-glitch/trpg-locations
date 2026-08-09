@@ -113,6 +113,17 @@ describe("five-layer composition catalog", () => {
     expect(scene.tactical.some((feature) => feature.id.includes("dockside-choke"))).toBe(true);
   });
 
+  it("makes forest density alter clearings and canopy topology", () => {
+    const prompt = "非常茂密的原始森林，三片不规则林间空地、封闭林冠、灌木、倒木、浅溪、大树和树冠战斗平台";
+    const sparse = generateScene({ prompt, seed: "forest-structure-density", size: "medium", density: 0.2 }, "adaptive");
+    const dense = generateScene({ prompt, seed: "forest-structure-density", size: "medium", density: 0.9 }, "adaptive");
+    const clearingSize = (scene: typeof sparse) => scene.rooms.filter((room) => room.id.startsWith("forest-clearing-")).reduce((sum, room) => sum + room.sizeCells.x * room.sizeCells.z, 0);
+    expect(clearingSize(sparse)).toBeGreaterThan(clearingSize(dense));
+    expect(dense.primitives.filter((primitive) => primitive.tags?.includes("root-buttress")).length).toBeGreaterThan(sparse.primitives.filter((primitive) => primitive.tags?.includes("root-buttress")).length);
+    expect(dense.primitives.filter((primitive) => primitive.tags?.includes("canopy-bridge")).length).toBeGreaterThanOrEqual(sparse.primitives.filter((primitive) => primitive.tags?.includes("canopy-bridge")).length);
+    expect(dense.routes.filter((route) => route.id.startsWith("forest-canopy-bridge-route")).length).toBeGreaterThanOrEqual(1);
+  });
+
   it("changes mangrove parent topology across seeds, not only building props", () => {
     const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、半淹档案库和水下温室";
     const first = generateScene({ prompt, seed: "mangrove-macro-a", size: "medium", density: 0.62 }, "adaptive");
