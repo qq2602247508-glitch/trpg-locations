@@ -17,7 +17,7 @@ const NATURAL_PARENT_TERMS = [
 ] as const;
 
 const SHELTER_TERMS = [
-  "木屋", "小屋", "猎人屋", "林间屋", "野外营房", "野外哨所", "cabin", "lodge", "hut", "cottage", "outpost",
+  "木屋", "小屋", "猎人屋", "猎人营地", "林间屋", "野外营房", "野外哨所", "猎人小站", "cabin", "lodge", "hut", "cottage", "hunter camp", "ranger camp", "outpost",
 ] as const;
 
 const PROFILE_TERMS: Readonly<Record<Exclude<EmbeddedFacilityProfile, "shelter">, readonly string[]>> = {

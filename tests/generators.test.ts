@@ -552,6 +552,18 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("keeps a hunter camp as an embedded forest facility rather than a town", () => {
+    const prompt = "非常茂密的古老森林，起伏山脊、林间峡谷、巨石高地、倒木和隐蔽猎人营地";
+    const scene = generateScene({ ...request("forest-hunter-camp-domain", "medium", 0.88), prompt }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("natural");
+    expect(scene.archetype).toBe("forest");
+    expect(scene.siteProgram?.siteType).toBe("wilderness-site");
+    expect(scene.buildingInstances?.[0]?.archetype).toBe("home");
+    expect(scene.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(80);
+    expect(hasTag(scene, "forest")).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("turns wilderness density into additional physical service and escape routes", () => {
     const prompt = "森林中的猎人木屋，有起居室、地窖、门廊、柴堆和林间道路";
     const sparse = generateScene({ ...request("forest-cabin-density", "medium", 0.25), prompt }, "adaptive");

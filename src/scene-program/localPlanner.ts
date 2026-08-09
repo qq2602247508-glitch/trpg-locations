@@ -1,6 +1,6 @@
 import type { SceneKind } from "../schema";
 import { classifyInput } from "../semantic/classify";
-import { shouldComposeWildernessFacility } from "../semantic/siteIntent";
+import { hasNaturalParentContext, shouldComposeWildernessFacility } from "../semantic/siteIntent";
 import type {
   CoverageOperator,
   MorphologyOperator,
@@ -57,12 +57,13 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   // spatial domain (for example "modern city hospital").
   // An explicit dungeon noun owns the topology even when the prompt also names
   // a room function such as laboratory, temple, prison, or archive.
+  const hasResourceCampParent = has(text, ["采矿营地", "矿业营地", "矿工营地", "mining camp", "mining settlement"]);
   const hasNamedSettlementParent = has(text, [
-    "城镇", "村镇", "村庄", "村落", "灯塔村", "海岸村", "海崖村", "渔村", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "港村", "走私港", "营地", "采矿营地", "矿业营地",
+    "城镇", "村镇", "村庄", "村落", "灯塔村", "海岸村", "海崖村", "渔村", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "港村", "走私港",
     "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇",
-    "town", "village", "market village", "district", "harbor", "port town", "smuggler port", "camp", "mining camp", "water city", "canal city", "tower city", "megastructure city", "settlement",
+    "town", "village", "market village", "district", "harbor", "port town", "smuggler port", "water city", "canal city", "tower city", "megastructure city", "settlement",
   ]);
-  const hasWildernessBuilding = !hasNamedSettlementParent && shouldComposeWildernessFacility(text);
+  const hasWildernessBuilding = !hasNamedSettlementParent && !hasResourceCampParent && shouldComposeWildernessFacility(text);
   if (hasWildernessBuilding) return { domain: "natural", primaryKind: "wilderness" };
   const hasCompoundSettlement = has(text, [
     "修道院群", "浮空修道院", "空心古树内部", "树内城市", "树上城市",
@@ -87,7 +88,9 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   // A settlement is the parent site and named buildings are its children.
   // "港区有酒馆和神殿" must therefore plan a district, not collapse into
   // whichever child building noun appears last in the prompt.
-  const hasStrongSettlementSubject = has(text, ["城镇", "水镇", "潮汐水镇", "村镇", "村庄", "村落", "灯塔村", "海岸村", "海崖村", "渔村", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "港村", "走私港", "营地", "采矿营地", "矿业营地", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇", "修道院群", "town", "water town", "tidal town", "village", "market village", "district", "harbor", "port town", "smuggler port", "camp", "mining camp", "water city", "canal city", "tower city", "megastructure city", "monastery cluster", "settlement"])
+  const hasStrongSettlementSubject = has(text, ["城镇", "水镇", "潮汐水镇", "村镇", "村庄", "村落", "灯塔村", "海岸村", "海崖村", "渔村", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "港村", "走私港", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇", "修道院群", "town", "water town", "tidal town", "village", "market village", "district", "harbor", "port town", "smuggler port", "water city", "canal city", "tower city", "megastructure city", "monastery cluster", "settlement"])
+    || hasResourceCampParent
+    || (has(text, ["营地", "camp"]) && !hasNaturalParentContext(text))
     || (has(text, ["工业区"]) && !has(text, ["废弃工业区", "工业遗址", "industrial ruin"]));
   const hasSettlementSubject = hasStrongSettlementSubject || (!hasBuildingSubject && has(text, ["城市", "city"]));
   if (hasSettlementSubject) return { domain: "settlement", primaryKind: "settlement" };
