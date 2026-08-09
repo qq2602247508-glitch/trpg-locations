@@ -412,7 +412,11 @@ describe("scene generators", () => {
       expect(scene.sceneProgram?.domain).toBe("settlement");
       expect(scene.terrainProgram?.kind).toBe(sample.kind);
       expect(scene.settlementAdaptation?.terrainKind).toBe(sample.kind);
-      expect(scene.settlementAdaptation?.roadMode).toBe("terrain-owned");
+      expect(scene.settlementAdaptation?.roadMode).toBe(sample.kind === "river" ? "planned" : "terrain-owned");
+      if (sample.kind === "river") {
+        expect(scene.primitives.some((primitive) => primitive.tags?.includes("terrain-adapted") && primitive.tags?.includes("road"))).toBe(true);
+        expect(scene.primitives.some((primitive) => primitive.tags?.includes("parcel-yard"))).toBe(true);
+      }
       expect(scene.settlementAdaptation?.relocatedBuildings ?? 0).toBeGreaterThan(0);
       expect((scene.terrainProgram?.maximumElevationFeet ?? 0) - (scene.terrainProgram?.minimumElevationFeet ?? 0)).toBeGreaterThanOrEqual(sample.minimumRange);
       expect(scene.diagnostics.metrics.terrainAdaptedBuildings ?? 0).toBeGreaterThan(0);

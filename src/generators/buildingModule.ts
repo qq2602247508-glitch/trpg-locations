@@ -598,11 +598,19 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     <= Math.hypot(entryStart.x - eastCornerP.x, entryStart.z - eastCornerP.z)
     ? westCornerP
     : eastCornerP;
-  scene.routes.push(
-    createRoute(`${lot.id}-entry-route`, "primary", [
+  const entryRoutePoints = lot.parcelId
+    ? [
+      { x: entryStart.x, z: entryStart.z, y: baseY },
+      { x: approachP.x, z: approachP.z, y: baseY },
+    ]
+    : [
       { x: entryStart.x, z: entryStart.z, y: baseY },
       { x: entryCornerP.x, z: entryCornerP.z, y: baseY },
       { x: approachP.x, z: approachP.z, y: baseY },
+    ];
+  scene.routes.push(
+    createRoute(`${lot.id}-entry-route`, "primary", [
+      ...entryRoutePoints,
       { x: frontDoorP.x, z: frontDoorP.z, y: baseY },
       { x: publicP.x, z: publicP.z, y: baseY },
     ]),

@@ -17,7 +17,7 @@ import { instantiateBuildingModule, type BuildingLot } from "./buildingModule";
 export type SettlementArchetype = "village" | "town" | "city" | "harbor";
 
 const SETTLEMENT_TERMS: Readonly<Record<SettlementArchetype, readonly string[]>> = {
-  village: ["village", "hamlet", "market village", "村庄", "村落", "渔猎村", "市场村"],
+  village: ["village", "hamlet", "market village", "村镇", "村庄", "村落", "渔猎村", "市场村"],
   town: ["town", "market town", "城镇", "集镇", "小镇"],
   city: ["city", "district", "urban", "deepwater", "深水城", "城市", "街区"],
   harbor: ["harbor", "harbour", "dock", "port", "港区", "港口", "港镇", "码头", "海港"],

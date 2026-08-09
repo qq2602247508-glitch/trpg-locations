@@ -86,6 +86,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
   const breachAngle = rng.float(-Math.PI, Math.PI);
   const breachAngles = [breachAngle, breachAngle + Math.PI * 0.72, breachAngle - Math.PI * 0.69];
   const normalizedPrompt = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const saltMarsh = includesAny(normalizedPrompt, ["盐沼", "盐泽", "潮汐湿地", "salt marsh", "tidal marsh"]);
   const wantsCraterBridge = includesAny(normalizedPrompt, ["跨坑", "吊桥", "悬索桥", "suspension bridge", "rope bridge"]);
   const wantsCraterShrine = includesAny(normalizedPrompt, ["神龛", "神殿", "祭坛", "shrine", "altar", "temple"]);
   const wantsCraterMine = includesAny(normalizedPrompt, ["矿工入口", "矿井", "矿洞", "mine entrance", "mine"]);
@@ -483,7 +484,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         if (cell.surface === "water") {
           const mainDistance = Math.abs(x + 0.5 - warpedRiverX(z + 0.5, width, depth, phase));
           scene.primitives.push(water(`terrain-water-${x}-${z}`, 0, x + 0.5, feetToMeters(cell.elevationFeet + (kind === "river" ? 7.5 : 0.5)), z + 0.5, 0.98, 0.12, 0.98, kind === "river"
-            ? ["terrain-program", "watercourse", "water-city", mainDistance < 3.4 ? "main-canal" : "branch-canal"]
+            ? ["terrain-program", "watercourse", "water-city", mainDistance < 3.4 ? "main-canal" : "branch-canal", ...(saltMarsh ? ["swamp", "wetland", "salt-marsh"] : [])]
             : kind === "underdark" ? ["terrain-program", "watercourse", "underdark", "underground-lake", "hazard"]
               : ["terrain-program", "coastal-cliff", "harbor-basin", "sea", "hazard"]));
         }
@@ -493,7 +494,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         for (const [index, row] of bridgeRows.entries()) {
           const cx = warpedRiverX(row, width, depth, phase);
           const y = feetToMeters(cellAt(cx + 4, row).elevationFeet) + FLOOR_SLAB_METERS + 0.12;
-          scene.primitives.push(corridor(`terrain-river-bridge-${index + 1}`, 0, cx - 5.2, row, cx + 5.2, row, y, index === 1 ? 2.5 : 1.7, index === 1 ? "stone" : "wood", ["bridge", "terrain-program", "standable", index === 1 ? "stone-bridge" : "wood-bridge"]));
+          scene.primitives.push(corridor(`terrain-river-bridge-${index + 1}`, 0, cx - 5.2, row, cx + 5.2, row, y, index === 1 ? 2.5 : 1.7, index === 1 ? "stone" : "wood", ["bridge", "terrain-program", "standable", index === 1 ? "stone-bridge" : "wood-bridge", ...(saltMarsh && index !== 1 ? ["boardwalk", "raised-boardwalk"] : [])]));
         }
         const route = Array.from({ length: depth }, (_, index) => {
           const z = index + 0.5;
@@ -513,7 +514,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           for (let index = 4; index < route.length; index += 4) {
             const from = route[index - 4]!; const to = route[index]!;
             const mx = (from.x + to.x) / 2 + offset; const mz = (from.z + to.z) / 2;
-            scene.primitives.push(corridor(`terrain-${side}-bank-${index}`, 0, from.x + offset, from.z, to.x + offset, to.z, feetToMeters(cellAt(mx, mz).elevationFeet) + FLOOR_SLAB_METERS + 0.04, 1.4, "stone", ["water-city", "bank-route", "quay", "standable", "terrain-program"]));
+            scene.primitives.push(corridor(`terrain-${side}-bank-${index}`, 0, from.x + offset, from.z, to.x + offset, to.z, feetToMeters(cellAt(mx, mz).elevationFeet) + FLOOR_SLAB_METERS + 0.04, 1.4, saltMarsh ? "wood" : "stone", ["water-city", "bank-route", "quay", "standable", "terrain-program", ...(saltMarsh ? ["boardwalk", "raised-boardwalk", "wetland"] : [])]));
           }
         }
         // A water-city needs a functional waterfront node, not only blue
@@ -527,8 +528,8 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         const marketCell = cellAt(Math.max(0, Math.min(width - 1, marketX)), marketRow);
         const marketY = feetToMeters(marketCell.elevationFeet) + FLOOR_SLAB_METERS + 0.08;
         scene.primitives.push(
-          box("terrain-water-city-market-dock", 0, marketX, marketY, marketRow, 6.5, FLOOR_SLAB_METERS, 4, "wood", ["water-city", "market-dock", "dock", "quay", "standable", "terrain-program"]),
-          corridor("terrain-water-city-market-approach", 0, marketX, marketRow + marketSide * 2.5, marketRiverX + marketSide * 3.2, marketRow, marketY, 1.2, "wood", ["water-city", "market-route", "dock", "standable", "terrain-program"]),
+          box("terrain-water-city-market-dock", 0, marketX, marketY, marketRow, 6.5, FLOOR_SLAB_METERS, 4, "wood", ["water-city", "market-dock", "dock", "quay", "standable", "terrain-program", ...(saltMarsh ? ["boardwalk", "wetland"] : [])]),
+          corridor("terrain-water-city-market-approach", 0, marketX, marketRow + marketSide * 2.5, marketRiverX + marketSide * 3.2, marketRow, marketY, 1.2, "wood", ["water-city", "market-route", "dock", "standable", "terrain-program", ...(saltMarsh ? ["boardwalk", "raised-boardwalk", "wetland"] : [])]),
         );
       }
       if (kind === "ice-crevasse") {

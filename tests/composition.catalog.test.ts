@@ -262,6 +262,39 @@ describe("five-layer composition catalog", () => {
     expect(scene.tactical.some((feature) => feature.id.includes("dockside-choke"))).toBe(true);
   });
 
+  it("gives dense water cities enough independent landmark interiors", () => {
+    const scene = generateScene({
+      prompt: "深水城河道水城，曲折主河、三条支流、石桥、木桥、水上市集、船坞、沿岸不规则街巷、神殿、巡逻塔和屋顶连桥",
+      seed: "water-city-landmark-budget",
+      size: "large",
+      density: 0.78,
+    }, "adaptive");
+    const site = scene.siteProgram;
+    expect(site?.parcelCount).toBeGreaterThanOrEqual(30);
+    expect(site?.fullInteriorCount).toBeGreaterThanOrEqual(5);
+    expect(scene.buildingInstances?.filter((building) => building.detailLevel === "full-interior").length).toBeGreaterThanOrEqual(5);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "shrine")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "tower")).toBe(true);
+  });
+
+  it("keeps an unfamiliar salt-marsh academy village as a composite settlement", () => {
+    const scene = generateScene({
+      prompt: "建在盐沼旧水闸上的天文学院村镇，有潮汐沟渠、旋转观星穹顶、木栈桥、学生宿舍、泵房、钟塔和地下档案库",
+      seed: "salt-marsh-academy-village",
+      size: "medium",
+      density: 0.68,
+    }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.siteProgram?.roadPattern).toBe("canal-banks");
+    expect(scene.terrainProgram?.kind).toBe("river");
+    expect(scene.buildingInstances?.some((building) => building.archetype === "guild")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "tower")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "factory")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("archive"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("terrain-adapted") && primitive.tags?.includes("road"))).toBe(true);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
   it("makes forest density alter clearings and canopy topology", () => {
     const prompt = "非常茂密的原始森林，三片不规则林间空地、封闭林冠、灌木、倒木、浅溪、大树和树冠战斗平台";
     const sparse = generateScene({ prompt, seed: "forest-structure-density", size: "medium", density: 0.2 }, "adaptive");

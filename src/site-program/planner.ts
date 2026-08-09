@@ -51,13 +51,13 @@ function requestedBuildingKinds(text: string): SettlementBuildingKind[] {
   };
   add("warehouse", ["仓库", "仓储", "warehouse"]);
   add("tavern", ["酒馆", "旅店", "旅馆", "酒店", "酒吧", "tavern", "inn", "hotel", "bar"]);
-  add("guild", ["公会", "警察驻所", "警察局", "警局", "办公室", "guild", "police station", "police post", "office"]);
+  add("guild", ["公会", "学院", "学校", "大学", "警察驻所", "警察局", "警局", "办公室", "guild", "academy", "school", "college", "university", "police station", "police post", "office"]);
   add("shrine", ["神殿", "神庙", "教堂", "礼拜堂", "shrine", "temple", "church", "chapel"]);
-  add("tower", ["岗楼", "瞭望塔", "灯塔", "无线电塔", "钟塔", "控制塔", "watchtower", "guard tower", "lighthouse", "radio tower", "bell tower", "control tower"]);
+  add("tower", ["岗楼", "瞭望塔", "巡逻塔", "观测塔", "观星穹顶", "灯塔", "无线电塔", "钟塔", "控制塔", "watchtower", "guard tower", "patrol tower", "observation tower", "observatory dome", "lighthouse", "radio tower", "bell tower", "control tower"]);
   add("mill", ["磨坊", "mill"]);
   add("blacksmith", ["铁匠", "武器工坊", "blacksmith", "weapon workshop"]);
   add("clinic", ["诊所", "医院", "野战医院", "clinic", "hospital"]);
-  add("factory", ["工厂", "厂房", "发电站", "工坊", "维修机库", "factory", "power station", "workshop", "hangar"]);
+  add("factory", ["工厂", "厂房", "发电站", "泵房", "工坊", "维修机库", "factory", "power station", "pump house", "pumphouse", "workshop", "hangar"]);
   add("barn", ["马厩", "谷仓", "粮仓", "stable", "barn", "granary"]);
   add("manor", ["庄园", "宅邸", "manor", "mansion"]);
   add("home", ["矿工宿舍", "工人住宅", "住宅", "宿舍", "棚屋", "居住模块", "worker housing", "dormitory", "residence", "shack", "habitat"]);
@@ -100,7 +100,7 @@ function requestedFunctionalModules(text: string): BuildingFunctionalModuleProgr
   add("archive", floodedArchive ? "Half-flooded secured archive" : "Secured archive", ["档案库", "档案室", "藏经洞", "书库", "archive", "records vault"], "basement", {
     minimumFootprintCells: 16,
     requiresWater: floodedArchive,
-    tags: ["archive", "shelf", "restricted", ...(floodedArchive ? ["flooded", "water-access"] : [])],
+    tags: ["archive", "reserve-vault", "shelf", "restricted", ...(floodedArchive ? ["flooded", "water-access"] : [])],
   });
   add("greenhouse", submergedGreenhouse ? "Submerged cultivation greenhouse" : undergroundGreenhouse ? "Underground fungal greenhouse" : "Cultivation greenhouse", ["温室", "培育室", "植物研究", "greenhouse", "glasshouse", "cultivation"], submergedGreenhouse || undergroundGreenhouse ? "basement" : "exterior", {
     minimumFootprintCells: 20,
@@ -149,7 +149,8 @@ function requestedSiteFeatures(text: string): string[] {
   add("radio-observatory", ["无线电观测", "气象站", "无线电塔", "radio observatory", "weather station"]);
   add("river-crossing", ["河上", "石桥", "河谷", "浅滩", "河桥", "river bridge", "river crossing", "ford"]);
   add("gate-district", ["城门街区", "城门到市场", "gate district", "city gate"]);
-  if ((text.includes("水城") && !text.includes("深水城")) || contains(text, ["主运河", "支流", "运河", "water city", "canal"])) features.push("water-city");
+  const explicitWaterCity = contains(text, ["河道水城", "水上城市", "水上市集", "主运河", "支流", "运河", "潮汐沟渠", "水闸", "water city", "canal", "tidal channel", "sluice"]);
+  if (explicitWaterCity) features.push("water-city");
   add("hillside-district", ["山坡贵族区", "等高线道路", "山顶神殿", "hillside", "contour road"]);
   add("war-damaged", ["战争破坏", "坍塌住宅", "临时街垒", "破损道路", "war-damaged", "barricade"]);
   add("vertical-slum", ["垂直贫民", "巨型桥墩", "桥墩棚屋", "多层棚屋", "vertical slum", "bridge pier settlement"]);
@@ -450,8 +451,8 @@ function organicRoadsAndBlocks(siteType: SiteType, width: number, depth: number,
       const column = Math.floor(index / 2);
       const rows = Math.max(3, Math.ceil(blockCount / 2));
       center = {
-        x: side === 0 ? width * rng.float(0.17, 0.35) : width * rng.float(0.61, 0.82),
-        z: depth * (0.12 + 0.7 * ((column + 0.5) / rows)) + rng.float(-1.2, 1.2),
+        x: side === 0 ? width * rng.float(0.10, 0.37) : width * rng.float(0.63, 0.90),
+        z: depth * (0.08 + 0.84 * ((column + 0.5) / rows)) + rng.float(-1.6, 1.6),
       };
     }
     center = { x: Math.max(5, Math.min(width - 5, center.x)), z: Math.max(5, Math.min(depth - 7, center.z)) };
@@ -506,8 +507,10 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
   const text = input.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const required = requestedBuildingKinds(text);
   const requestedModules = requestedFunctionalModules(text);
-  const base = siteType === "village" ? 9 : siteType === "town" ? 15 : siteType === "mining-settlement" ? 12 : 22;
-  const target = Math.max(5, Math.round(base * sizeFactor(input.request.size) * (0.5 + input.request.density * 0.9)));
+  const waterCity = features.includes("water-city");
+  const base = waterCity ? 28 : siteType === "village" ? 9 : siteType === "town" ? 15 : siteType === "mining-settlement" ? 12 : 22;
+  const targetMultiplier = waterCity ? 1.12 : 1;
+  const target = Math.max(5, Math.round(base * sizeFactor(input.request.size) * (0.5 + input.request.density * 0.9) * targetMultiplier));
   const parcels: ParcelProgram[] = [];
   const perBlock = Math.max(1, Math.ceil(target / Math.max(1, blocks.length)));
   for (const block of blocks) {
@@ -525,16 +528,22 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
     let nx = -uz; let nz = ux;
     if ((block.center.x - segment.projected.x) * nx + (block.center.z - segment.projected.z) * nz < 0) { nx *= -1; nz *= -1; }
     const frontageSpan = Math.max(6, Math.abs(ux) * block.size.x + Math.abs(uz) * block.size.z - 2);
-    const targetFrontage = siteType === "village" ? 5.5 : district.role === "industrial" ? 9.2 - input.request.density * 3.8 : 7 - input.request.density * 2.5;
+    const targetFrontage = siteType === "village"
+      ? 5.5
+      : waterCity
+        ? district.role === "industrial" || district.role === "harbor"
+          ? 10.8 - input.request.density * 2.4
+          : 8.8 - input.request.density * 2.1
+        : district.role === "industrial" ? 9.2 - input.request.density * 3.8 : 7 - input.request.density * 2.5;
     const count = Math.min(perBlock, Math.max(1, Math.floor(frontageSpan / targetFrontage)));
     for (let slot = 0; slot < count && parcels.length < target; slot += 1) {
       const requestedModule = requestedModules[parcels.length];
       const kind = required[parcels.length] ?? (requestedModule ? preferredCarrier(requestedModule) : buildingKindFor(district.role, parcels.length, text));
       const wide = kind === "warehouse" || kind === "factory" || kind === "barn" || kind === "manor";
       const slotSpan = frontageSpan / count;
-      const parcelFrontage = Math.max(4.8, Math.min(slotSpan - 0.6, wide ? 10.5 : 7.2));
+      const parcelFrontage = Math.max(4.8, Math.min(slotSpan - 0.6, waterCity ? (wide ? 13.5 : 10.2) : (wide ? 10.5 : 7.2)));
       const crossSpan = Math.max(6, Math.abs(nx) * block.size.x + Math.abs(nz) * block.size.z - 1.2);
-      const parcelDepth = Math.max(5.2, Math.min(crossSpan * 0.72, wide ? 10 : 7.8));
+      const parcelDepth = Math.max(5.2, Math.min(crossSpan * 0.72, waterCity ? (wide ? 13 : 10) : (wide ? 10 : 7.8)));
       const offsetAlong = (slot - (count - 1) / 2) * slotSpan + rng.float(-0.2, 0.2);
       const entrance = { x: segment.projected.x + ux * offsetAlong, z: segment.projected.z + uz * offsetAlong };
       const setback = frontageRoad.widthCells / 2 + block.setbackCells;
@@ -562,7 +571,10 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
         districtId: block.districtId,
         center,
         size: { x: parcelFrontage, z: parcelDepth },
-        buildingSize: { x: parcelFrontage * (siteType === "village" ? 0.68 : 0.82), z: parcelDepth * (district.role === "industrial" ? 0.78 : 0.7) },
+        buildingSize: {
+          x: parcelFrontage * (siteType === "village" ? 0.68 : waterCity ? 0.92 : 0.82),
+          z: parcelDepth * (district.role === "industrial" ? (waterCity ? 0.86 : 0.78) : waterCity ? 0.82 : 0.7),
+        },
         rotationY: Math.atan2(entrance.x - center.x, entrance.z - center.z),
         frontageRoadId: frontageRoad.id,
         entrance,
@@ -585,8 +597,10 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
     if ((requestedLeft >= 0) !== (requestedRight >= 0)) return requestedLeft >= 0 ? -1 : 1;
     return Math.hypot(left.center.x, left.center.z) - Math.hypot(right.center.x, right.center.z);
   });
-  const fullBudget = input.request.size === "small" ? 1 : input.request.size === "large" ? 4 : 3;
-  const facadeBudget = Math.max(2, Math.round(parcels.length * 0.36));
+  const requestedLandmarkBudget = Math.min(8, required.length + (waterCity ? 3 : 0));
+  const defaultFullBudget = input.request.size === "small" ? 1 : input.request.size === "large" ? 4 : 3;
+  const fullBudget = Math.min(parcels.length, Math.max(defaultFullBudget, requestedLandmarkBudget));
+  const facadeBudget = Math.max(2, Math.round(parcels.length * (waterCity ? 0.44 : 0.36)));
   ranked.forEach((parcel, index) => { parcel.lod = index < fullBudget ? "full-interior" : index < fullBudget + facadeBudget ? "facade" : "mass"; });
   return parcels;
 }
@@ -632,6 +646,22 @@ export function planSettlementSite(input: SitePlanningInput, rng: SeededRandom):
         const previous = line.points[index];
         return previous ? distanceToSegment(parcel.center, previous, point) > line.width / 2 + buildingClearance : true;
       }));
+    });
+    const requested = requestedBuildingKinds(text);
+    const requestedModules = requestedFunctionalModules(text);
+    const desiredFullBudget = Math.min(parcels.length, Math.max(5, Math.min(8, requested.length + 3)));
+    const reRanked = [...parcels].sort((left, right) => {
+      const requestedLeft = requested.indexOf(left.buildingKind);
+      const requestedRight = requested.indexOf(right.buildingKind);
+      const functionalLeft = (left.functionalModules?.length ?? 0) > 0 || requestedModules.some((module) => preferredCarrier(module) === left.buildingKind);
+      const functionalRight = (right.functionalModules?.length ?? 0) > 0 || requestedModules.some((module) => preferredCarrier(module) === right.buildingKind);
+      if (functionalLeft !== functionalRight) return functionalLeft ? -1 : 1;
+      if ((requestedLeft >= 0) !== (requestedRight >= 0)) return requestedLeft >= 0 ? -1 : 1;
+      return left.id.localeCompare(right.id);
+    });
+    const facadeBudget = Math.max(2, Math.round(reRanked.length * 0.44));
+    reRanked.forEach((parcel, index) => {
+      parcel.lod = index < desiredFullBudget ? "full-interior" : index < desiredFullBudget + facadeBudget ? "facade" : "mass";
     });
   }
   const fullInteriorCount = parcels.filter((parcel) => parcel.lod === "full-interior").length;

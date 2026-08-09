@@ -753,7 +753,13 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   if (isMangrovePort) addMangroveSmugglerPort(scene, program.bounds.x, program.bounds.z, context.request.density, context.rng.fork("mangrove-parent"));
   // Districts are planning ownership, not giant coloured floor decals. Their
   // identity is made legible by parcel use, landmarks and road hierarchy.
-  const semanticTerrain = ["river", "impact-crater", "caldera", "ice-crevasse", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind) || isFloating || isHollowTree || isMangrovePort;
+  // A canal-bank settlement owns both a parent water surface and a normal
+  // urban circulation layer.  Treating every river as a fully semantic
+  // wilderness parent used to suppress its planned roads, blocks, yards and
+  // civic open spaces, leaving only blue channels plus detached building
+  // islands.  Standalone river sites still keep the terrain-only grammar.
+  const waterCity = program.requiredFeatures.includes("water-city");
+  const semanticTerrain = (["river", "impact-crater", "caldera", "ice-crevasse", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind) && !(terrain.summary.kind === "river" && waterCity)) || isFloating || isHollowTree || isMangrovePort;
   if (!semanticTerrain) addBlockAndParcelSurfaces(scene, program, elevationAt);
   if (!semanticTerrain) {
     for (const road of program.roads) scene.primitives.push(...roadPieces(road, legacySpecialElevation ? { ...terrain, elevationAt, surfaceAt: () => "ground" } : terrain));
