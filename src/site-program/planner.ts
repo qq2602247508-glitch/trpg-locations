@@ -143,7 +143,7 @@ function requestedSiteFeatures(text: string): string[] {
   add("industrial-plant", ["工业街区", "发电站", "厂房", "工业区", "维修机库", "采矿营地", "矿业营地", "mining camp", "industrial district", "power station", "factory", "hangar"]);
   add("conveyor-network", ["输送桥", "输送带", "维护桥", "维修桥", "maintenance bridge", "conveyor"]);
   add("underground-maintenance", ["地下维护", "地下电缆", "桥下维修", "生命维持层", "maintenance tunnel", "cable level", "life support"]);
-  add("flooded-site", ["洪水", "淹没", "被淹", "flooded", "flood"]);
+  add("flooded-site", ["洪水", "淹没", "被淹", "flooded", "flood", "high tide"]);
   add("elevated-rail", ["高架铁路", "高架铁道", "elevated railway", "viaduct"]);
   add("mountain-monastery", ["山地修道院", "山顶修道院", "mountain monastery"]);
   add("radio-observatory", ["无线电观测", "气象站", "无线电塔", "radio observatory", "weather station"]);
@@ -159,7 +159,8 @@ function requestedSiteFeatures(text: string): string[] {
   add("coastal-cliff", ["海崖港镇", "分层海崖", "悬崖港镇", "海岸悬崖", "黑沙海岸", "鲸骨灯塔村", "灯塔村", "sea-cliff port", "cliff port", "coastal cliff", "black sand coast", "lighthouse village"]);
   add("whalebone-landmark", ["鲸骨", "鲸骨灯塔", "鲸骨村", "whalebone", "whalebone lighthouse"]);
   add("storm-cableway", ["风暴缆车", "风暴索道", "悬崖缆车", "storm cableway", "cliff cableway", "cable lift"]);
-  add("sea-cave", ["海蚀洞", "地下海蚀洞", "海蚀洞穴", "sea cave", "sea-eroded cave"]);
+  add("sea-cave", ["海蚀洞", "地下海蚀洞", "海蚀洞穴", "潮汐洞穴", "潮汐洞穴群", "sea cave", "sea-eroded cave", "tidal cavern"]);
+  add("tidal-cavern", ["潮汐洞穴", "潮汐洞穴群", "潮汐洞窟", "tidal cavern", "tidal cave"]);
   add("stilt-houses", ["吊脚木屋", "吊脚屋", "架高木屋", "stilt house", "stilt cabin"]);
   add("tide-pools", ["潮池", "潮汐池", "岩礁水池", "tide pool", "tidal pool"]);
   add("fantasy-harbor", ["深水城港区", "奇幻港区", "deepwater harbor", "fantasy harbor"]);

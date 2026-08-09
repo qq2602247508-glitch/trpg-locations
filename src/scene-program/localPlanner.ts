@@ -70,7 +70,15 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
     "monastery cluster", "floating monastery", "hollow tree city",
     "mangrove port", "smuggler port",
   ]);
-  if (hasCompoundSettlement) return { domain: "settlement", primaryKind: "settlement" };
+  // A multi-chamber natural parent plus a sacred complex is a site-scale
+  // composition even when the prompt does not literally say “village” or
+  // “cluster”. The cavern/water system owns the macro terrain and the
+  // monastery becomes a group of independently generated buildings inside it.
+  const hasCavernMonasteryCompound = has(text, [
+    "潮汐洞穴", "洞穴群", "洞窟群", "洞穴网络", "海蚀洞群",
+    "tidal cavern", "cavern network", "cave network", "sea-cave complex",
+  ]) && has(text, ["修道院", "寺院", "monastery", "abbey", "cloister"]);
+  if (hasCompoundSettlement || hasCavernMonasteryCompound) return { domain: "settlement", primaryKind: "settlement" };
   const hasCompoundRoadSite = has(text, ["驿站", "road station", "coach stop"])
     && has(text, ["主路", "桥", "马厩", "收费岗", "仓库", "main road", "bridge", "stable", "toll", "warehouse"]);
   if (hasCompoundRoadSite) return { domain: "settlement", primaryKind: "settlement" };
@@ -110,7 +118,8 @@ function inferOperators(text: string): { morphology: MorphologyOperator[]; cover
     coverage.push("woodland", "dense");
   }
   if (has(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) {
-    morphology.push("floating-islands", "vertical-stack");
+    if (has(text, ["浮空", "浮岛", "悬空", "floating", "levitating"])) morphology.push("floating-islands");
+    morphology.push("vertical-stack");
     coverage.push("ice");
   }
   if (has(text, ["陨石", "流星", "撞击坑", "meteor", "impact crater"])) morphology.push("impact-crater", "radial-fractures", "basin");

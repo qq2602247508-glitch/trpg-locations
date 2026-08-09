@@ -1,4 +1,4 @@
-import type { BuildingInstance, GeneratedScene, GeneratorContext } from "../schema";
+import type { BuildingInstance, GeneratedScene, GeneratorContext, ScenePrimitive } from "../schema";
 import { planSettlementSite, summarizeSiteProgram, type RoadProgram } from "../site-program";
 import { instantiateBuildingModule } from "./buildingModule";
 import { classifySettlementArchetype } from "./settlement";
@@ -29,6 +29,35 @@ function addRoadJunctions(scene: GeneratedScene, program: ReturnType<typeof plan
     const connected = node.roadIds.map((id) => program.roads.find((road) => road.id === id)).filter((road): road is RoadProgram => Boolean(road));
     const radius = Math.max(1.4, ...connected.map((road) => road.widthCells * 0.58));
     scene.primitives.push(cylinder(`site-${node.id}-junction`, 0, node.point.x, elevationAt(node.point.x, node.point.z) + FLOOR_SLAB_METERS + 0.025, node.point.z, radius * 2, 0.08, "stone", ["road", "road-junction", "standable", "site-program"]));
+  }
+}
+
+/**
+ * A settlement may contain many unrelated cellars. Explicit functional
+ * modules (archives, submerged rooms, greenhouses, laboratories) need a
+ * coherent inspection target instead of shrinking every basement into one
+ * unreadable overview. Group each authored module by building instance; the
+ * renderer can then select the largest cluster on the numeric basement view.
+ */
+function tagFunctionalInspectionClusters(scene: GeneratedScene): void {
+  const groups = new Map<string, ScenePrimitive[]>();
+  for (const primitive of scene.primitives) {
+    if (primitive.level !== 3) continue;
+    const functionTag = primitive.tags?.find((tag) => tag.startsWith("function:"));
+    const buildingTag = primitive.tags?.find((tag) => tag.startsWith("building-instance:"));
+    if (!functionTag || !buildingTag) continue;
+    const key = `${functionTag}|${buildingTag}`;
+    const group = groups.get(key) ?? [];
+    group.push(primitive);
+    groups.set(key, group);
+  }
+  for (const [key, primitives] of groups) {
+    if (primitives.length < 3) continue;
+    const [functionTag, buildingTag] = key.split("|");
+    const functionName = functionTag?.slice("function:".length) || "module";
+    const buildingName = buildingTag?.slice("building-instance:".length) || "building";
+    const clusterTag = `focus-cluster:${functionName}:${buildingName}`;
+    for (const primitive of primitives) primitive.tags = [...new Set([...(primitive.tags ?? []), clusterTag])];
   }
 }
 
@@ -895,11 +924,14 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   scene.siteProgram = summarizeSiteProgram(program);
   scene.terrainProgram = terrain.summary;
   const landDepth = program.siteType === "harbor-district" ? program.bounds.z - 8 : program.bounds.z;
-  const isFloating = (context.sceneProgram?.morphology.includes("floating-islands") ?? false) || program.requiredFeatures.includes("salt-crystal-monastery");
+  const promptText = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const explicitlyFloating = ["浮空", "浮岛", "悬空", "floating", "levitating"].some((term) => promptText.includes(term));
+  const isFloating = explicitlyFloating && ((context.sceneProgram?.morphology.includes("floating-islands") ?? false) || program.requiredFeatures.includes("salt-crystal-monastery"));
   const isHollowTree = program.requiredFeatures.includes("hollow-tree-city");
   const isMangrovePort = program.requiredFeatures.includes("mangrove-smuggler-port");
   const isMountainMonastery = program.requiredFeatures.includes("mountain-monastery") || program.requiredFeatures.includes("hillside-district");
-  const isFlooded = program.requiredFeatures.includes("flooded-site");
+  const isTidalCavern = program.requiredFeatures.includes("tidal-cavern");
+  const isFlooded = program.requiredFeatures.includes("flooded-site") && !isTidalCavern;
   const legacySpecialElevation = isFloating || isMountainMonastery;
   const elevationAt = isFloating ? addFloatingIslandTerrain(scene, program.bounds.x, program.bounds.z, program.requiredFeatures.includes("salt-crystal-monastery")) : isMountainMonastery ? addMountainTerraces(scene, program.bounds.x, program.bounds.z) : terrain.elevationAt;
   if (!legacySpecialElevation) terrain.render(scene);
@@ -1162,6 +1194,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       scene.primitives.push(stairs(`flood-access-stair-${parcel.id}`, 0, parcel.entrance.x, 0, parcel.entrance.z, 1.2, siteElevation, 3.8, "wood", ["flooded-site", "vertical-opening", "site-program"], parcel.rotationY));
     }
   }
+  tagFunctionalInspectionClusters(scene);
   if (waterCity) addWaterCityLandmarks(scene, context.request.prompt);
 
   const central = program.openSpaces[0];

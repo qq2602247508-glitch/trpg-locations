@@ -88,9 +88,12 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
     return output;
   }
   if (has(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) {
-    add("salt-islands", "三层盐晶浮岛", ["salt-crystal", "floating-island"], "critical");
+    const explicitlyFloating = has(text, ["浮空", "浮岛", "悬空", "floating", "levitating"]);
+    if (explicitlyFloating) add("salt-islands", "三层盐晶浮岛", ["salt-crystal", "floating-island"], "critical");
+    else add("salt-cavern", "盐晶洞穴承载体", ["salt-crystal", "cavern-wall"], "critical");
     add("monastery-buildings", "修道院建筑群", ["shrine", "building"], "critical");
-    add("salt-bridges", "悬索桥", ["suspension-bridge", "vertical-route"], "critical");
+    if (explicitlyFloating) add("salt-bridges", "悬索桥", ["suspension-bridge", "vertical-route"], "critical");
+    else add("salt-cavern-route", "洞穴垂直交通", ["vertical-opening"], "critical");
     add("salt-cavern-pool", "洞底潮池", ["cavern-tide-pool", "watercourse"], "major");
     add("bell-tower", "钟塔", ["tower", "high-ground"], "major");
     return output;
@@ -189,7 +192,10 @@ export function compileSceneComposition(request: GenerationRequest, source: Scen
   if (!hasSettlementParent(text) && shouldComposeWildernessFacility(text)) motifIds.push("motif.embedded-building");
   if (has(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) motifIds.push("motif.hollow-tree-city");
   if (has(text, ["红树林", "mangrove"]) && has(text, ["走私港", "走私港村", "走私", "smuggler port", "smuggling port"])) motifIds.push("motif.mangrove-smuggler-port");
-  if (has(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) motifIds.push("motif.salt-crystal-monastery");
+  if (has(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) {
+    const explicitlyFloating = has(text, ["浮空", "浮岛", "悬空", "floating", "levitating"]);
+    motifIds.push(explicitlyFloating ? "motif.salt-crystal-monastery" : "motif.salt-crystal-cavern-monastery");
+  }
   const selectedMotifIds = [...new Set(motifIds)];
   const moduleIds = new Set(selectedMotifIds.flatMap((id) => DESIGNER_MOTIFS.find((entry) => entry.id === id)?.moduleIds ?? []));
   const capabilityIds = [...new Set([...FUNCTIONAL_MODULES.filter((entry) => moduleIds.has(entry.id)).flatMap((entry) => entry.capabilityIds), ...retrievedCapabilityIds])].filter((id) => CAPABILITY_CARDS.some((entry) => entry.id === id));

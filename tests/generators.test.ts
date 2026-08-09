@@ -508,6 +508,21 @@ describe("scene generators", () => {
     expect(variation.diagnostics.valid).toBe(true);
   });
 
+  it("promotes a cavern monastery compound to a site-scale composition", () => {
+    const prompt = "建在潮汐洞穴群中的盐晶修道院，退潮时露出石路，涨潮时部分回廊被淹，有海蚀礼拜堂、僧侣居室、钟塔、藏经洞和悬崖逃生梯";
+    const scene = generateScene({ ...request("round66-tidal-salt-monastery", "medium", 0.72), prompt }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.siteProgram).toBeDefined();
+    expect(scene.terrainProgram?.kind).toBe("underdark");
+    expect(scene.compositionProgram?.grammarId).toBe("grammar.cave-network-v1");
+    expect(scene.compositionProgram?.motifIds).toContain("motif.salt-crystal-cavern-monastery");
+    expect(hasTag(scene, "salt-crystal")).toBe(true);
+    expect(hasTag(scene, "cavern-tide-pool")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "shrine")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.some((tag) => tag.startsWith("focus-cluster:archive:")))).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("keeps a hillside noble district under settlement planning", () => {
     const scene = generateScene({ ...request("r12-hillside-settlement", "large", 0.62), prompt: "山坡贵族区，沿等高线道路、三座不同庄园、公共花园、守卫岗亭、仆从巷、山顶钟楼和下层商业街" }, "adaptive");
     expect(scene.sceneProgram?.domain).toBe("settlement");

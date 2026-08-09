@@ -48,7 +48,11 @@ function terrainKind(program: SiteProgram, prompt: string): TerrainProgramSummar
   if (program.requiredFeatures.includes("underdark-settlement") || includesAny(text, ["幽暗地域", "underdark", "地下聚落"])) return "underdark";
   if (program.requiredFeatures.includes("hollow-tree-city") || includesAny(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) return "megastructure";
   if (program.requiredFeatures.includes("mangrove-smuggler-port") || includesAny(text, ["红树林", "走私港", "港村", "mangrove", "smuggler port"])) return "swamp-bone";
-  if (program.requiredFeatures.includes("salt-crystal-monastery") || includesAny(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) return "megastructure";
+  if (program.requiredFeatures.includes("salt-crystal-monastery") || includesAny(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) {
+    const explicitlyFloating = includesAny(text, ["浮空", "浮岛", "悬空", "floating", "levitating"]);
+    const cavernParent = includesAny(text, ["潮汐洞穴", "洞穴群", "洞窟群", "洞穴网络", "海蚀洞", "tidal cavern", "cave network", "cavern network", "sea cave"]);
+    return explicitlyFloating || !cavernParent ? "megastructure" : "underdark";
+  }
   if (program.requiredFeatures.includes("tower-city") || includesAny(text, ["巨型塔楼结构", "巨塔城市", "tower city", "megastructure city"])) return "megastructure";
   if (program.requiredFeatures.includes("vertical-slum") || includesAny(text, ["桥墩之间", "垂直贫民", "bridge-pier settlement"])) return "bridge-megastructure";
   if (program.requiredFeatures.includes("coastal-cliff") || includesAny(text, ["海崖港镇", "分层海崖", "海岸悬崖", "黑沙海岸", "鲸骨灯塔村", "灯塔村", "sea-cliff port", "cliff port", "coastal cliff", "black sand coast", "lighthouse village"])) return "coastal-cliff";
@@ -637,18 +641,32 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           const angle = Math.PI * 2 * index / 18;
           const x = width / 2 + Math.cos(angle) * width * 0.48;
           const z = depth / 2 + Math.sin(angle) * depth * 0.47;
-          scene.primitives.push(primitive(`cavern-wall-${index}`, "cone", 0, x, feetToMeters(-15), z, 4.2 * 1.524, feetToMeters(45 + index % 4 * 5), 4.2 * 1.524, "darkStone", ["underdark", "cavern-wall", "vertical-face", "terrain-program"]));
+          scene.primitives.push(primitive(
+            `cavern-wall-${index}`,
+            "cone",
+            0,
+            x,
+            feetToMeters(-15),
+            z,
+            4.2 * 1.524,
+            feetToMeters(45 + index % 4 * 5),
+            4.2 * 1.524,
+            isSaltCrystal && index % 3 === 0 ? "ice" : "darkStone",
+            ["underdark", "cavern-wall", "vertical-face", "terrain-program", ...(isSaltCrystal ? ["salt-crystal", "tidal-cavern"] : [])],
+          ));
         }
         scene.primitives.push(
-          primitive("underdark-lake-surface", "sphere", 0, width * 0.22, feetToMeters(-4.5), depth * 0.72, width * 0.27 * 1.524, 0.22, depth * 0.22 * 1.524, "water", ["terrain-program", "watercourse", "underdark", "underground-lake", "hazard"]),
+          primitive("underdark-lake-surface", "sphere", 0, width * 0.22, feetToMeters(-4.5), depth * 0.72, width * 0.27 * 1.524, 0.22, depth * 0.22 * 1.524, "water", ["terrain-program", "watercourse", "underdark", "underground-lake", "hazard", ...(isSaltCrystal ? ["salt-crystal", "cavern-tide-pool", "tidal-cavern"] : [])]),
           corridor("underdark-ravine-bridge-north", 0, ravineX - 4, depth * 0.3, ravineX + 4, depth * 0.3, feetToMeters(10) + FLOOR_SLAB_METERS, 1.8, "stone", ["underdark", "ravine-bridge", "bridge", "standable", "terrain-program"]),
           corridor("underdark-ravine-bridge-south", 0, ravineX - 4, depth * 0.72, ravineX + 4, depth * 0.72, feetToMeters(5) + FLOOR_SLAB_METERS, 1.5, "wood", ["underdark", "ravine-bridge", "bridge", "standable", "terrain-program"]),
         );
-        for (let index = 0; index < 12; index += 1) {
+        for (let index = 0; index < (isSaltCrystal ? 20 : 12); index += 1) {
           const x = width * (0.12 + ((index * 7) % 11) / 14);
           const z = depth * (0.14 + ((index * 5) % 9) / 12);
           if (cellAt(x, z).surface === "void") continue;
-          scene.primitives.push(primitive(`settlement-fungus-${index}`, "cone", 0, x, feetToMeters(cellAt(x, z).elevationFeet), z, feetToMeters(1.2 + index % 3), feetToMeters(5 + index % 4), feetToMeters(1.2 + index % 3), index % 3 === 0 ? "warmLight" : "moss", ["underdark", "fungal-forest", "cover", "terrain-program"]));
+          scene.primitives.push(isSaltCrystal
+            ? primitive(`settlement-salt-crystal-${index}`, "cone", 0, x, feetToMeters(cellAt(x, z).elevationFeet), z, feetToMeters(0.7 + index % 3 * 0.25), feetToMeters(5 + index % 5 * 2), feetToMeters(0.7 + (index + 1) % 3 * 0.22), index % 4 === 0 ? "warmLight" : "ice", ["underdark", "salt-crystal", "crystal-spire", "cover", "tidal-cavern", "terrain-program"])
+            : primitive(`settlement-fungus-${index}`, "cone", 0, x, feetToMeters(cellAt(x, z).elevationFeet), z, feetToMeters(1.2 + index % 3), feetToMeters(5 + index % 4), feetToMeters(1.2 + index % 3), index % 3 === 0 ? "warmLight" : "moss", ["underdark", "fungal-forest", "cover", "terrain-program"]));
         }
       }
       if (kind === "megastructure" && !isHollowTree && !isSaltCrystal) {
