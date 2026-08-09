@@ -479,6 +479,31 @@ describe("scene generators", () => {
     }
   });
 
+  it("composes an unfamiliar whalebone lighthouse village onto a coastal cliff", () => {
+    const prompt = "建在黑沙海岸悬崖上的鲸骨灯塔村，有潮池、吊脚木屋、风暴缆车、盐风仓库和地下海蚀洞";
+    const scene = generateScene({ ...request("round64-whalebone-cliff", "medium", 0.72), prompt }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.siteProgram).toBeDefined();
+    expect(scene.siteProgram?.siteType).toBe("village");
+    expect(scene.terrainProgram?.kind).toBe("coastal-cliff");
+    expect(scene.buildingInstances?.some((building) => building.archetype === "home")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "tower")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "warehouse")).toBe(true);
+    expect(hasTag(scene, "whalebone")).toBe(true);
+    expect(hasTag(scene, "storm-cableway")).toBe(true);
+    expect(hasTag(scene, "sea-cave")).toBe(true);
+    expect(hasTag(scene, "tide-pool")).toBe(true);
+    expect(hasTag(scene, "stilt-foundation")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.level === 3 && primitive.tags?.includes("sea-cave"))).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+    expect(scene.diagnostics.warnings).toEqual([]);
+
+    const variation = generateScene({ ...request("round64-whalebone-cliff-b", "medium", 0.72), prompt }, "adaptive");
+    expect(variation.boundsCells).not.toEqual(scene.boundsCells);
+    expect(variation.buildingInstances?.map((building) => building.positionCells)).not.toEqual(scene.buildingInstances?.map((building) => building.positionCells));
+    expect(variation.diagnostics.valid).toBe(true);
+  });
+
   it("keeps a hillside noble district under settlement planning", () => {
     const scene = generateScene({ ...request("r12-hillside-settlement", "large", 0.62), prompt: "山坡贵族区，沿等高线道路、三座不同庄园、公共花园、守卫岗亭、仆从巷、山顶钟楼和下层商业街" }, "adaptive");
     expect(scene.sceneProgram?.domain).toBe("settlement");

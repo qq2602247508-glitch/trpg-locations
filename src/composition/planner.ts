@@ -7,6 +7,13 @@ import { resolveCapabilityDomain } from "./capabilityDomain";
 const normalized = (text: string) => text.normalize("NFKC").toLocaleLowerCase("en-US");
 const has = (text: string, terms: readonly string[]) => terms.some((term) => text.includes(term));
 
+function hasSettlementParent(text: string): boolean {
+  return has(text, [
+    "城镇", "村镇", "村庄", "村落", "灯塔村", "海岸村", "海崖村", "渔村", "聚居地", "街区", "港区", "港镇", "港村", "水镇", "水城", "运河城", "小镇",
+    "town", "village", "settlement", "district", "port town", "harbor village", "water town", "water city", "canal city",
+  ]);
+}
+
 function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   const text = normalized(prompt);
   if (has(text, ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"])) return "crater";
@@ -61,6 +68,7 @@ function styleFor(prompt: string, domain: string): StyleProgram {
 function semanticRequirements(prompt: string, domain: string): SemanticRequirement[] {
   const text = normalized(prompt);
   const facilityCapabilities = embeddedFacilityCapabilities(text);
+  const settlementParent = hasSettlementParent(text);
   const output: SemanticRequirement[] = [];
   const add = (id: string, phrase: string, tags: string[], importance: SemanticRequirement["importance"] = "major") => output.push({ id, sourcePhrase: phrase, requiredTags: tags, importance });
   if (has(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) {
@@ -142,7 +150,13 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
   if (domain === "volcanic") { add("volcano-core", "火山口", ["caldera", "lava"], "critical"); if (has(text, ["支流", "branch"])) add("lava-branches", "熔岩支流", ["lava-branch"], "critical"); if (has(text, ["黑曜石", "obsidian"])) add("obsidian", "黑曜石脊", ["obsidian-ridge"], "major"); if (has(text, ["玄武岩", "basalt"])) add("basalt", "玄武岩战术台地", ["basalt-platform", "high-ground"], "major"); }
   if (domain === "crater") { add("crater-core", "陨石坑", ["impact-crater", "crater-rim"], "critical"); if (has(text, ["裂缝", "fracture"])) add("crater-fracture", "放射裂缝", ["radial-fracture"], "major"); }
   if (domain === "rift") { add("rift-core", "裂谷双岸", ["rift", "crevasse", "rift-bank"], "critical"); if (has(text, ["裂谷底", "底部", "rift floor", "bottom"])) add("rift-bottom", "深层裂谷底", ["rift-bottom"], "critical"); if (has(text, ["桥", "bridge"])) add("rift-crossing", "跨谷桥", ["bridge", "rift-crossing"], "critical"); if (has(text, ["下降", "梯", "descent", "ladder"])) add("rift-descent", "贴崖下降交通", ["cliff-descent", "vertical-route"], "major"); }
-  if (shouldComposeWildernessFacility(text)) add("embedded-building", "场地建筑", ["building", "interior", "foundation"], "critical");
+  if (has(text, ["海岸悬崖", "海崖", "黑沙海岸", "coastal cliff", "black sand coast"])) add("coastal-cliff", "海岸悬崖", ["coastal-cliff"], "critical");
+  if (has(text, ["鲸骨", "whalebone"])) add("whalebone-landmark", "鲸骨地标", ["whalebone"], "critical");
+  if (has(text, ["风暴缆车", "风暴索道", "悬崖缆车", "storm cableway", "cliff cableway"])) add("storm-cableway", "风暴缆车", ["storm-cableway", "support"], "critical");
+  if (has(text, ["海蚀洞", "sea cave", "sea-eroded cave"])) add("sea-cave", "地下海蚀洞", ["sea-cave", "underground"], "critical");
+  if (has(text, ["吊脚木屋", "吊脚屋", "stilt house", "stilt cabin"])) add("stilt-houses", "吊脚木屋", ["stilt-foundation", "home"], "major");
+  if (has(text, ["潮池", "潮汐池", "tide pool", "tidal pool"])) add("tide-pools", "海岸潮池", ["tide-pool", "water"], "major");
+  if (!settlementParent && shouldComposeWildernessFacility(text)) add("embedded-building", "场地建筑", ["building", "interior", "foundation"], "critical");
   return output;
 }
 
@@ -172,7 +186,7 @@ export function compileSceneComposition(request: GenerationRequest, source: Scen
   }[domain];
   if (domainMotif) motifIds.push(domainMotif);
   if (isWaterCity) motifIds.push("motif.water-city-quays");
-  if (shouldComposeWildernessFacility(text)) motifIds.push("motif.embedded-building");
+  if (!hasSettlementParent(text) && shouldComposeWildernessFacility(text)) motifIds.push("motif.embedded-building");
   if (has(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) motifIds.push("motif.hollow-tree-city");
   if (has(text, ["红树林", "mangrove"]) && has(text, ["走私港", "走私港村", "走私", "smuggler port", "smuggling port"])) motifIds.push("motif.mangrove-smuggler-port");
   if (has(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) motifIds.push("motif.salt-crystal-monastery");

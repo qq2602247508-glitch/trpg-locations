@@ -876,6 +876,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       : program.requiredFeatures.includes("hollow-tree-city") ? "The Hollow-Heart Canopy"
         : program.requiredFeatures.includes("mangrove-smuggler-port") ? "The Rootbound Smuggler Port"
           : program.requiredFeatures.includes("salt-crystal-monastery") ? "The Salt-Crystal Ascendancy"
+            : program.requiredFeatures.includes("whalebone-landmark") ? "The Whalebone Lighthouse Village"
       : program.siteType === "harbor-district" ? "The Layered Quays"
         : program.siteType === "village" ? "The Living Crossroads"
           : program.siteType === "mining-settlement" ? "Orewater Camp"
@@ -993,6 +994,8 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     const placement = mangrovePlacement ?? semanticPlacement ?? nearestBuildable(parcel.center.x, parcel.center.z, clearance);
     if (!placement) continue;
     const siteElevation = isFlooded ? feetToMeters(5) : placement.elevationFeet === undefined ? elevationAt(placement.x, placement.z) : feetToMeters(placement.elevationFeet);
+    const raisedStiltHome = program.requiredFeatures.includes("stilt-houses") && parcel.buildingKind === "home";
+    const buildingBaseY = siteElevation + FLOOR_SLAB_METERS + (raisedStiltHome ? feetToMeters(5) : 0);
     instantiateBuildingModule(scene, {
       id: `settlement-building-${parcel.id.replace("parcel-", "")}`,
       kind: parcel.buildingKind,
@@ -1007,10 +1010,38 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       parcelId: parcel.id,
       frontageRoadId: parcel.frontageRoadId,
       entrance: placement,
-      baseY: siteElevation + FLOOR_SLAB_METERS,
+      baseY: buildingBaseY,
       state: parcel.state,
       functionalModules: parcel.functionalModules,
     }, context.rng.fork(parcel.buildingSeed));
+    if (raisedStiltHome) {
+      for (const [pierIndex, dx, dz] of [[0, -0.32, -0.32], [1, 0.32, -0.32], [2, -0.32, 0.32], [3, 0.32, 0.32]] as const) {
+        scene.primitives.push(cylinder(
+          `coastal-stilt-home-${parcel.id}-${pierIndex + 1}`,
+          0,
+          placement.x + parcel.buildingSize.x * dx,
+          siteElevation,
+          placement.z + parcel.buildingSize.z * dz,
+          0.38,
+          feetToMeters(5) + FLOOR_SLAB_METERS,
+          "wood",
+          ["coastal-cliff", "stilt-foundation", "support", "grounded-support", "home", `parcel:${parcel.id}`, "site-program"],
+        ));
+      }
+      scene.primitives.push(stairs(
+        `coastal-stilt-home-entry-${parcel.id}`,
+        0,
+        placement.x,
+        siteElevation,
+        placement.z + parcel.buildingSize.z * 0.48,
+        1.4,
+        feetToMeters(5),
+        4,
+        "wood",
+        ["coastal-cliff", "stilt-foundation", "home", "supported", "standable", `parcel:${parcel.id}`, "site-program"],
+        parcel.rotationY,
+      ));
+    }
     const requiresParentWater = parcel.functionalModules?.some((module) => module.requiresWater) ?? false;
     if (requiresParentWater) {
       const waterPoint = terrain.nearestSurfacePoint(placement.x, placement.z, ["water"], Math.max(10, Math.min(program.bounds.x, program.bounds.z) * 0.22));

@@ -28,7 +28,7 @@ function inferSiteType(text: string, archetype: SitePlanningInput["archetype"]):
   if (contains(text, ["火星殖民", "殖民地港口", "mars colony", "colony port"])) return "city-district";
   if (archetype === "harbor") return "harbor-district";
   if (archetype === "city") return "city-district";
-  if (archetype === "village") return "village";
+  if (archetype === "village" || contains(text, ["灯塔村", "海岸村", "海崖村", "渔村", "村庄", "村落", "village"])) return "village";
   return "town";
 }
 
@@ -60,7 +60,7 @@ function requestedBuildingKinds(text: string): SettlementBuildingKind[] {
   add("factory", ["工厂", "厂房", "染坊", "染料作坊", "发电站", "泵房", "工坊", "维修机库", "factory", "dye works", "dye workshop", "power station", "pump house", "pumphouse", "workshop", "hangar"]);
   add("barn", ["马厩", "谷仓", "粮仓", "stable", "barn", "granary"]);
   add("manor", ["庄园", "宅邸", "manor", "mansion"]);
-  add("home", ["矿工宿舍", "工人住宅", "住宅", "宿舍", "棚屋", "居住模块", "worker housing", "dormitory", "residence", "shack", "habitat"]);
+  add("home", ["吊脚木屋", "木屋", "小木屋", "灯塔村住宅", "海岸木屋", "矿工宿舍", "工人住宅", "住宅", "宿舍", "棚屋", "居住模块", "worker housing", "dormitory", "residence", "shack", "habitat", "stilt house", "cabin", "lodge", "hut"]);
   return requested;
 }
 
@@ -156,7 +156,12 @@ function requestedSiteFeatures(text: string): string[] {
   add("vertical-slum", ["垂直贫民", "巨型桥墩", "桥墩棚屋", "多层棚屋", "vertical slum", "bridge pier settlement"]);
   add("colony-port", ["火星殖民", "气闸", "居住模块", "温室", "mars colony", "airlock"]);
   add("coastal-town", ["海滨小镇", "1920年代海滨", "coastal town", "seaside town"]);
-  add("coastal-cliff", ["海崖港镇", "分层海崖", "悬崖港镇", "sea-cliff port", "cliff port"]);
+  add("coastal-cliff", ["海崖港镇", "分层海崖", "悬崖港镇", "海岸悬崖", "黑沙海岸", "鲸骨灯塔村", "灯塔村", "sea-cliff port", "cliff port", "coastal cliff", "black sand coast", "lighthouse village"]);
+  add("whalebone-landmark", ["鲸骨", "鲸骨灯塔", "鲸骨村", "whalebone", "whalebone lighthouse"]);
+  add("storm-cableway", ["风暴缆车", "风暴索道", "悬崖缆车", "storm cableway", "cliff cableway", "cable lift"]);
+  add("sea-cave", ["海蚀洞", "地下海蚀洞", "海蚀洞穴", "sea cave", "sea-eroded cave"]);
+  add("stilt-houses", ["吊脚木屋", "吊脚屋", "架高木屋", "stilt house", "stilt cabin"]);
+  add("tide-pools", ["潮池", "潮汐池", "岩礁水池", "tide pool", "tidal pool"]);
   add("fantasy-harbor", ["深水城港区", "奇幻港区", "deepwater harbor", "fantasy harbor"]);
   add("impact-crater-settlement", ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"]);
   add("volcanic-settlement", ["火山口村", "火山村", "火山聚落", "破火山口聚落", "火山灰峡谷", "熔岩营地", "volcanic settlement", "volcano village", "caldera village", "volcanic canyon"]);

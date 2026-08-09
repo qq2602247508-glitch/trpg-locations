@@ -51,7 +51,7 @@ function terrainKind(program: SiteProgram, prompt: string): TerrainProgramSummar
   if (program.requiredFeatures.includes("salt-crystal-monastery") || includesAny(text, ["盐晶", "浮空修道院", "修道院群", "salt crystal", "floating monastery"])) return "megastructure";
   if (program.requiredFeatures.includes("tower-city") || includesAny(text, ["巨型塔楼结构", "巨塔城市", "tower city", "megastructure city"])) return "megastructure";
   if (program.requiredFeatures.includes("vertical-slum") || includesAny(text, ["桥墩之间", "垂直贫民", "bridge-pier settlement"])) return "bridge-megastructure";
-  if (program.requiredFeatures.includes("coastal-cliff") || includesAny(text, ["海崖港镇", "分层海崖", "sea-cliff port", "cliff port"])) return "coastal-cliff";
+  if (program.requiredFeatures.includes("coastal-cliff") || includesAny(text, ["海崖港镇", "分层海崖", "海岸悬崖", "黑沙海岸", "鲸骨灯塔村", "灯塔村", "sea-cliff port", "cliff port", "coastal cliff", "black sand coast", "lighthouse village"])) return "coastal-cliff";
   if (program.requiredFeatures.includes("bone-swamp-settlement") || includesAny(text, ["石化龙骨", "肋骨栈道", "dragonbone swamp", "fossil ribs"])) return "swamp-bone";
   if (program.requiredFeatures.includes("airship-wreck-settlement") || includesAny(text, ["坠毁飞艇", "飞艇残骸", "crashed airship", "airship wreck"])) return "wreck-field";
   if (program.requiredFeatures.includes("water-city")) return "river";
@@ -61,6 +61,7 @@ function terrainKind(program: SiteProgram, prompt: string): TerrainProgramSummar
 function materialFor(cell: TerrainCell, kind: TerrainProgramSummary["kind"]): MaterialKey {
   if (cell.surface === "lava") return "hazard";
   if (kind === "ice-crevasse") return cell.elevationFeet <= -10 ? "darkStone" : "ice";
+  if (kind === "coastal-cliff") return cell.elevationFeet <= 0 ? "darkStone" : cell.elevationFeet >= 20 ? "rock" : "stone";
   if (cell.surface === "rock" || kind === "underdark" || kind === "caldera" || kind === "impact-crater" || kind === "megastructure") return cell.elevationFeet >= 20 ? "darkStone" : "rock";
   return kind === "river" ? "earth" : "earth";
 }
@@ -718,6 +719,79 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           stairs("coastal-cliff-switchback-upper", 1, width * 0.72, feetToMeters(20), depth * 0.29, 2, feetToMeters(10), 7, "stone", ["coastal-cliff", "switchback", "vertical-opening", "standable", "terrain-program"], 0),
           stairs("coastal-cliff-switchback-lower", 0, width * 0.66, feetToMeters(10), depth * 0.56, 2, feetToMeters(10), 7, "stone", ["coastal-cliff", "switchback", "vertical-opening", "standable", "terrain-program"], 0),
         );
+        if (program.requiredFeatures.includes("whalebone-landmark")) {
+          const boneY = feetToMeters(23);
+          const spineStart = { x: width * 0.16, z: depth * 0.44 };
+          const spineEnd = { x: width * 0.62, z: depth * 0.33 };
+          scene.primitives.push(
+            corridor("coastal-whalebone-spine", 1, spineStart.x, spineStart.z, spineEnd.x, spineEnd.z, boneY, 1.65, "plaster", ["coastal-cliff", "whalebone", "spine", "standable", "high-ground", "terrain-program"]),
+            primitive("coastal-whalebone-skull", "sphere", 1, width * 0.14, feetToMeters(16), depth * 0.45, 8.5, feetToMeters(9), 6.5, "plaster", ["coastal-cliff", "whalebone", "whale-skull", "landmark", "cover", "terrain-program"], -0.22),
+          );
+          const spineAngle = Math.atan2(spineEnd.z - spineStart.z, spineEnd.x - spineStart.x);
+          for (let rib = 0; rib < 6; rib += 1) {
+            const t = (rib + 1) / 7;
+            const cx = spineStart.x + (spineEnd.x - spineStart.x) * t;
+            const cz = spineStart.z + (spineEnd.z - spineStart.z) * t;
+            const ribLength = 7.5 + (rib % 3) * 1.7;
+            for (const side of [-1, 1]) {
+              const endX = cx + Math.cos(spineAngle + side * (Math.PI / 2 - 0.25)) * ribLength;
+              const endZ = cz + Math.sin(spineAngle + side * (Math.PI / 2 - 0.25)) * ribLength;
+              scene.primitives.push(corridor(`coastal-whalebone-rib-${rib}-${side}`, 1, cx, cz, endX, endZ, boneY - feetToMeters(1.5), 0.9, "plaster", ["coastal-cliff", "whalebone", "rib", "cover", "terrain-program"]));
+              scene.primitives.push(cylinder(`coastal-whalebone-rib-post-${rib}-${side}`, 0, endX, feetToMeters(10), endZ, 0.48, feetToMeters(14 + (rib % 3) * 3), "plaster", ["coastal-cliff", "whalebone", "rib", "vertical-bone", "cover", "terrain-program"]));
+            }
+          }
+        }
+        if (program.requiredFeatures.includes("tide-pools")) {
+          for (let pool = 0; pool < 4; pool += 1) {
+            scene.primitives.push(water(
+              `coastal-tide-pool-${pool + 1}`,
+              0,
+              width * (0.18 + pool * 0.19),
+              feetToMeters(0.4),
+              depth * (0.74 + (pool % 2) * 0.035),
+              2.4 + (pool % 2) * 0.8,
+              0.08,
+              1.7 + ((pool + 1) % 2) * 0.7,
+              ["coastal-cliff", "tide-pool", "hazard", "terrain-program"],
+            ));
+          }
+        }
+        if (program.requiredFeatures.includes("storm-cableway")) {
+          const cableY = feetToMeters(28);
+          scene.primitives.push(
+            corridor("coastal-storm-cableway", 2, width * 0.58, depth * 0.3, width * 0.72, depth * 0.7, cableY, 0.32, "metal", ["coastal-cliff", "storm-cableway", "elevated", "high-ground", "terrain-program"]),
+            box("coastal-storm-cable-station-upper", 2, width * 0.58, cableY - 0.1, depth * 0.3, 3.2, FLOOR_SLAB_METERS, 3.2, "wood", ["coastal-cliff", "storm-cableway", "station-platform", "standable", "supported", "terrain-program"]),
+            box("coastal-storm-cable-station-lower", 2, width * 0.72, cableY - 0.1, depth * 0.7, 3.2, FLOOR_SLAB_METERS, 3.2, "wood", ["coastal-cliff", "storm-cableway", "station-platform", "standable", "supported", "terrain-program"]),
+            box("coastal-storm-cable-gondola", 2, width * 0.65, cableY - feetToMeters(3), depth * 0.5, 2.2, feetToMeters(3.5), 2.6, "metal", ["coastal-cliff", "storm-cableway", "gondola", "cover", "terrain-program"]),
+            cylinder("coastal-storm-cable-pylon-a", 0, width * 0.58, 0, depth * 0.3, 0.35, cableY, "metal", ["coastal-cliff", "storm-cableway", "support", "terrain-program"]),
+            cylinder("coastal-storm-cable-pylon-b", 0, width * 0.72, 0, depth * 0.7, 0.35, cableY, "metal", ["coastal-cliff", "storm-cableway", "support", "terrain-program"]),
+          );
+        }
+        if (program.requiredFeatures.includes("sea-cave")) {
+          const caveX = width * 0.34;
+          const caveZ = depth * 0.66;
+          const caveY = -feetToMeters(12);
+          scene.primitives.push(
+            box("coastal-sea-cave-floor-main", 3, caveX, caveY, caveZ, 9, FLOOR_SLAB_METERS, 7, "darkStone", ["coastal-cliff", "sea-cave", "underground", "floor", "standable", "terrain-program"]),
+            box("coastal-sea-cave-floor-tidal", 3, caveX - 4.8, caveY, caveZ + 1.1, 5.5, FLOOR_SLAB_METERS, 4.8, "darkStone", ["coastal-cliff", "sea-cave", "underground", "floor", "standable", "terrain-program"]),
+            corridor("coastal-sea-cave-entry-path", 3, caveX + 1.1, caveZ - 4.4, caveX + 1.1, caveZ - 1.4, caveY + FLOOR_SLAB_METERS, 1.8, "stone", ["coastal-cliff", "sea-cave", "underground", "standable", "terrain-program"]),
+            stairs("coastal-sea-cave-entry", 3, caveX + 1.1, caveY, caveZ - 4.5, 1.8, feetToMeters(12), 7, "stone", ["coastal-cliff", "sea-cave", "underground", "vertical-opening", "standable", "terrain-program"], 0),
+            water("coastal-sea-cave-pool", 3, caveX - 4.7, caveY + 0.1, caveZ + 1.2, 3.7, 0.08, 3.2, ["coastal-cliff", "sea-cave", "tidal-pool", "hazard", "terrain-program"]),
+            primitive("coastal-sea-cave-wall-north", "sphere", 3, caveX, caveY, caveZ - 4.1, 12, feetToMeters(8), 4.5, "rock", ["coastal-cliff", "sea-cave", "cave-wall", "cover", "terrain-program"]),
+            primitive("coastal-sea-cave-wall-south", "sphere", 3, caveX - 0.8, caveY, caveZ + 4.1, 12, feetToMeters(9), 4.8, "rock", ["coastal-cliff", "sea-cave", "cave-wall", "cover", "terrain-program"]),
+            primitive("coastal-sea-cave-wall-west", "sphere", 3, caveX - 6.2, caveY, caveZ - 0.3, 5.2, feetToMeters(10), 10, "rock", ["coastal-cliff", "sea-cave", "cave-wall", "cover", "terrain-program"]),
+            primitive("coastal-sea-cave-wall-east", "sphere", 3, caveX + 5.2, caveY, caveZ + 0.2, 5, feetToMeters(11), 9, "rock", ["coastal-cliff", "sea-cave", "cave-wall", "cover", "terrain-program"]),
+            primitive("coastal-sea-cave-pillar-a", "sphere", 3, caveX - 2.4, caveY, caveZ - 1.7, 3.2, feetToMeters(7), 3.2, "rock", ["coastal-cliff", "sea-cave", "stone-pillar", "cover", "terrain-program"]),
+            primitive("coastal-sea-cave-pillar-b", "sphere", 3, caveX + 2.7, caveY, caveZ + 1.9, 3.5, feetToMeters(8), 3.5, "rock", ["coastal-cliff", "sea-cave", "stone-pillar", "cover", "terrain-program"]),
+          );
+          scene.routes.push(createRoute("coastal-sea-cave-route", "alternate", [
+            { x: caveX + 1.1, z: caveZ - 7.8, y: 0 },
+            { x: caveX + 1.1, z: caveZ - 4.5, y: caveY },
+            { x: caveX + 1.1, z: caveZ - 1.4, y: caveY + FLOOR_SLAB_METERS },
+            { x: caveX - 2.4, z: caveZ + 0.4, y: caveY + FLOOR_SLAB_METERS },
+            { x: caveX - 4.7, z: caveZ + 1.2, y: caveY + FLOOR_SLAB_METERS },
+          ], { purpose: "movement", traffic: 0.2, schedule: "all" }));
+        }
       }
       if (kind === "swamp-bone") {
         const spinePoints = Array.from({ length: 8 }, (_, index) => ({ x: width * (0.2 + index * 0.085), z: depth * (0.2 + index * 0.075) + Math.sin(index + phase) * 1.4 }));
