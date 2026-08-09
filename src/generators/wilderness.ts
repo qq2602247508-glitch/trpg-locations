@@ -16,6 +16,7 @@ import {
   cylinder,
   feetToMeters,
   primitive,
+  ramp,
   rectangularShell,
   stairConnection,
   stairRoute,
@@ -622,16 +623,20 @@ interface FieldRenderOptions {
   materialFor(level: number, x: number, z: number): MaterialKey;
   tagsFor?(level: number, x: number, z: number): string[];
   stepFeet?: number;
+  slopeFacades?: boolean;
+  slopeMaterial?: MaterialKey;
 }
 
 /** Shared terrain realization: morphology operators author an elevation field,
  * while this pass makes all walkable tops and vertical boundaries explicit. */
-function renderMorphologyField(scene: GeneratedScene, options: FieldRenderOptions): { yOf(level: number): number; walkable: number; cliffs: number } {
+function renderMorphologyField(scene: GeneratedScene, options: FieldRenderOptions): { yOf(level: number): number; walkable: number; cliffs: number; slopes: number } {
   const { prefix, cols, rows, heights } = options;
   const at = (x: number, z: number) => x < 0 || z < 0 || x >= cols || z >= rows ? undefined : heights[z * cols + x];
   const yOf = (level: number) => feetToMeters(level * (options.stepFeet ?? 5)) + FLOOR_SLAB_METERS;
   let walkable = 0;
   let cliffs = 0;
+  let slopes = 0;
+  const slopeEdges: Array<{ x: number; z: number; dx: number; dz: number; lowY: number; highY: number; rotation: number; material: MaterialKey }> = [];
   for (let z = 0; z < rows; z += 1) {
     for (let x = 0; x < cols; x += 1) {
       const level = at(x, z);
@@ -645,11 +650,64 @@ function renderMorphologyField(scene: GeneratedScene, options: FieldRenderOption
         const highY = yOf(neighbour === undefined ? level : Math.max(level, neighbour));
         if (highY - lowY < 0.3) continue;
         cliffs += 1;
+        if (options.slopeFacades && neighbour !== undefined && Math.abs(level - neighbour) === 1) {
+          const highIsCurrent = level > neighbour;
+          const highDirectionX = highIsCurrent ? -dx : dx;
+          const highDirectionZ = highIsCurrent ? -dz : dz;
+          slopeEdges.push({
+            x: x + 0.5 + dx * 0.5,
+            z: z + 0.5 + dz * 0.5,
+            dx,
+            dz,
+            lowY,
+            highY,
+            rotation: Math.atan2(highDirectionX, highDirectionZ),
+            material: options.slopeMaterial ?? "rock",
+          });
+          continue;
+        }
         scene.primitives.push(box(`${prefix}-cliff-${x}-${z}-${dx}-${dz}`, 0, x + 0.5 + dx * 0.49, lowY, z + 0.5 + dz * 0.49, dx ? 0.14 : 0.96, highY - lowY, dz ? 0.14 : 0.96, "darkStone", ["cliff-face", "vertical-face", "terrain", `${prefix}-boundary`]));
       }
     }
   }
-  return { yOf, walkable, cliffs };
+  const groupedSlopes = new Map<string, typeof slopeEdges>();
+  for (const edge of slopeEdges) {
+    const fixedCoordinate = edge.dx ? edge.x : edge.z;
+    const key = `${edge.dx}:${edge.dz}:${fixedCoordinate.toFixed(3)}:${edge.lowY.toFixed(3)}:${edge.highY.toFixed(3)}:${edge.rotation.toFixed(3)}:${edge.material}`;
+    const group = groupedSlopes.get(key);
+    if (group) group.push(edge); else groupedSlopes.set(key, [edge]);
+  }
+  for (const group of groupedSlopes.values()) {
+    group.sort((left, right) => (left.dx ? left.z - right.z : left.x - right.x));
+    let start = 0;
+    const flush = (end: number) => {
+      const run = group.slice(start, end);
+      if (run.length === 0) return;
+      const first = run[0]!; const last = run.at(-1)!;
+      scene.primitives.push(ramp(
+        `${prefix}-slope-run-${slopes}`,
+        0,
+        (first.x + last.x) / 2,
+        first.lowY,
+        (first.z + last.z) / 2,
+        run.length * 0.98,
+        first.highY - first.lowY,
+        0.92,
+        first.material,
+        ["terrain", "slope-facade", "erosion-facing", "non-walkable-facade", "merged-slope-run", `${prefix}-boundary`],
+        first.rotation,
+      ));
+      slopes += 1;
+    };
+    for (let index = 1; index <= group.length; index += 1) {
+      const previous = group[index - 1]; const current = group[index];
+      const gap = previous && current ? (previous.dx ? current.z - previous.z : current.x - previous.x) : Number.POSITIVE_INFINITY;
+      if (gap <= 1.01) continue;
+      flush(index);
+      start = index;
+    }
+  }
+  return { yOf, walkable, cliffs, slopes };
 }
 
 function buildDryRiverbed(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
@@ -673,6 +731,8 @@ function buildDryRiverbed(scene: GeneratedScene, width: number, depth: number, d
     heights,
     materialFor: (level) => level === 0 ? "earth" : level >= 3 ? "darkStone" : "rock",
     tagsFor: (level) => [level === 0 ? "dry-riverbed" : "eroded-bank", level === 1 ? "wash-margin" : "badland-shelf"],
+    slopeFacades: true,
+    slopeMaterial: "rock",
   });
   const crossingXs = [cols * 0.24, cols * 0.62, cols * 0.84];
   for (const [index, x] of crossingXs.entries()) {
@@ -691,7 +751,7 @@ function buildDryRiverbed(scene: GeneratedScene, width: number, depth: number, d
   connectRooms(scene.rooms, "dry-channel-bed", "dry-channel-lower-bank");
   scene.routes.push(createRoute("dry-channel-long-route", "primary", [{ x: 2, z: channelAt(2), y: rendered.yOf(0) }, { x: cols * 0.35, z: channelAt(cols * 0.35), y: rendered.yOf(0) }, { x: cols * 0.7, z: channelAt(cols * 0.7), y: rendered.yOf(0) }, { x: cols - 2, z: channelAt(cols - 2), y: rendered.yOf(0) }]), createRoute("dry-channel-bank-crossing", "alternate", [{ x: crossingXs[1] ?? cols / 2, z: 2, y: rendered.yOf(3) }, { x: crossingXs[1] ?? cols / 2, z: channelAt(crossingXs[1] ?? cols / 2), y: rendered.yOf(0) }, { x: crossingXs[1] ?? cols / 2, z: rows - 2, y: rendered.yOf(3) }]));
   scene.tactical.push(tacticalFeature("dry-channel-entrance", "entrance", 2, channelAt(2), rendered.yOf(0), 2, "The dry channel enters through a narrow upstream cut."), tacticalFeature("dry-channel-flash-flood", "hazard", cols * 0.5, channelAt(cols * 0.5), rendered.yOf(0), 3, "The exposed river bed is a fast route but becomes a flash-flood kill zone."), tacticalFeature("dry-channel-overlook", "highGround", cols * 0.62, rows * 0.2, rendered.yOf(3), 3, "An eroded bank overlooks two channel crossings."));
-  scene.description = `Dry-channel morphology with ${rendered.walkable} walkable cells, ${rendered.cliffs} eroded vertical faces, three crossings, scoured boulders, and a continuous low river bed.`;
+  scene.description = `Dry-channel morphology with ${rendered.walkable} walkable cells, ${rendered.cliffs} eroded boundaries (${rendered.slopes} slope facades), three crossings, scoured boulders, and a continuous low river bed.`;
 }
 
 function buildImpactCrater(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
@@ -1278,6 +1338,8 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
     tagsFor: (_level, x, z) => clearingAt(x, z) >= 0
       ? ["forest", "clearing", `clearing:${clearingAt(x, z) + 1}`, "standable", ...(coldForest ? ["cold-forest-floor"] : [])]
       : ["forest", "woodland-floor", "standable", ...(coldForest ? ["cold-forest-floor"] : [])],
+    slopeFacades: true,
+    slopeMaterial: "earth",
   });
   const levelAt = (x: number, z: number) => heights[Math.max(0, Math.min(rows - 1, Math.floor(z))) * cols + Math.max(0, Math.min(cols - 1, Math.floor(x)))] ?? 0;
   const surfaceY = (x: number, z: number) => rendered.yOf(levelAt(x, z));
@@ -1497,7 +1559,7 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   );
   connectRooms(scene.rooms, "forest-edge", "forest-clearing-1"); connectRooms(scene.rooms, "forest-clearing-1", "forest-clearing-2"); connectRooms(scene.rooms, "forest-clearing-2", "forest-clearing-3"); connectRooms(scene.rooms, "forest-clearing-3", "forest-deep");
   scene.tactical.push(tacticalFeature("forest-entrance", "entrance", 1.5, rows * 0.18, surfaceY(1.5, rows * 0.18), 2, "A narrow game trail enters beneath a layered canopy."), tacticalFeature("forest-clearing-choke", "chokepoint", clearings[1]!.x, clearings[1]!.z, surfaceY(clearings[1]!.x, clearings[1]!.z), 3, "The middle clearing exposes movement between two dense tree walls."));
-  scene.description = `Layered forest composition with ${rendered.walkable} terrain cells, ${rendered.cliffs} vertical faces, ${maximumTerrainLevel + 1} elevation bands, three irregular clearings, ${trees} clustered trees (${speciesCounts.broadleaf} broadleaf, ${speciesCounts.conifer} conifer, ${speciesCounts.snag} snags, ${speciesCounts.understory} understory), ${undergrowthCount} undergrowth attempts, ${logCount} fallen logs, ${ancientCount} reachable canopy platforms${coldForest ? `, ${snowPatchCount} high-ground snow patches` : ""}${streamWanted ? ", and a shallow stream" : ""}.`;
+  scene.description = `Layered forest composition with ${rendered.walkable} terrain cells, ${rendered.cliffs} elevation boundaries (${rendered.slopes} natural slope facades), ${maximumTerrainLevel + 1} elevation bands, three irregular clearings, ${trees} clustered trees (${speciesCounts.broadleaf} broadleaf, ${speciesCounts.conifer} conifer, ${speciesCounts.snag} snags, ${speciesCounts.understory} understory), ${undergrowthCount} undergrowth attempts, ${logCount} fallen logs, ${ancientCount} reachable canopy platforms${coldForest ? `, ${snowPatchCount} high-ground snow patches` : ""}${streamWanted ? ", and a shallow stream" : ""}.`;
   scene.floorHeightFeet = [Math.ceil((rendered.yOf(maximumTerrainLevel) + feetToMeters(54)) / 0.3048)];
 }
 

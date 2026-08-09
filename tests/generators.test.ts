@@ -762,6 +762,10 @@ describe("scene generators", () => {
     expect(hasTag(scene, "eroded-bank")).toBe(true);
     expect(hasTag(scene, "scoured-boulder")).toBe(true);
     expect(hasTag(scene, "watercourse")).toBe(false);
+    const slopes = scene.primitives.filter((primitive) => primitive.shape === "ramp" && primitive.tags?.includes("slope-facade"));
+    expect(slopes.length).toBeGreaterThan(40);
+    expect(slopes.every((primitive) => primitive.size.y > 0 && primitive.rotationY !== undefined && !primitive.tags?.includes("standable"))).toBe(true);
+    expect(scene.description).toContain("slope facades");
   });
 
   it("keeps giant fungi as standable tactical platforms", () => {

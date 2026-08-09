@@ -6,7 +6,7 @@ import type { SettlementAdaptationProgramSummary, SiteProgramSummary, TerrainPro
 import type { SceneCompositionProgram, SceneCompositionProgramSummary } from "./composition/schema";
 
 export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "dungeon" | "building" | "settlement" | "wilderness" | "adaptive";
-export type PrimitiveShape = "box" | "cylinder" | "cone" | "sphere" | "gable" | "stairs" | "water";
+export type PrimitiveShape = "box" | "cylinder" | "cone" | "sphere" | "gable" | "ramp" | "stairs" | "water";
 export type MaterialKey =
   | "stone"
   | "darkStone"

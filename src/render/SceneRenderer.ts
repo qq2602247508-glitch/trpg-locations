@@ -1259,6 +1259,9 @@ export class SceneRenderer {
       case "gable":
         geometry = this.createGableGeometry();
         break;
+      case "ramp":
+        geometry = this.createRampGeometry();
+        break;
       case "stairs":
         geometry = this.createStairsGeometry();
         break;
@@ -1279,6 +1282,31 @@ export class SceneRenderer {
       0, 1, 4, 0, 4, 3,
       0, 3, 5, 0, 5, 2,
       1, 2, 5, 1, 5, 4,
+    ];
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  private createRampGeometry(): THREE.BufferGeometry {
+    // Unit triangular wedge: local +Z is the high edge, local -Z is the
+    // low edge. Authored rotationY points the wedge into the higher terrain.
+    const vertices = new Float32Array([
+      -0.5, -0.5, -0.5,
+       0.5, -0.5, -0.5,
+      -0.5, -0.5,  0.5,
+       0.5, -0.5,  0.5,
+      -0.5,  0.5,  0.5,
+       0.5,  0.5,  0.5,
+    ]);
+    const indices = [
+      0, 1, 3, 0, 3, 2,
+      0, 4, 5, 0, 5, 1,
+      0, 2, 4,
+      1, 5, 3,
+      2, 3, 5, 2, 5, 4,
     ];
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));

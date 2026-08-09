@@ -151,9 +151,13 @@ describe("five-layer composition catalog", () => {
       .filter((primitive) => primitive.id.startsWith("forest-morphology-cell-"))
       .flatMap((primitive) => primitive.tags?.filter((tag) => tag.startsWith("elevation:")) ?? [])).size;
     const verticalFaces = (scene: typeof dense) => scene.primitives.filter((primitive) => primitive.tags?.includes("forest-morphology-boundary")).length;
+    const slopeFacades = (scene: typeof dense) => scene.primitives.filter((primitive) => primitive.shape === "ramp" && primitive.tags?.includes("slope-facade"));
     expect(terrainBands(dense)).toBeGreaterThan(terrainBands(sparse));
     expect(verticalFaces(dense)).toBeGreaterThan(verticalFaces(sparse));
     expect(dense.primitives.filter((primitive) => primitive.tags?.includes("tree")).length).toBeGreaterThan(sparse.primitives.filter((primitive) => primitive.tags?.includes("tree")).length * 1.8);
+    expect(slopeFacades(dense).length).toBeGreaterThan(100);
+    expect(slopeFacades(dense).every((primitive) => !primitive.tags?.includes("standable") && primitive.tags?.includes("non-walkable-facade"))).toBe(true);
+    expect(dense.description).toContain("natural slope facades");
   });
 
   it("keeps contour-following forest routes deterministic and seed-sensitive", () => {

@@ -186,6 +186,23 @@ export function box(
   );
 }
 
+/** A non-walkable triangular terrain facing. Local +Z is the high edge. */
+export function ramp(
+  id: string,
+  level: number,
+  xCells: number,
+  yMeters: number,
+  zCells: number,
+  widthCells: number,
+  heightMeters: number,
+  runCells: number,
+  material: MaterialKey,
+  tags: string[] = [],
+  rotationY = 0,
+): ScenePrimitive {
+  return primitive(id, "ramp", level, xCells, yMeters, zCells, cellsToMeters(widthCells), heightMeters, cellsToMeters(runCells), material, tags, rotationY);
+}
+
 /**
  * Builds a floor as non-overlapping slabs around one or more actual voids.
  * The opening frame is deliberately separate from `floor-slab` geometry, so
