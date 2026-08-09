@@ -8,7 +8,67 @@ describe("five-layer composition catalog", () => {
     const ready = SPATIAL_ATOMS.filter((entry) => entry.status === "production-ready");
     expect(ready.length).toBeGreaterThan(5);
     expect(ready.map(auditAtomQuality).every((result) => result.ready && result.issues.length === 0)).toBe(true);
-    expect(catalogMaturity().planned).toBeGreaterThan(10);
+    const maturity = catalogMaturity();
+    expect(maturity.validated + maturity["production-ready"]).toBeGreaterThan(maturity.planned);
+    expect(SPATIAL_ATOMS.filter((entry) => entry.status === "validated" || entry.status === "production-ready")
+      .every((entry) => !entry.geometryBuilder.startsWith("planned:"))).toBe(true);
+  });
+
+  it("only promotes atoms that have deterministic geometry evidence", () => {
+    const upgraded = [
+      "terrain.ravine",
+      "ecology.root-network",
+      "structure.room-cell",
+      "state.collapse",
+      "state.flood",
+    ];
+    for (const id of upgraded) {
+      const entry = SPATIAL_ATOMS.find((atom) => atom.id === id);
+      expect(entry, id).toBeDefined();
+      expect(entry?.status, id).toBe("validated");
+      expect(entry?.geometryBuilder.startsWith("planned:"), id).toBe(false);
+      expect(auditAtomQuality(entry!).ready, id).toBe(true);
+    }
+
+    const rift = generateScene({ prompt: "弯曲裂谷把两岸完全切开，有深层裂谷底、两座桥和下降路线", seed: "atom-ravine-proof", size: "medium", density: 0.72 }, "adaptive");
+    expect(rift.primitives.some((primitive) => primitive.tags?.includes("rift-bottom"))).toBe(true);
+    expect(rift.primitives.filter((primitive) => primitive.tags?.includes("rift-crossing"))).toHaveLength(2);
+    expect(rift.routes.some((route) => route.id === "rift-bottom-route")).toBe(true);
+
+    const cave = generateScene({ prompt: "多腔体洞穴，有相邻通道、岩架、危险区和不同高度", seed: "atom-cave-proof", size: "large", density: 0.76 }, "cave");
+    expect(cave.rooms.filter((room) => room.id.startsWith("cave-chamber-")).length).toBeGreaterThanOrEqual(4);
+    expect(cave.primitives.some((primitive) => primitive.tags?.includes("ledge"))).toBe(true);
+    expect(new Set(cave.rooms.filter((room) => room.id.startsWith("cave-chamber-")).map((room) => room.center.y)).size).toBeGreaterThan(1);
+
+    const floating = generateScene({ prompt: "三层破碎浮空岛屿，有暴露底面、岛间深渊和垂直交通", seed: "atom-floating-proof", size: "medium", density: 0.74 }, "adaptive");
+    const floatingLevels = new Set(floating.primitives.filter((primitive) => primitive.tags?.includes("floating-island")).map((primitive) => Math.round(primitive.position.y * 10)));
+    expect(floatingLevels.size).toBeGreaterThanOrEqual(3);
+    expect(floating.primitives.some((primitive) => primitive.tags?.includes("vertical-face"))).toBe(true);
+    expect(floating.routes.filter((route) => route.kind === "vertical").length).toBeGreaterThanOrEqual(2);
+
+    const tree = generateScene({ prompt: "巨大空心古树内部的学者聚落，有根桥、根系档案库和可攀爬根台", seed: "atom-root-proof", size: "medium", density: 0.68 }, "adaptive");
+    expect(tree.primitives.some((primitive) => primitive.tags?.includes("root-archive"))).toBe(true);
+    expect(tree.primitives.some((primitive) => primitive.tags?.includes("root-bridge") || primitive.tags?.includes("spiral-tree-street"))).toBe(true);
+
+    const building = generateScene({ prompt: "被植物侵入且部分坍塌的哥特博物馆，有独立展厅、门窗、淹水地下库房和屋顶逃生路线", seed: "atom-building-proof", size: "medium", density: 0.72 }, "adaptive");
+    const tags = new Set(building.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(building.rooms.length).toBeGreaterThanOrEqual(6);
+    expect(tags.has("program-room")).toBe(true);
+    expect(tags.has("door-frame")).toBe(true);
+    expect(tags.has("window")).toBe(true);
+    expect(tags.has("pitched-roof") || tags.has("parapet")).toBe(true);
+    expect(tags.has("rubble")).toBe(true);
+    expect(tags.has("temporary-bridge")).toBe(true);
+    expect(tags.has("flooded")).toBe(true);
+    expect(tags.has("overgrowth")).toBe(true);
+    expect(building.routes.some((route) => route.id === "temporary-collapse-route")).toBe(true);
+    expect(building.diagnostics.valid).toBe(true);
+
+    expect(SPATIAL_ATOMS.find((atom) => atom.id === "structure.wall-opening")?.status).toBe("prototype");
+    expect(SPATIAL_ATOMS.find((atom) => atom.id === "structure.roof-system")?.status).toBe("prototype");
+    expect(SPATIAL_ATOMS.find((atom) => atom.id === "terrain.cave-chamber")?.status).toBe("prototype");
+    expect(SPATIAL_ATOMS.find((atom) => atom.id === "terrain.floating-island")?.status).toBe("prototype");
+    expect(SPATIAL_ATOMS.find((atom) => atom.id === "state.overgrowth")?.status).toBe("prototype");
   });
 
   it("maps forest density into ecology rather than only decoration", () => {
@@ -54,6 +114,34 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("river")).toBe(true);
     expect(tags.has("watercourse")).toBe(true);
     expect(scene.compositionProgram?.source).toBe("bge");
+  });
+
+  it("routes retrieved cave and floating atoms into existing deterministic generators", () => {
+    const floatingRequest = { prompt: "悬空石盘之间的风剪聚落", seed: "bge-floating-domain", size: "medium" as const, density: 0.68 };
+    const floatingComposition = compileSceneComposition(floatingRequest, "bge", ["terrain.floating-island", "route.vertical", "route.bridge"]);
+    expect(floatingComposition.primaryDomain).toBe("floating");
+    expect(floatingComposition.grammarId).toBe("grammar.floating-stack-v1");
+    const floating = generateScene(floatingRequest, "wilderness", undefined, undefined, floatingComposition);
+    expect(floating.archetype).toBe("floating-islands");
+    expect(floating.primitives.some((primitive) => primitive.tags?.includes("vertical-face"))).toBe(true);
+
+    const caveRequest = { prompt: "层叠岩腹中的回声腔群", seed: "bge-cave-domain", size: "large" as const, density: 0.7 };
+    const caveComposition = compileSceneComposition(caveRequest, "bge", ["terrain.cave-chamber", "route.surface-trail", "route.vertical"]);
+    expect(caveComposition.primaryDomain).toBe("cave");
+    expect(caveComposition.grammarId).toBe("grammar.cave-network-v1");
+    const cave = generateScene(caveRequest, "adaptive", undefined, undefined, caveComposition);
+    expect(cave.archetype).toBe("cave");
+    expect(cave.rooms.filter((room) => room.id.startsWith("cave-chamber-")).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("does not let a secondary abyss word steal a floating-island parent", () => {
+    const request = { prompt: "三层破碎浮空岩岛群，岛屿有暴露底面、风剪深渊、悬索桥和垂直升降路线", seed: "floating-parent-precedence", size: "large" as const, density: 0.78 };
+    const program = compileSceneComposition(request);
+    expect(program.primaryDomain).toBe("floating");
+    expect(program.grammarId).toBe("grammar.floating-stack-v1");
+    const scene = generateScene(request, "adaptive");
+    expect(scene.archetype).toBe("floating-islands");
+    expect(scene.diagnostics.valid).toBe(true);
   });
 
   it("selects compound motifs by prompt instead of loading every motif in a domain", () => {

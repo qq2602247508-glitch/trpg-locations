@@ -304,6 +304,13 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   // institutions: cellar, attic, service stair and roof pursuit cannot be
   // represented by the compact encounter-only tavern grammar.
   if (kind === "adaptive" && primary === "tavern" && ["三层", "three-storey", "three story", "酒窖", "cellar", "屋顶", "roof"].some((term) => programText.includes(term))) primary = "building";
+  // When local wording is unresolved, bounded capability retrieval may still
+  // identify a real cave graph or floating-island stack. It selects an
+  // existing deterministic generator; it never authors coordinates.
+  if (kind === "adaptive" && program.morphology.includes("plain")) {
+    if (composition.primaryDomain === "cave") primary = "cave";
+    if (composition.primaryDomain === "floating") primary = "wilderness";
+  }
   const semanticHints = suppliedClassification?.traits ?? semanticHintsFromProgram(program);
   const generated = generatorRegistry[primary]({
     request: normalized,
@@ -343,7 +350,7 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
     validated.diagnostics.warnings.push(`Semantic geometry missing: ${semanticCoverage.missing.join(", ")}.`);
     validated.diagnostics.score = Math.min(validated.diagnostics.score, 55 + Math.round(semanticCoverage.score * 0.45));
   }
-  const compositionOwnsGeneratedDomain = ({ forest: "forest", river: "river-valley", volcanic: "volcanic", crater: "impact-crater", rift: "rift" } as Record<string, string | undefined>)[composition.primaryDomain] === validated.archetype;
+  const compositionOwnsGeneratedDomain = ({ forest: "forest", river: "river-valley", volcanic: "volcanic", crater: "impact-crater", rift: "rift", floating: "floating-islands", cave: "cave" } as Record<string, string | undefined>)[composition.primaryDomain] === validated.archetype;
   if (compositionOwnsGeneratedDomain && semanticCoverage.coveredCritical < semanticCoverage.totalCritical) validated.diagnostics.valid = false;
   return validated;
 }

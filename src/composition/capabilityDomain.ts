@@ -28,6 +28,9 @@ export function resolveCapabilityDomain(ids: readonly string[]): CapabilityDomai
     if (id === "water.lava-network") add("volcanic", id, 3.5 * rank);
     if (id === "terrain.ravine") add("rift", id, 2.4 * rank);
     if (id === "terrain.crevasse") add("rift", id, 3.2 * rank);
+    if (id === "terrain.floating-island" || id === "terrain.salt-crystal-island") add("floating", id, 4 * rank);
+    if (id === "terrain.cave-chamber") add("cave", id, 4 * rank);
+    if (id === "water.cavern-tide-pool") add("cave", id, 1.6 * rank);
     if (id === "terrain.marsh-basin") add("swamp", id, 3.5 * rank);
     if (id === "water.tidal-channel") add("swamp", id, 2.2 * rank);
     if (id === "ecology.mangrove-canopy") add("swamp", id, 3.2 * rank);
@@ -35,7 +38,8 @@ export function resolveCapabilityDomain(ids: readonly string[]): CapabilityDomai
     if (id === "water.tributary") add("river", id, 2.8 * rank);
     if (id === "water.waterfall") add("river", id, 3.4 * rank);
     if (id === "water.pool") add("river", id, 1.1 * rank);
-    if (id.startsWith("ecology.") && id !== "ecology.mangrove-canopy") add("forest", id, (id === "ecology.tree-cluster" ? 2.8 : 1.5) * rank);
+    if (id.startsWith("ecology.") && id !== "ecology.mangrove-canopy" && id !== "ecology.fungal-grove") add("forest", id, (id === "ecology.tree-cluster" ? 2.8 : 1.5) * rank);
+    if (id === "ecology.fungal-grove") add("cave", id, 2.2 * rank);
     if (id === "terrain.irregular-clearing" || id === "structure.hollow-tree-shell") add("forest", id, 2.4 * rank);
   }
   const ranked = [...scores.entries()].sort((a, b) => b[1].score - a[1].score || a[0].localeCompare(b[0]));

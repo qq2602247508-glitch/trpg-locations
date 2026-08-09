@@ -15,7 +15,7 @@ function programFor(context: GeneratorContext): BuildingProgram {
     ...(has(text, ["废弃", "abandoned"]) ? ["abandoned" as const] : []),
     ...(has(text, ["坍塌", "破裂", "collapsed", "shattered"]) ? ["collapsed" as const] : []),
     ...(has(text, ["火灾", "燃烧", "burning", "fire-damaged"]) ? ["fire" as const] : []),
-    ...(has(text, ["淹没", "洪水", "flooded"]) ? ["flooded" as const] : []),
+    ...(has(text, ["淹没", "淹水", "水淹", "半淹", "洪水", "flooded", "submerged"]) ? ["flooded" as const] : []),
     ...(has(text, ["植物侵入", "overgrown"]) ? ["overgrown" as const] : []),
     ...(has(text, ["阿弗纳斯", "地狱", "avernus", "infernal"]) ? ["infernal" as const] : []),
     ...(has(text, ["战争损坏", "war-damaged"]) ? ["war-damaged" as const] : []),

@@ -55,7 +55,7 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   underdark: ["underdark", "幽暗地域", "地底世界", "地下洞窟", "菌林", "发光水晶", "mushroom", "fungal", "蘑菇", "菌类"],
   forest: ["forest", "woodland", "林地", "森林", "树林", "林间", "巨树", "树冠"],
   swamp: ["swamp", "marsh", "bog", "沼泽", "湿地"],
-  "floating-islands": ["floating island", "sky island", "levitating island", "浮空岛", "浮岛", "空岛", "悬浮岛"],
+  "floating-islands": ["floating island", "sky island", "levitating island", "浮空岛", "浮空岩岛", "浮岛", "空岛", "悬浮岛", "悬空石盘", "漂浮岩岛"],
   "industrial-ruin": ["industrial district", "industrial ruins", "factory district", "废弃工业区", "工业区", "工业遗址", "厂房", "输送桥", "锈蚀管道"],
   "coral-tide": ["coral courtyard", "coral reef", "tide pool", "潮汐", "潮池", "珊瑚庭院", "珊瑚礁"],
 };
@@ -181,6 +181,8 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   if (capabilityDomain === "volcanic") return "volcanic";
   if (capabilityDomain === "crater") return "impact-crater";
   if (capabilityDomain === "rift") return "rift";
+  if (capabilityDomain === "floating") return "floating-islands";
+  if (capabilityDomain === "cave") return "underdark";
   return selected;
 }
 
@@ -3195,7 +3197,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
   const morphology = analyzeTerrainMorphology(context.request.prompt, context.semanticHints);
   const floatingText = [context.request.prompt, ...(context.semanticHints?.anchors ?? []), ...(context.semanticHints?.tags ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");
-  if (archetype !== "floating-islands" && ["浮空岛", "浮岛", "空岛", "floating island", "sky island", "levitating"].some((term) => floatingText.includes(term))) {
+  if (archetype !== "floating-islands" && ["浮空岛", "浮空岩岛", "浮岛", "空岛", "悬空石盘", "漂浮岩岛", "floating island", "sky island", "levitating"].some((term) => floatingText.includes(term))) {
     addFloatingIslandsOverlay(scene, profile.width, profile.depth, context.rng.fork("floating-overlay"));
   }
   const infernalText = [context.request.prompt, ...(context.semanticHints?.anchors ?? []), ...(context.semanticHints?.tags ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");

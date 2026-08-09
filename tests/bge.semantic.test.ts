@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { SPATIAL_ATOMS } from "../src/composition";
 import { retrieveCapabilitiesLexically, retrieveCapabilitiesWithBge } from "../src/semantic/bge";
 
 describe("local capability retrieval", () => {
@@ -25,5 +26,30 @@ describe("local capability retrieval", () => {
     const result = await retrieveCapabilitiesWithBge("河流、瀑布和支流", { model: "offline-bge", fetcher: vi.fn(async () => { throw new Error("offline"); }) as typeof fetch });
     expect(result.source).toBe("lexical");
     expect(result.capabilityIds).toContain("water.tributary");
+  });
+
+  it("decomposes an unfamiliar compound prompt into several existing atoms", () => {
+    const result = retrieveCapabilitiesLexically("坍塌的浮空岩窟修道院，有断桥、淹水下层、树根侵入和屋顶逃生路线", 10);
+    expect(result.capabilityIds).toEqual(expect.arrayContaining([
+      "terrain.floating-island",
+      "terrain.cave-chamber",
+      "state.collapse",
+      "state.flood",
+      "state.overgrowth",
+      "structure.roof-system",
+    ]));
+    const registered = new Set(SPATIAL_ATOMS.map((atom) => atom.id));
+    expect(result.capabilityIds.every((id) => registered.has(id))).toBe(true);
+  });
+
+  it("never returns an invented capability when BGE ranks the bounded catalog", async () => {
+    const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const input = (JSON.parse(String(init?.body)) as { input: string[] }).input;
+      return new Response(JSON.stringify({ embeddings: input.map((_item, index) => index === 0 ? [1, 0, 0] : [Math.max(0.3, 1 - index * 0.01), index * 0.001, 0]) }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    const result = await retrieveCapabilitiesWithBge("悬空石盘之间的垂直聚落", { fetcher, model: "bounded-catalog-mock", limit: 6 });
+    const registered = new Set(SPATIAL_ATOMS.map((atom) => atom.id));
+    expect(result.capabilityIds.length).toBeGreaterThan(0);
+    expect(result.capabilityIds.every((id) => registered.has(id))).toBe(true);
   });
 });

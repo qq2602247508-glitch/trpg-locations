@@ -53,12 +53,102 @@ function addCavePassage(
     const ramp = stairConnection(`${routeId}-continuous-ramp`, 0, bottom, top, widthCells, "rock", ["cave-passage", "continuous-ramp", "elevation-change", `passage:${routeId}`]);
     scene.primitives.push(ramp.primitive);
   }
+  const normalX = -unitZ;
+  const normalZ = unitX;
+  const shellOffset = widthCells / 2 + 0.85;
+  for (let index = 1; index <= 4; index += 1) {
+    const t = index / 5;
+    const x = fromPortal.xCells + (toPortal.xCells - fromPortal.xCells) * t;
+    const z = fromPortal.zCells + (toPortal.zCells - fromPortal.zCells) * t;
+    const y = fromPortal.yMeters + elevationDelta * t;
+    for (const side of [-1, 1]) {
+      scene.primitives.push(primitive(
+        `${routeId}-passage-wall-${index}-${side < 0 ? "left" : "right"}`,
+        "sphere",
+        0,
+        x + normalX * shellOffset * side,
+        y,
+        z + normalZ * shellOffset * side,
+        cellsToMeters(1.25),
+        cellsToMeters(1.8 + (index % 2) * 0.45),
+        cellsToMeters(1.15),
+        "rock",
+        ["cave-wall", "passage-wall", "vertical-face", "blocks-sight", `passage:${routeId}`],
+      ));
+    }
+    if (index % 2 === 0) {
+      scene.primitives.push(primitive(
+        `${routeId}-passage-roof-${index}`,
+        "sphere",
+        0,
+        x,
+        y + feetToMeters(9),
+        z,
+        cellsToMeters(widthCells + 1.9),
+        cellsToMeters(1.5),
+        cellsToMeters(1.7),
+        "rock",
+        ["cave-ceiling", "passage-roof", `passage:${routeId}`],
+      ));
+    }
+  }
   scene.routes.push(createRoute(routeId, kind, [
     { x: from.x, z: from.z, y: from.y + FLOOR_SLAB_METERS },
     { x: fromPortal.xCells, z: fromPortal.zCells, y: fromPortal.yMeters },
     { x: toPortal.xCells, z: toPortal.zCells, y: toPortal.yMeters },
     { x: to.x, z: to.z, y: to.y + FLOOR_SLAB_METERS },
   ]));
+}
+
+function addChamberShells(scene: GeneratedScene, chambers: readonly Chamber[], rng: GeneratorContext["rng"]): void {
+  const roomsById = new Map(scene.rooms.map((room) => [room.id, room]));
+  const chambersById = new Map(chambers.map((chamber) => [chamber.id, chamber]));
+  for (const chamber of chambers) {
+    const room = roomsById.get(chamber.id);
+    const openingAngles = (room?.connections ?? [])
+      .map((id) => chambersById.get(id))
+      .filter((other): other is Chamber => other !== undefined)
+      .map((other) => Math.atan2(other.z - chamber.z, other.x - chamber.x));
+    const segmentCount = Math.max(14, Math.round(chamber.diameter * 2.1));
+    const radius = chamber.diameter * 0.5;
+    for (let index = 0; index < segmentCount; index += 1) {
+      const angle = (Math.PI * 2 * index) / segmentCount;
+      const angleDistance = (target: number) => Math.abs(Math.atan2(Math.sin(angle - target), Math.cos(angle - target)));
+      if (openingAngles.some((opening) => angleDistance(opening) < 0.34)) continue;
+      const radialJitter = rng.float(-0.28, 0.32);
+      const x = chamber.x + Math.cos(angle) * (radius + radialJitter);
+      const z = chamber.z + Math.sin(angle) * (radius + radialJitter);
+      const heightFeet = rng.int(9, 17);
+      scene.primitives.push(box(
+        `${chamber.id}-shell-wall-${index}`,
+        0,
+        x,
+        chamber.y + FLOOR_SLAB_METERS,
+        z,
+        rng.float(1.05, 1.65),
+        feetToMeters(heightFeet),
+        rng.float(0.8, 1.35),
+        "rock",
+        ["cave-wall", "chamber-shell", "vertical-face", "blocks-sight", `room:${chamber.id}`],
+        -angle,
+      ));
+      if (index % 4 === 1) {
+        scene.primitives.push(primitive(
+          `${chamber.id}-shell-overhang-${index}`,
+          "sphere",
+          0,
+          x - Math.cos(angle) * 0.45,
+          chamber.y + feetToMeters(heightFeet - 1),
+          z - Math.sin(angle) * 0.45,
+          cellsToMeters(1.4),
+          cellsToMeters(1.1),
+          cellsToMeters(1.5),
+          "rock",
+          ["cave-ceiling", "chamber-overhang", `room:${chamber.id}`],
+        ));
+      }
+    }
+  }
 }
 
 const ANCHORS = [
@@ -109,6 +199,7 @@ export function generateCave(context: GeneratorContext): GeneratedScene {
     1,
     [12],
   );
+  scene.archetype = "cave";
 
   const chambers: Chamber[] = [];
   let elevationCells = rng.int(0, 1);
@@ -187,6 +278,7 @@ export function generateCave(context: GeneratorContext): GeneratedScene {
       scene.tactical.push(tacticalFeature("cave-narrow-alternate", "chokepoint", (from.x + to.x) / 2, (from.z + to.z) / 2, Math.min(from.y, to.y), 1, "A narrow squeeze creates an alternate but dangerous flanking route."));
     }
   }
+  addChamberShells(scene, chambers, rng.fork("chamber-shells"));
 
   const ledgeCandidates = chambers.slice(1);
   const ledgeCount = Math.min(ledgeCandidates.length, rng.int(1, request.size === "large" ? 3 : 2));
