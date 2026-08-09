@@ -98,6 +98,19 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
     add("bell-tower", "钟塔", ["tower", "high-ground"], "major");
     return output;
   }
+  const mountainMonastery = shouldComposeWildernessFacility(text)
+    && has(text, ["修道院", "寺院", "monastery", "abbey", "cloister"])
+    && has(text, ["山顶", "山脊", "风化岩脊", "峰顶", "mountain top", "ridge", "summit", "weathered rock ridge"]);
+  if (mountainMonastery) {
+    add("mountain-ridge-parent", "风化岩脊承载地貌", ["mountain", "ridge", "vertical-face"], "critical");
+    add("monastery-compound", "修道院复合建筑", ["building", "shrine", "settlement-building"], "critical");
+    if (has(text, ["无线电", "radio"])) add("radio-room", "无线电室", ["radio-console", "communications"], "critical");
+    if (has(text, ["气象", "weather", "meteorological"])) add("weather-deck", "气象观测设施", ["weather-instruments", "observation"], "major");
+    if (has(text, ["地下防空洞", "防空洞", "bunker", "air-raid shelter"])) add("air-raid-shelter", "地下防空洞", ["bunker", "underground"], "critical");
+    if (has(text, ["天线", "antenna", "aerial"])) add("antenna-tower", "屋顶天线", ["antenna", "vertical-landmark"], "critical");
+    if (has(text, ["维护栈道", "外部栈道", "维修栈道", "maintenance walkway", "maintenance catwalk"])) add("maintenance-walk", "外部维护栈道", ["external-maintenance-walk", "supported", "standable"], "critical");
+    return output;
+  }
   if (domain === "forest") { add("forest-core", "森林", ["forest", "tree", "canopy"], "critical"); if (has(text, ["茂密", "封闭林冠", "dense", "closed canopy"])) add("dense-canopy", "封闭林冠", ["canopy", "tree-cluster"], "critical"); if (has(text, ["灌木", "林下", "undergrowth"])) add("undergrowth", "林下灌木", ["undergrowth"], "major"); if (has(text, ["空地", "clearing"])) add("clearings", "林间空地", ["clearing"], "major"); if (has(text, ["浅溪", "溪流", "stream"])) add("forest-stream", "浅溪", ["stream", "watercourse"], "major"); if (has(text, ["倒木", "fallen log"])) add("fallen-log", "倒木", ["fallen-log"], "major"); if (has(text, ["树冠战斗平台", "树冠平台", "canopy platform"])) add("canopy-platform", "树冠战斗平台", ["canopy-platform", "high-ground"], "critical"); }
   if (domain === "ice") {
     add("ice-eroded-base", "破碎不规则冰盖边缘", ["ice-base-plate", "eroded-ice-edge"], "critical");

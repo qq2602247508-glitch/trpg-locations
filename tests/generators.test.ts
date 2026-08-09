@@ -574,6 +574,26 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
+  it("keeps a mountain monastery as a terrain-owned site and realizes its specialist facilities", () => {
+    const prompt = "山顶无线电修道院与气象观测站，建在陡峭风化岩脊上，有环形回廊、礼拜堂、无线电室、档案密库、地下防空洞、屋顶天线和外部维护栈道";
+    const scene = generateScene({ ...request("mountain-radio-monastery"), prompt }, "adaptive");
+    expect(scene.archetype).toBe("mountain");
+    expect(scene.buildingInstances?.[0]?.archetype).toBe("shrine");
+    for (const tag of ["radio-console", "bunker", "antenna", "external-maintenance-walk"]) expect(hasTag(scene, tag)).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(90);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
+  it("treats a waterfall canyon as a river parent even when a facility mentions wet maps", () => {
+    const prompt = "建在峡谷瀑布背后的测绘站与缆车维修所，有悬崖办公室、绞盘井、湿地图柜、地下避险室和跨瀑维护桥";
+    const scene = generateScene({ ...request("waterfall-survey-station"), prompt }, "adaptive");
+    expect(scene.archetype).toBe("river-valley");
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("waterfall"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("building-instance:wilderness-core-building"))).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(90);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("turns wilderness density into additional physical service and escape routes", () => {
     const prompt = "森林中的猎人木屋，有起居室、地窖、门廊、柴堆和林间道路";
     const sparse = generateScene({ ...request("forest-cabin-density", "medium", 0.25), prompt }, "adaptive");

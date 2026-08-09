@@ -301,7 +301,10 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
     program = planSceneProgramLocally(normalized.prompt, kind);
     primary = "wilderness";
   }
-  if (kind === "adaptive" && primary !== "dungeon" && primary !== "settlement" && !ownsSite && hasExplicitBuilding) primary = "building";
+  // An explicit child building noun must not steal ownership from a named
+  // natural parent. "山顶气象修道院" is a mountain site with a monastery
+  // child, not a generic institution floating on a blank slab.
+  if (kind === "adaptive" && primary !== "dungeon" && primary !== "settlement" && !ownsSite && !wildernessBuildingOwnsSite && hasExplicitBuilding) primary = "building";
   // Multi-storey hospitality prompts need the same auditable room graph as
   // institutions: cellar, attic, service stair and roof pursuit cannot be
   // represented by the compact encounter-only tavern grammar.

@@ -41,14 +41,14 @@ interface TerrainMorphology {
 }
 
 const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>> = {
-  "river-valley": ["river", "stream", "creek", "riverbank", "river bend", "河谷", "河流", "河川", "河湾", "溪流", "溪谷", "水湾", "峡谷河"],
+  "river-valley": ["river", "stream", "creek", "waterfall", "riverbank", "river bend", "河谷", "河流", "河川", "河湾", "溪流", "溪谷", "瀑布", "峡谷", "水湾", "峡谷河"],
   "dry-riverbed": ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床", "河床"],
   "impact-crater": ["impact crater", "meteor crater", "陨石坑", "撞击坑", "流星坑"],
   volcanic: ["volcano", "volcanic", "caldera", "火山", "火山口", "破火山口"],
   "infernal-waste": ["avernus", "hellscape", "infernal waste", "阿弗纳斯", "地狱荒原", "地狱"],
   "burial-ground": ["cemetery", "graveyard", "burial ground", "墓地", "墓园", "坟场", "陵园"],
   rift: ["rift", "chasm", "ravine", "裂谷", "裂隙", "深坑", "断崖"],
-  mountain: ["mountain", "cliff", "ridge", "山地", "山脊", "高山", "峭壁"],
+  mountain: ["mountain", "mountain top", "cliff", "ridge", "weathered rock ridge", "山地", "山顶", "山脊", "风化岩脊", "高山", "峭壁"],
   ice: ["ice", "ice sheet", "ice cap", "polar", "glacier", "tundra", "冰原", "冰盖", "冰帽", "极地", "冰川", "冻土", "雪原"],
   ruin: ["ruin", "ruined", "wilderness ruin", "遗迹", "废墟", "残垣", "荒野遗迹"],
   "underground-lake": ["underground lake", "dark lake", "subterranean lake", "地下湖", "地底湖"],
@@ -147,9 +147,11 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   // Their frozen substrate owns the macro terrain while thaw pools and
   // boardwalks remain composable wetland layers, regardless of word order.
   if (includesAny(normalized, WILDERNESS_TERMS.ice) && includesAny(normalized, WILDERNESS_TERMS.swamp)) return "ice";
-  // Water is a topology, woodland is a coverage layer. A mixed prompt must
-  // retain a continuous river rather than becoming a flat forest with props.
-  if (morphology.channel && morphology.woodland) return "river-valley";
+  // Water is a topology, woodland is a coverage layer. Only an explicit
+  // water/river term can promote a forest with a secondary canyon phrase to a
+  // river valley; "林间峡谷" alone is still a forest landform.
+  const explicitWaterTopology = includesAny(normalized, ["河流", "河谷", "溪流", "瀑布", "河川", "河湾", "river", "stream", "waterfall", "creek", "riverbank"]);
+  if (morphology.channel && morphology.woodland && explicitWaterTopology) return "river-valley";
   // Named biome/domain beats a secondary landmark in the same prompt. For
   // example “幽暗地域，连续裂谷” is an underdark map with a rift feature,
   // not a generic rift map.
@@ -2091,6 +2093,9 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const wantsGeneratorShed = facilityCapabilities.generator;
   const wantsIceFissure = ["冰水裂沟", "冰裂沟", "冰隙", "冰川裂缝", "冰川裂隙", "巨大裂缝", "ice-water fissure", "ice fissure", "crevasse"].some((term) => text.includes(term));
   const wantsReserveVault = facilityCapabilities.undergroundStore;
+  const monastery = ["修道院", "寺院", "monastery", "abbey", "cloister"].some((term) => text.includes(term));
+  const wantsMaintenanceWalk = ["维护栈道", "外部栈道", "维修栈道", "维护步道", "maintenance walkway", "maintenance catwalk", "service catwalk"].some((term) => text.includes(term));
+  const wantsBunker = ["地下防空洞", "防空洞", "掩体", "bunker", "air-raid shelter"].some((term) => text.includes(term));
   if (coldWetland) {
     for (const primitiveEntry of scene.primitives) {
       if (!primitiveEntry.tags?.some((tag) => tag === "water" || tag === "thaw-basin" || tag === "thaw-pool")) continue;
@@ -2185,7 +2190,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   ] : weatherStation ? [
     { id: "weather-observation", kind: "observation", label: "Meteorological instrument deck", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 16, tags: ["weather-instruments", "communications-tower"] },
     { id: "weather-generator", kind: "workshop", label: "Generator service room", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 15, tags: ["generator-shed", "power-service"] },
-    { id: "weather-reserve", kind: "archive", label: "Underground reserve store", levelRole: "basement", minimumFootprintCells: 16, tags: ["reserve-vault", "underground-reserve"] },
+    { id: "weather-reserve", kind: "archive", label: wantsBunker ? "Underground air-raid shelter" : "Underground reserve store", levelRole: "basement", minimumFootprintCells: 16, tags: ["reserve-vault", "underground-reserve", ...(wantsBunker ? ["bunker"] : [])] },
   ] : researchStation ? [
     { id: "field-laboratory", kind: "laboratory", label: "Field laboratory", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 18, tags: ["field-laboratory", "sample-processing"] },
     { id: "field-observation", kind: "observation", label: "Observation and radio deck", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 14, tags: ["field-observation", "radio-deck"] },
@@ -2193,7 +2198,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   ] : [];
   instantiateBuildingModule(scene, {
     id: "wilderness-core-building",
-    kind: quarantine ? "clinic" : weatherStation || researchStation ? "guild" : alchemical ? "guild" : "home",
+    kind: quarantine ? "clinic" : monastery ? "shrine" : weatherStation || researchStation ? "guild" : alchemical ? "guild" : "home",
     x,
     z,
     width: alchemical ? 11 : 9,
@@ -2210,6 +2215,33 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     siteProfile: quarantine ? "quarantine-station" : weatherStation ? "weather-station" : researchStation ? "field-station" : borderOutpost ? "border-outpost" : rangerStation ? "ranger-station" : undefined,
     climateProfile: archetype === "ice" ? "polar" : archetype === "swamp" ? "wetland" : archetype === "volcanic" || archetype === "infernal-waste" ? "volcanic" : archetype === "mountain" || archetype === "rift" || archetype === "impact-crater" ? "alpine" : archetype === "forest" ? "forest" : archetype === "river-valley" ? "coastal" : "temperate",
   }, context.rng.fork("wilderness-building"));
+
+  // A requested exterior maintenance route is a real supported traversal
+  // around the parent landform, not a floating decorative strip. Keep it
+  // attached to the authored entrance and provide legs down to the nearest
+  // terrain surface so the route remains physically explainable.
+  if (wantsMaintenanceWalk) {
+    const walkY = baseY + feetToMeters(5);
+    const walkStart = { x: entrance.x, z: entrance.z };
+    const walkEnd = {
+      x: Math.max(3, Math.min(width - 3, x + entranceDirection * 10)),
+      z: Math.max(3, Math.min(depth - 3, z - 8)),
+    };
+    scene.primitives.push(
+      corridor("wilderness-exterior-maintenance-walk", 0, walkStart.x, walkStart.z, walkEnd.x, walkEnd.z, walkY, 1.35, "metal", ["site-program", "external-maintenance-walk", "maintenance-catwalk", "standable", "supported", "high-ground"]),
+    );
+    for (const [index, ratio] of [0.22, 0.5, 0.78].entries()) {
+      const supportX = walkStart.x + (walkEnd.x - walkStart.x) * ratio;
+      const supportZ = walkStart.z + (walkEnd.z - walkStart.z) * ratio;
+      const supportSurfaceY = terrainSurfaceY(scene, supportX, supportZ, terrainBaseY);
+      scene.primitives.push(cylinder(`wilderness-exterior-maintenance-support-${index + 1}`, 0, supportX, supportSurfaceY - feetToMeters(0.4), supportZ, 0.18, Math.max(FLOOR_SLAB_METERS, walkY - supportSurfaceY), "metal", ["site-program", "external-maintenance-walk", "structural-support", "supported"]));
+    }
+    scene.routes.push(createRoute("wilderness-exterior-maintenance-route", "alternate", [
+      { x: walkStart.x, z: walkStart.z, y: walkY },
+      { x: walkEnd.x, z: walkEnd.z, y: walkY },
+    ], { purpose: "service", traffic: 0.2, schedule: "all" }));
+    scene.tactical.push(tacticalFeature("wilderness-exterior-maintenance-choke", "chokepoint", (walkStart.x + walkEnd.x) / 2, (walkStart.z + walkEnd.z) / 2, walkY, 1, "The exposed maintenance catwalk is a supported alternate route around the mountain compound."));
+  }
   scene.viewProgram = {
     version: 1,
     mode: "site",
@@ -2420,7 +2452,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     const interiorTags = ["site-program", "weather-station-interior", "building-instance:wilderness-core-building", "full-interior", "focus-interior"];
     scene.primitives.push(
       box("wilderness-weather-map-table", 0, x - 1.6, baseY + FLOOR_SLAB_METERS, z + 0.8, 3.2, feetToMeters(3.1), 1.6, "wood", [...interiorTags, "map-table", "cover"]),
-      box("wilderness-weather-radio-rack-a", 0, x + 2.5, baseY + FLOOR_SLAB_METERS, z - 1.4, 0.8, feetToMeters(6.2), 2.2, "metal", [...interiorTags, "radio-rack", "communications", "cover"]),
+      box("wilderness-weather-radio-rack-a", 0, x + 2.5, baseY + FLOOR_SLAB_METERS, z - 1.4, 0.8, feetToMeters(6.2), 2.2, "metal", [...interiorTags, "radio-rack", "radio-console", "communications", "cover"]),
       box("wilderness-weather-radio-rack-b", 0, x + 2.5, baseY + FLOOR_SLAB_METERS, z + 1.4, 0.8, feetToMeters(6.2), 2.2, "metal", [...interiorTags, "instrument-rack", "weather-instruments", "cover"]),
       cylinder("wilderness-weather-barometer", 0, x - 0.1, baseY + FLOOR_SLAB_METERS, z - 2.2, 0.7, feetToMeters(5.5), "metal", [...interiorTags, "weather-instruments", "barometer"]),
     );
