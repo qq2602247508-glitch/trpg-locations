@@ -816,11 +816,21 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     const semanticPlacement = semanticTerrain ? terrain.placementFor(adaptedBuildings, program.parcels.length, parcel.center, clearance) : undefined;
     const mangroveNode = isMangrovePort ? mangroveBuildingNodes[adaptedBuildings % mangroveBuildingNodes.length] : undefined;
     const mangroveSide = isMangrovePort ? (adaptedBuildings % 2 === 0 ? -1 : 1) : 0;
-    const mangrovePlacement: { x: number; z: number; elevationFeet?: number } | undefined = mangroveNode ? {
+    const mangroveCandidate = mangroveNode ? {
       x: mangroveNode[0] + mangroveSide * (2.7 + (adaptedBuildings % 3) * 0.8),
       z: mangroveNode[1] + Math.sin(adaptedBuildings * 1.7) * 1.2,
-      elevationFeet: mangroveElevationFeet[adaptedBuildings % mangroveElevationFeet.length],
     } : undefined;
+    // A parent wetland may reject a random parcel if it lands in the tidal
+    // channel. Never let a child building float over water just because its
+    // authored node was aesthetically convenient: use the terrain placement
+    // solver as the final authority and inherit its actual elevation.
+    const mangrovePlacement: { x: number; z: number; elevationFeet?: number } | undefined = mangroveCandidate
+      && terrain.buildableAt(mangroveCandidate.x, mangroveCandidate.z, Math.min(1.2, clearance))
+      ? {
+        ...mangroveCandidate,
+        elevationFeet: terrain.elevationFeetAt(mangroveCandidate.x, mangroveCandidate.z) + (mangroveElevationFeet[adaptedBuildings % mangroveElevationFeet.length] ?? 6) * 0.18,
+      }
+      : undefined;
     const placement = mangrovePlacement ?? semanticPlacement ?? nearestBuildable(parcel.center.x, parcel.center.z, clearance);
     if (!placement) continue;
     const siteElevation = isFlooded ? feetToMeters(5) : placement.elevationFeet === undefined ? elevationAt(placement.x, placement.z) : feetToMeters(placement.elevationFeet);
