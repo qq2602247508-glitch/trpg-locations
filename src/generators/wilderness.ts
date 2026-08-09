@@ -625,18 +625,21 @@ interface FieldRenderOptions {
   stepFeet?: number;
   slopeFacades?: boolean;
   slopeMaterial?: MaterialKey;
+  edgeSkirts?: boolean;
+  edgeSkirtMaterial?: MaterialKey;
 }
 
 /** Shared terrain realization: morphology operators author an elevation field,
  * while this pass makes all walkable tops and vertical boundaries explicit. */
-function renderMorphologyField(scene: GeneratedScene, options: FieldRenderOptions): { yOf(level: number): number; walkable: number; cliffs: number; slopes: number } {
+function renderMorphologyField(scene: GeneratedScene, options: FieldRenderOptions): { yOf(level: number): number; walkable: number; cliffs: number; slopes: number; skirts: number } {
   const { prefix, cols, rows, heights } = options;
   const at = (x: number, z: number) => x < 0 || z < 0 || x >= cols || z >= rows ? undefined : heights[z * cols + x];
   const yOf = (level: number) => feetToMeters(level * (options.stepFeet ?? 5)) + FLOOR_SLAB_METERS;
   let walkable = 0;
   let cliffs = 0;
-  let slopes = 0;
-  const slopeEdges: Array<{ x: number; z: number; dx: number; dz: number; lowY: number; highY: number; rotation: number; material: MaterialKey }> = [];
+  type FacingEdge = { x: number; z: number; dx: number; dz: number; lowY: number; highY: number; rotation: number; material: MaterialKey };
+  const slopeEdges: FacingEdge[] = [];
+  const skirtEdges: FacingEdge[] = [];
   for (let z = 0; z < rows; z += 1) {
     for (let x = 0; x < cols; x += 1) {
       const level = at(x, z);
@@ -668,46 +671,66 @@ function renderMorphologyField(scene: GeneratedScene, options: FieldRenderOption
         }
         scene.primitives.push(box(`${prefix}-cliff-${x}-${z}-${dx}-${dz}`, 0, x + 0.5 + dx * 0.49, lowY, z + 0.5 + dz * 0.49, dx ? 0.14 : 0.96, highY - lowY, dz ? 0.14 : 0.96, "darkStone", ["cliff-face", "vertical-face", "terrain", `${prefix}-boundary`]));
       }
+      if (options.edgeSkirts) for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+        const perimeter = dx < 0 ? x <= 1 : dx > 0 ? x >= cols - 2 : dz < 0 ? z <= 1 : z >= rows - 2;
+        if (!perimeter || at(x + dx, z + dz) !== undefined) continue;
+        skirtEdges.push({
+          x: x + 0.5 + dx * 1.325,
+          z: z + 0.5 + dz * 1.325,
+          dx: Math.abs(dx),
+          dz: Math.abs(dz),
+          lowY: 0,
+          highY: yOf(level),
+          rotation: Math.atan2(-dx, -dz),
+          material: options.edgeSkirtMaterial ?? options.slopeMaterial ?? "rock",
+        });
+      }
     }
   }
-  const groupedSlopes = new Map<string, typeof slopeEdges>();
-  for (const edge of slopeEdges) {
-    const fixedCoordinate = edge.dx ? edge.x : edge.z;
-    const key = `${edge.dx}:${edge.dz}:${fixedCoordinate.toFixed(3)}:${edge.lowY.toFixed(3)}:${edge.highY.toFixed(3)}:${edge.rotation.toFixed(3)}:${edge.material}`;
-    const group = groupedSlopes.get(key);
-    if (group) group.push(edge); else groupedSlopes.set(key, [edge]);
-  }
-  for (const group of groupedSlopes.values()) {
-    group.sort((left, right) => (left.dx ? left.z - right.z : left.x - right.x));
-    let start = 0;
-    const flush = (end: number) => {
-      const run = group.slice(start, end);
-      if (run.length === 0) return;
-      const first = run[0]!; const last = run.at(-1)!;
-      scene.primitives.push(ramp(
-        `${prefix}-slope-run-${slopes}`,
-        0,
-        (first.x + last.x) / 2,
-        first.lowY,
-        (first.z + last.z) / 2,
-        run.length * 0.98,
-        first.highY - first.lowY,
-        0.92,
-        first.material,
-        ["terrain", "slope-facade", "erosion-facing", "non-walkable-facade", "merged-slope-run", `${prefix}-boundary`],
-        first.rotation,
-      ));
-      slopes += 1;
-    };
-    for (let index = 1; index <= group.length; index += 1) {
-      const previous = group[index - 1]; const current = group[index];
-      const gap = previous && current ? (previous.dx ? current.z - previous.z : current.x - previous.x) : Number.POSITIVE_INFINITY;
-      if (gap <= 1.01) continue;
-      flush(index);
-      start = index;
+  const emitMergedFacades = (edges: FacingEdge[], kind: "slope" | "skirt", runCells: number) => {
+    let emitted = 0;
+    const groups = new Map<string, FacingEdge[]>();
+    for (const edge of edges) {
+      const fixedCoordinate = edge.dx ? edge.x : edge.z;
+      const key = `${edge.dx}:${edge.dz}:${fixedCoordinate.toFixed(3)}:${edge.lowY.toFixed(3)}:${edge.highY.toFixed(3)}:${edge.rotation.toFixed(3)}:${edge.material}`;
+      const group = groups.get(key);
+      if (group) group.push(edge); else groups.set(key, [edge]);
     }
-  }
-  return { yOf, walkable, cliffs, slopes };
+    for (const group of groups.values()) {
+      group.sort((left, right) => (left.dx ? left.z - right.z : left.x - right.x));
+      let start = 0;
+      const flush = (end: number) => {
+        const run = group.slice(start, end);
+        if (run.length === 0) return;
+        const first = run[0]!; const last = run.at(-1)!;
+        scene.primitives.push(ramp(
+          `${prefix}-${kind}-run-${emitted}`,
+          0,
+          (first.x + last.x) / 2,
+          first.lowY,
+          (first.z + last.z) / 2,
+          run.length * 0.98,
+          first.highY - first.lowY,
+          runCells,
+          first.material,
+          ["terrain", kind === "slope" ? "slope-facade" : "erosion-skirt", "erosion-facing", "non-walkable-facade", `merged-${kind}-run`, `${prefix}-boundary`],
+          first.rotation,
+        ));
+        emitted += 1;
+      };
+      for (let index = 1; index <= group.length; index += 1) {
+        const previous = group[index - 1]; const current = group[index];
+        const gap = previous && current ? (previous.dx ? current.z - previous.z : current.x - previous.x) : Number.POSITIVE_INFINITY;
+        if (gap <= 1.01) continue;
+        flush(index);
+        start = index;
+      }
+    }
+    return emitted;
+  };
+  const slopes = emitMergedFacades(slopeEdges, "slope", 0.92);
+  const skirts = emitMergedFacades(skirtEdges, "skirt", 1.65);
+  return { yOf, walkable, cliffs, slopes, skirts };
 }
 
 function buildDryRiverbed(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
@@ -733,6 +756,8 @@ function buildDryRiverbed(scene: GeneratedScene, width: number, depth: number, d
     tagsFor: (level) => [level === 0 ? "dry-riverbed" : "eroded-bank", level === 1 ? "wash-margin" : "badland-shelf"],
     slopeFacades: true,
     slopeMaterial: "rock",
+    edgeSkirts: true,
+    edgeSkirtMaterial: "darkStone",
   });
   const crossingXs = [cols * 0.24, cols * 0.62, cols * 0.84];
   for (const [index, x] of crossingXs.entries()) {
@@ -751,7 +776,7 @@ function buildDryRiverbed(scene: GeneratedScene, width: number, depth: number, d
   connectRooms(scene.rooms, "dry-channel-bed", "dry-channel-lower-bank");
   scene.routes.push(createRoute("dry-channel-long-route", "primary", [{ x: 2, z: channelAt(2), y: rendered.yOf(0) }, { x: cols * 0.35, z: channelAt(cols * 0.35), y: rendered.yOf(0) }, { x: cols * 0.7, z: channelAt(cols * 0.7), y: rendered.yOf(0) }, { x: cols - 2, z: channelAt(cols - 2), y: rendered.yOf(0) }]), createRoute("dry-channel-bank-crossing", "alternate", [{ x: crossingXs[1] ?? cols / 2, z: 2, y: rendered.yOf(3) }, { x: crossingXs[1] ?? cols / 2, z: channelAt(crossingXs[1] ?? cols / 2), y: rendered.yOf(0) }, { x: crossingXs[1] ?? cols / 2, z: rows - 2, y: rendered.yOf(3) }]));
   scene.tactical.push(tacticalFeature("dry-channel-entrance", "entrance", 2, channelAt(2), rendered.yOf(0), 2, "The dry channel enters through a narrow upstream cut."), tacticalFeature("dry-channel-flash-flood", "hazard", cols * 0.5, channelAt(cols * 0.5), rendered.yOf(0), 3, "The exposed river bed is a fast route but becomes a flash-flood kill zone."), tacticalFeature("dry-channel-overlook", "highGround", cols * 0.62, rows * 0.2, rendered.yOf(3), 3, "An eroded bank overlooks two channel crossings."));
-  scene.description = `Dry-channel morphology with ${rendered.walkable} walkable cells, ${rendered.cliffs} eroded boundaries (${rendered.slopes} slope facades), three crossings, scoured boulders, and a continuous low river bed.`;
+  scene.description = `Dry-channel morphology with ${rendered.walkable} walkable cells, ${rendered.cliffs} eroded boundaries (${rendered.slopes} slope facades, ${rendered.skirts} perimeter skirts), three crossings, scoured boulders, and a continuous low river bed.`;
 }
 
 function buildImpactCrater(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
