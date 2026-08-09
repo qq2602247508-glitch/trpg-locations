@@ -245,14 +245,15 @@ function addHollowTreeCity(scene: GeneratedScene, width: number, depth: number):
   );
 }
 
-function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   // The wetland is a parent terrain grammar, not a fixed decorative layer.
   // This macro stream chooses a different channel topology per seed while
   // keeping every branch connected to the central tidal basin.
   const macro = rng.fork("mangrove-macro");
   const channelZ = depth * macro.float(0.42, 0.62);
   const channelX = width * macro.float(0.44, 0.58);
-  const branchCount = macro.int(2, 4);
+  const branchBand = Math.min(5, Math.max(2, 2 + Math.round(density * 2)));
+  const branchCount = Math.min(5, Math.max(2, branchBand + macro.int(-1, 1)));
   const tidalBranches = Array.from({ length: branchCount }, (_, index) => {
     const side = index % 2 === 0 ? -1 : 1;
     const startX = side < 0 ? width * macro.float(0.04, 0.18) : width * macro.float(0.82, 0.96);
@@ -287,7 +288,8 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
     water("mangrove-tidal-branch-west", 0, width * macro.float(0.16, 0.28), -0.16, depth * macro.float(0.18, 0.34), 3.4, 0.25, depth * macro.float(0.32, 0.5), ["mangrove", "tidal-channel", "watercourse", "site-program"]),
     water("mangrove-tidal-branch-east", 0, width * macro.float(0.72, 0.86), -0.16, depth * macro.float(0.62, 0.82), 3.8, 0.25, depth * macro.float(0.3, 0.46), ["mangrove", "tidal-channel", "watercourse", "site-program"]),
   );
-  const loopCount = macro.int(2, 4);
+  const loopBand = Math.min(5, Math.max(2, 2 + Math.round(density * 2)));
+  const loopCount = Math.min(5, Math.max(2, loopBand + macro.int(-1, 1)));
   const boardwalks = Array.from({ length: loopCount }, (_, index) => {
     const cx = width * macro.float(0.14, 0.86);
     const cz = depth * macro.float(0.18, 0.82);
@@ -332,7 +334,7 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
     ["mangrove", "root-boardwalk", "bridge", "standable", "site-program"],
   );
   scene.routes.push(createRoute("mangrove-ferry-route", "alternate", ferryPoints, { purpose: "movement", traffic: 0.36, schedule: "all" }));
-  const rootCount = macro.int(24, 42);
+  const rootCount = 18 + Math.round(density * 26) + macro.int(-3, 3);
   for (let index = 0; index < rootCount; index += 1) {
     const x = width * macro.float(0.06, 0.94);
     const z = depth * macro.float(0.08, 0.92);
@@ -748,7 +750,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   if (!legacySpecialElevation) terrain.render(scene);
   else if (!isFloating) scene.primitives.push(box("site-terrain-base", 0, program.bounds.x / 2, 0, landDepth / 2, program.bounds.x, FLOOR_SLAB_METERS, landDepth, "earth", ["floor", "terrain", "site-program", `site:${program.siteType}`]));
   if (isHollowTree) addHollowTreeCity(scene, program.bounds.x, program.bounds.z);
-  if (isMangrovePort) addMangroveSmugglerPort(scene, program.bounds.x, program.bounds.z, context.rng.fork("mangrove-parent"));
+  if (isMangrovePort) addMangroveSmugglerPort(scene, program.bounds.x, program.bounds.z, context.request.density, context.rng.fork("mangrove-parent"));
   // Districts are planning ownership, not giant coloured floor decals. Their
   // identity is made legible by parcel use, landmarks and road hierarchy.
   const semanticTerrain = ["river", "impact-crater", "caldera", "ice-crevasse", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind) || isFloating || isHollowTree || isMangrovePort;
