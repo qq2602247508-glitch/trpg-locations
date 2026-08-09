@@ -161,10 +161,14 @@ describe("five-layer composition catalog", () => {
       expect(surface, underside.id).toBeDefined();
       expect(underside.position.y + underside.size.y).toBeCloseTo(surface!.position.y, 5);
     }
-    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("bridge-pylon")).length).toBeGreaterThanOrEqual(8);
-    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("bridge-guardrail")).length).toBeGreaterThanOrEqual(4);
-    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("suspension-chain")).length).toBeGreaterThanOrEqual(12);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("bridge-pylon")).length).toBeGreaterThanOrEqual(4);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("bridge-guardrail")).length).toBeGreaterThanOrEqual(12);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("suspension-chain")).length).toBeGreaterThanOrEqual(10);
     expect(scene.primitives.filter((primitive) => primitive.tags?.includes("bridge-landing") && primitive.tags?.includes("standable") && primitive.tags?.includes("supported")).length).toBeGreaterThanOrEqual(4);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("lift-guide")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("lift-chain")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("lift-platform") && primitive.tags?.includes("standable"))).toBe(true);
+    expect(scene.routes.some((route) => route.id === "floating-chain-lift-route" && route.kind === "vertical")).toBe(true);
 
     const replay = generateScene(request, "adaptive");
     const signature = (candidate: typeof scene) => candidate.primitives

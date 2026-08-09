@@ -1203,6 +1203,34 @@ function buildFloatingIslands(scene: GeneratedScene, width: number, depth: numbe
       zCells: upper.z - uz * upper.d * 0.3,
       yMeters: upper.y + FLOOR_SLAB_METERS,
     };
+    if (index === 1) {
+      const liftX = (bottom.xCells + top.xCells) / 2;
+      const liftZ = (bottom.zCells + top.zCells) / 2;
+      const liftHeight = Math.max(feetToMeters(12), top.yMeters - bottom.yMeters);
+      const platformY = bottom.yMeters + liftHeight * 0.42;
+      const guideOffset = 0.82;
+      scene.primitives.push(
+        corridor("floating-chain-lift-lower-gangway", index, bottom.xCells, bottom.zCells, liftX, liftZ, bottom.yMeters, 1.7, "wood", ["chain-lift", "lift-gangway", "bridge", "standable", "supported", "floating-island"]),
+        corridor("floating-chain-lift-upper-gangway", index + 1, liftX, liftZ, top.xCells, top.zCells, top.yMeters, 1.7, "wood", ["chain-lift", "lift-gangway", "bridge", "standable", "supported", "floating-island"]),
+        box("floating-chain-lift-bottom-landing", index, liftX, bottom.yMeters, liftZ, 3.4, FLOOR_SLAB_METERS, 3.4, "wood", ["chain-lift", "bridge-landing", "standable", "supported", "floating-island"]),
+        box("floating-chain-lift-platform", index, liftX, platformY, liftZ, 3, FLOOR_SLAB_METERS * 1.45, 3, "metal", ["floor", "platform", "chain-lift", "lift-platform", "shaft-access", "standable", "vertical-route", "vertical-opening", "floating-island"]),
+        box("floating-chain-lift-top-landing", index + 1, liftX, top.yMeters, liftZ, 3.4, FLOOR_SLAB_METERS, 3.4, "wood", ["chain-lift", "bridge-landing", "standable", "supported", "floating-island"]),
+        cylinder("floating-chain-lift-guide-north", index, liftX, bottom.yMeters, liftZ - guideOffset, 0.3, liftHeight + feetToMeters(12), "metal", ["chain-lift", "lift-guide", "shaft-access", "vertical-opening", "vertical-support", "floating-island"]),
+        cylinder("floating-chain-lift-guide-south", index, liftX, bottom.yMeters, liftZ + guideOffset, 0.3, liftHeight + feetToMeters(12), "metal", ["chain-lift", "lift-guide", "shaft-access", "vertical-opening", "vertical-support", "floating-island"]),
+        cylinder("floating-chain-lift-chain-west", index, liftX - guideOffset, bottom.yMeters, liftZ, 0.18, liftHeight + feetToMeters(10), "metal", ["chain-lift", "lift-chain", "vertical-support", "floating-island"]),
+        cylinder("floating-chain-lift-chain-east", index, liftX + guideOffset, bottom.yMeters, liftZ, 0.18, liftHeight + feetToMeters(10), "metal", ["chain-lift", "lift-chain", "vertical-support", "floating-island"]),
+        box("floating-chain-lift-windlass", index + 1, liftX, top.yMeters + feetToMeters(9), liftZ, 4.2, feetToMeters(2.2), 2.1, "metal", ["chain-lift", "windlass", "vertical-landmark", "floating-island"]),
+      );
+      scene.routes.push(createRoute("floating-chain-lift-route", "vertical", [
+        { x: bottom.xCells, z: bottom.zCells, y: bottom.yMeters },
+        { x: liftX, z: liftZ, y: bottom.yMeters },
+        { x: liftX, z: liftZ, y: platformY },
+        { x: liftX, z: liftZ, y: top.yMeters },
+        { x: top.xCells, z: top.zCells, y: top.yMeters },
+      ]));
+      scene.tactical.push(tacticalFeature("floating-chain-lift-chokepoint", "chokepoint", liftX, liftZ, platformY, 2, "A chained lift cage is the only direct vertical route to the upper observation island."));
+      continue;
+    }
     const stair = stairConnection(`floating-vertical-${index}`, index, bottom, top, 1.6, "wood", ["vertical-route", "vertical-opening", "floating-island", "suspension-bridge", "supported"]);
     scene.primitives.push(
       stair.primitive,

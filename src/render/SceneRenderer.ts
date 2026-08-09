@@ -1398,6 +1398,11 @@ export class SceneRenderer {
     if (tags.includes("understory-tree") || tags.includes("young-tree")) return new THREE.Color("#5b7d49");
     if (tags.includes("tree") && material === "wood") return new THREE.Color("#5a4534");
     if (tags.includes("home-fixture") && material === "wood") return new THREE.Color("#704a2d");
+    if (tags.includes("island-underbelly-mass")) return new THREE.Color(material === "darkStone" ? "#344740" : "#52665c");
+    if (tags.includes("island-underside")) return new THREE.Color(material === "darkStone" ? "#4a5f56" : "#697b71");
+    if (tags.includes("suspension-cable")) return new THREE.Color("#c0d7d1");
+    if (tags.includes("bridge-guardrail")) return new THREE.Color("#92aaa4");
+    if (tags.includes("floating-island") && tags.includes("floor")) return new THREE.Color(material === "darkStone" ? "#879b91" : "#aab5aa");
     if (tags.includes("block-surface")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0, -0.08, 0.045);
     if (tags.includes("parcel-yard")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0.02, -0.12, 0.08);
     if (tags.includes("terrain") || tags.includes("floor") || tags.includes("semantic-grid") || tags.includes("macro-region")) {
