@@ -603,6 +603,11 @@ describe("scene generators", () => {
     expect(first.rooms.some((room) => room.name === "Submerged cultivation greenhouse")).toBe(true);
     expect(first.routes.some((route) => route.id.includes("distillation-route"))).toBe(true);
     expect(first.routes.some((route) => route.id.includes("laboratory-route"))).toBe(true);
+    expect(hasTag(first, "archive-hatch")).toBe(true);
+    expect(hasTag(first, "archive-access")).toBe(true);
+    expect(hasTag(first, "exhaust-stack")).toBe(true);
+    expect(first.routes.some((route) => route.id.includes("archive-route"))).toBe(true);
+    expect(first.routes.some((route) => route.id.includes("greenhouse-route"))).toBe(true);
     expect(first.tactical.some((feature) => feature.id.includes("greenhouse-cover"))).toBe(true);
     expect(first.diagnostics.valid).toBe(true);
     expect(first).toEqual(replay);

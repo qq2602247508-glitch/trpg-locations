@@ -182,6 +182,8 @@ function addFunctionalModuleGeometry(
       addBox(module, "workbench", level, laboratoryX, laboratoryY + FLOOR_SLAB_METERS, localZ, Math.max(1.8, lot.width * 0.22), feetToMeters(3.2), 1.05, "wood", ["workbench", "cover"]);
       addBox(module, "reagent-rack", level, laboratoryX - side * lot.width * 0.12, laboratoryY + FLOOR_SLAB_METERS, localZ - lot.depth * 0.11, 0.65, feetToMeters(5.5), Math.max(1.4, lot.depth * 0.24), "wood", ["storage", "reagent-rack", "cover"]);
       addCylinder(module, "hazard-vat", level, laboratoryX + side * lot.width * 0.12, laboratoryY + FLOOR_SLAB_METERS, localZ + lot.depth * 0.1, 1.05, feetToMeters(3.5), "hazard", ["hazard-vat"]);
+      addBox(module, "hood-wall", level, laboratoryX, laboratoryY, localZ - Math.max(1.6, lot.depth * 0.18), Math.max(3.2, lot.width * 0.34), feetToMeters(6.5), 0.18, "darkStone", ["laboratory-shell", "exhaust-wall", "cover"]);
+      addCylinder(module, "exhaust-stack", 1, laboratoryX + side * lot.width * 0.16, laboratoryY + feetToMeters(6.5), localZ - Math.max(1.4, lot.depth * 0.16), 0.65, feetToMeters(9), "metal", ["laboratory-shell", "exhaust-stack", "vertical-landmark"]);
       for (const [vialIndex, vialX, vialZ] of [[1, -0.45, -0.2], [2, 0, 0.16], [3, 0.46, -0.08]] as const) {
         addCylinder(module, `vial-${vialIndex}`, level, laboratoryX + vialX, laboratoryY + feetToMeters(3.2), localZ + vialZ, 0.34, feetToMeters(1.8 + vialIndex * 0.25), vialIndex === 2 ? "warmLight" : "hazard", ["alchemical-vessel", "laboratory-fixture"]);
       }
@@ -221,6 +223,15 @@ function addFunctionalModuleGeometry(
         addBox(module, `shelf-${shelf + 2}`, 3, localX * 0.45 + shelf * 1.05, archiveY + FLOOR_SLAB_METERS, localZ, 0.55, feetToMeters(6.2), Math.max(2.2, lot.depth * 0.27), "wood", ["archive-shelf", "cover", "restricted"]);
       }
       if (module.requiresWater) addBox(module, "floodwater", 3, localX * 0.45, archiveY + feetToMeters(1.1), localZ, Math.max(3, lot.width * 0.34), 0.14, Math.max(2.8, lot.depth * 0.3), "water", ["water", "flooded", "hazard"]);
+      const archiveAccess = point(localX * 0.45 + lot.width * 0.2, localZ + lot.depth * 0.16);
+      scene.primitives.push(
+        box(`${lot.id}-${module.kind}-surface-hatch`, 0, archiveAccess.x, baseY + FLOOR_SLAB_METERS, archiveAccess.z, 1.5, 0.16, 1.5, "metal", [...common, `function:${module.kind}`, "archive-hatch", "vertical-opening", "entrance"], lot.rotation),
+        stairs(`${lot.id}-${module.kind}-access-stair`, 3, archiveAccess.x, archiveY, archiveAccess.z, 1.05, baseY - archiveY, Math.max(3.8, lot.depth * 0.34), "stone", [...common, `function:${module.kind}`, "archive-access", "vertical-opening", "standable", "underground"], lot.rotation),
+      );
+      scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "vertical", [
+        { x: archiveAccess.x, z: archiveAccess.z, y: baseY },
+        { x: center.x, z: center.z, y: archiveY },
+      ], { purpose: "service", traffic: 0.28, schedule: "all" }));
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-choke`, "chokepoint", center.x, center.z, archiveY, 1.1, "Dense archive stacks form narrow investigative and combat aisles."));
     } else if (module.kind === "greenhouse") {
       const width = Math.max(4, lot.width * 0.46);
@@ -232,6 +243,8 @@ function addFunctionalModuleGeometry(
       const center = addBox(module, "floor", level, greenhouseX, greenhouseY, localZ, width, FLOOR_SLAB_METERS, depth, "stone", ["floor", "standable", "greenhouse-floor", ...(submerged ? ["underground"] : [])]);
       addBox(module, "north-frame", level, greenhouseX, greenhouseY, localZ - depth / 2, width, feetToMeters(7), 0.16, "wood", ["greenhouse-frame", "wall"]);
       addBox(module, "west-frame", level, greenhouseX - width / 2, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
+      addBox(module, "south-frame", level, greenhouseX, greenhouseY, localZ + depth / 2, width, feetToMeters(7), 0.16, "wood", ["greenhouse-frame", "wall"]);
+      addBox(module, "east-frame", level, greenhouseX + width / 2, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
       for (const [postIndex, postX, postZ] of [
         [1, greenhouseX - width / 2, localZ - depth / 2],
         [2, greenhouseX + width / 2, localZ - depth / 2],
@@ -246,6 +259,16 @@ function addFunctionalModuleGeometry(
       addBox(module, "roof-ridge", submerged ? 3 : 1, greenhouseX, greenhouseY + feetToMeters(7.35), localZ, width * 1.03, 0.18, 0.16, "metal", ["greenhouse-roof-frame", "ridge"]);
       for (const bedOffset of [-0.24, 0.24]) addBox(module, `bed-${bedOffset > 0 ? 2 : 1}`, level, greenhouseX + width * bedOffset, greenhouseY + FLOOR_SLAB_METERS, localZ, width * 0.28, feetToMeters(1.6), depth * 0.68, "moss", ["growing-bed", "cover", "wet-zone"]);
       if (submerged) addBox(module, "water", 3, greenhouseX, greenhouseY + feetToMeters(1.25), localZ, width * 0.9, 0.14, depth * 0.86, "water", ["water", "submerged", "hazard"]);
+      if (submerged) {
+        const access = point(greenhouseX + width * 0.34, localZ + depth * 0.34);
+        scene.primitives.push(
+          stairs(`${lot.id}-${module.kind}-access`, 3, access.x, greenhouseY, access.z, 1.05, baseY - greenhouseY, 4.5, "stone", [...common, `function:${module.kind}`, "greenhouse-access", "vertical-opening", "standable", "underground"], lot.rotation),
+        );
+        scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "vertical", [
+          { x: access.x, z: access.z, y: baseY },
+          { x: center.x, z: center.z, y: greenhouseY },
+        ], { purpose: "service", traffic: 0.24, schedule: "all" }));
+      }
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-cover`, "cover", center.x, center.z, greenhouseY, 1.6, "Raised cultivation beds divide the greenhouse into cover lanes."));
     } else if (module.kind === "submerged-room") {
       const submergedY = undergroundY;
