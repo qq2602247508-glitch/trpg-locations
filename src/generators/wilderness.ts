@@ -1325,6 +1325,7 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   const macro = rng.fork("macro-terrain");
   const ecology = rng.fork("ecology");
   const micro = rng.fork("micro");
+  const forestEdge = rng.fork("forest-edge-transition");
   const phaseA = macro.float(-Math.PI, Math.PI);
   const phaseB = macro.float(-Math.PI, Math.PI);
   const maximumTerrainLevel = density < 0.34 ? 3 : density < 0.7 ? 4 : 5;
@@ -1368,6 +1369,88 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   });
   const levelAt = (x: number, z: number) => heights[Math.max(0, Math.min(rows - 1, Math.floor(z))) * cols + Math.max(0, Math.min(cols - 1, Math.floor(x)))] ?? 0;
   const surfaceY = (x: number, z: number) => rendered.yOf(levelAt(x, z));
+  const edgeClusterTarget = Math.round(5 + density * 8);
+  let edgeRootCount = 0;
+  let edgeShrubCount = 0;
+  let edgeLogCount = 0;
+  for (let cluster = 0; cluster < edgeClusterTarget; cluster += 1) {
+    const side = forestEdge.int(0, 3);
+    const along = forestEdge.float(0.12, 0.88);
+    const anchor = side === 0 ? { x: 1.05, z: rows * along, dx: -1, dz: 0 }
+      : side === 1 ? { x: cols - 1.05, z: rows * along, dx: 1, dz: 0 }
+        : side === 2 ? { x: cols * along, z: 1.05, dx: 0, dz: -1 }
+          : { x: cols * along, z: rows - 1.05, dx: 0, dz: 1 };
+    const tangentX = Math.abs(anchor.dz); const tangentZ = Math.abs(anchor.dx);
+    const y = surfaceY(anchor.x, anchor.z);
+    const anchorHeight = feetToMeters(forestEdge.float(10, 18));
+    const anchorRadius = forestEdge.float(0.48, 0.82);
+    scene.primitives.push(
+      cylinder(`forest-edge-anchor-${cluster}`, 0, anchor.x, y, anchor.z, anchorRadius, anchorHeight, "wood", ["forest", "forest-edge-transition", "edge-anchor-tree", "root-buttress", "cover"]),
+      primitive(`forest-edge-anchor-crown-${cluster}`, "sphere", 0, anchor.x, y + anchorHeight * 0.78, anchor.z, feetToMeters(forestEdge.float(7, 12)), anchorHeight * 0.42, feetToMeters(forestEdge.float(6, 10)), "moss", ["forest", "forest-edge-transition", "edge-canopy", "cover"]),
+    );
+    const rootCount = forestEdge.int(2, 3);
+    const outwardAngle = Math.atan2(anchor.dx, anchor.dz);
+    for (let rootIndex = 0; rootIndex < rootCount; rootIndex += 1) {
+      const rootAngle = outwardAngle + (rootIndex - (rootCount - 1) / 2) * forestEdge.float(0.42, 0.72) + forestEdge.float(-0.14, 0.14);
+      const rootDx = Math.sin(rootAngle); const rootDz = Math.cos(rootAngle);
+      const rootLength = forestEdge.float(1.35, 2.45);
+      const lowY = Math.max(0, y - feetToMeters(forestEdge.float(1.2, 2.8)));
+      const highY = y + feetToMeters(forestEdge.float(0.45, 1.15));
+      scene.primitives.push(ramp(
+        `forest-edge-root-${cluster}-${rootIndex}`,
+        0,
+        anchor.x + rootDx * rootLength * 0.46,
+        lowY,
+        anchor.z + rootDz * rootLength * 0.46,
+        forestEdge.float(0.28, 0.48),
+        highY - lowY,
+        rootLength,
+        "wood",
+        ["forest", "forest-edge-transition", "root-apron", "root-buttress", "cover", "non-walkable-facade"],
+        Math.atan2(-rootDx, -rootDz),
+      ));
+      edgeRootCount += 1;
+    }
+    const shrubCount = forestEdge.int(2, 5);
+    for (let shrubIndex = 0; shrubIndex < shrubCount; shrubIndex += 1) {
+      const inward = forestEdge.float(0.15, 1.55);
+      const tangentOffset = forestEdge.float(-1.8, 1.8);
+      const x = anchor.x - anchor.dx * inward + tangentX * tangentOffset;
+      const z = anchor.z - anchor.dz * inward + tangentZ * tangentOffset;
+      const radius = forestEdge.float(0.38, 0.78);
+      scene.primitives.push(primitive(
+        `forest-edge-shrub-${cluster}-${shrubIndex}`,
+        "sphere",
+        0,
+        x,
+        surfaceY(x, z) + feetToMeters(0.45),
+        z,
+        radius * CELL,
+        feetToMeters(forestEdge.float(1.4, 3.2)),
+        radius * CELL,
+        "moss",
+        ["forest", "forest-edge-transition", "edge-thicket", "undergrowth", "cover", "natural-detail"],
+      ));
+      edgeShrubCount += 1;
+    }
+    if (cluster % 3 === 1) {
+      const tangentAngle = Math.atan2(tangentZ, tangentX) + forestEdge.float(-0.28, 0.28);
+      scene.primitives.push(box(
+        `forest-edge-log-${cluster}`,
+        0,
+        anchor.x - anchor.dx * 0.5,
+        y + feetToMeters(0.7),
+        anchor.z - anchor.dz * 0.5,
+        0.7,
+        feetToMeters(1.4),
+        forestEdge.float(2.8, 5.4),
+        "wood",
+        ["forest", "forest-edge-transition", "edge-fallen-log", "fallen-log", "cover", "climbable"],
+        tangentAngle,
+      ));
+      edgeLogCount += 1;
+    }
+  }
   let snowPatchCount = 0;
   if (coldForest) {
     const snowTarget = Math.round(7 + density * 13);
@@ -1584,7 +1667,7 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   );
   connectRooms(scene.rooms, "forest-edge", "forest-clearing-1"); connectRooms(scene.rooms, "forest-clearing-1", "forest-clearing-2"); connectRooms(scene.rooms, "forest-clearing-2", "forest-clearing-3"); connectRooms(scene.rooms, "forest-clearing-3", "forest-deep");
   scene.tactical.push(tacticalFeature("forest-entrance", "entrance", 1.5, rows * 0.18, surfaceY(1.5, rows * 0.18), 2, "A narrow game trail enters beneath a layered canopy."), tacticalFeature("forest-clearing-choke", "chokepoint", clearings[1]!.x, clearings[1]!.z, surfaceY(clearings[1]!.x, clearings[1]!.z), 3, "The middle clearing exposes movement between two dense tree walls."));
-  scene.description = `Layered forest composition with ${rendered.walkable} terrain cells, ${rendered.cliffs} elevation boundaries (${rendered.slopes} natural slope facades), ${maximumTerrainLevel + 1} elevation bands, three irregular clearings, ${trees} clustered trees (${speciesCounts.broadleaf} broadleaf, ${speciesCounts.conifer} conifer, ${speciesCounts.snag} snags, ${speciesCounts.understory} understory), ${undergrowthCount} undergrowth attempts, ${logCount} fallen logs, ${ancientCount} reachable canopy platforms${coldForest ? `, ${snowPatchCount} high-ground snow patches` : ""}${streamWanted ? ", and a shallow stream" : ""}.`;
+  scene.description = `Layered forest composition with ${rendered.walkable} terrain cells, ${rendered.cliffs} elevation boundaries (${rendered.slopes} natural slope facades), ${maximumTerrainLevel + 1} elevation bands, ${edgeClusterTarget} discontinuous forest-edge clusters (${edgeRootCount} root aprons, ${edgeShrubCount} shrubs, ${edgeLogCount} fallen logs), three irregular clearings, ${trees} clustered trees (${speciesCounts.broadleaf} broadleaf, ${speciesCounts.conifer} conifer, ${speciesCounts.snag} snags, ${speciesCounts.understory} understory), ${undergrowthCount} undergrowth attempts, ${logCount} fallen logs, ${ancientCount} reachable canopy platforms${coldForest ? `, ${snowPatchCount} high-ground snow patches` : ""}${streamWanted ? ", and a shallow stream" : ""}.`;
   scene.floorHeightFeet = [Math.ceil((rendered.yOf(maximumTerrainLevel) + feetToMeters(54)) / 0.3048)];
 }
 

@@ -160,6 +160,24 @@ describe("five-layer composition catalog", () => {
     expect(dense.description).toContain("natural slope facades");
   });
 
+  it("uses discontinuous forest-edge clusters instead of a universal terrain skirt", () => {
+    const prompt = "茂密森林，林缘有盘根、灌丛和倒木，内部有三片不规则空地";
+    const request = { prompt, seed: "forest-edge-seed-a", size: "medium" as const, density: 0.82 };
+    const first = generateScene(request, "adaptive");
+    const replay = generateScene(request, "adaptive");
+    const other = generateScene({ ...request, seed: "forest-edge-seed-b" }, "adaptive");
+    const roots = (scene: typeof first) => scene.primitives.filter((primitive) => primitive.tags?.includes("root-apron"));
+    const shrubs = (scene: typeof first) => scene.primitives.filter((primitive) => primitive.tags?.includes("edge-thicket"));
+    const signature = (scene: typeof first) => roots(scene).map((primitive) => `${primitive.position.x.toFixed(2)},${primitive.position.z.toFixed(2)},${primitive.rotationY?.toFixed(2)}`).join("|");
+    expect(roots(first).length).toBeGreaterThan(8);
+    expect(roots(first).every((primitive) => primitive.shape === "ramp" && !primitive.tags?.includes("standable"))).toBe(true);
+    expect(shrubs(first).length).toBeGreaterThan(20);
+    expect(first.primitives.some((primitive) => primitive.tags?.includes("erosion-skirt"))).toBe(false);
+    expect(signature(first)).toBe(signature(replay));
+    expect(signature(first)).not.toBe(signature(other));
+    expect(first.description).toContain("discontinuous forest-edge clusters");
+  });
+
   it("keeps contour-following forest routes deterministic and seed-sensitive", () => {
     const prompt = "起伏针叶林，林间小径连接三片空地、倒木和树冠哨台";
     const request = { prompt, seed: "forest-contour-seed-a", size: "medium" as const, density: 0.82 };
