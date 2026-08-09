@@ -41,6 +41,7 @@ export interface BuildingLot {
   state?: "active" | "abandoned" | "flooded" | "temporary";
   functionalModules?: readonly BuildingFunctionalModuleProgram[];
   siteProfile?: SiteBuildingProfile;
+  climateProfile?: "polar" | "wetland" | "alpine" | "forest" | "coastal" | "temperate";
 }
 
 function localPoint(lot: BuildingLot, localX: number, localZ: number): { x: number; z: number } {
@@ -148,6 +149,59 @@ function planSettlementBuildingProgram(lot: BuildingLot, generated: ReturnType<t
 
 function functionalTags(lot: BuildingLot): string[] {
   return (lot.functionalModules ?? []).flatMap((module) => [module.kind, ...module.tags]);
+}
+
+/** Climate is a facade grammar, not a palette switch. Each profile adds
+ * supported geometry that explains how the building survives its parent site. */
+function addSiteClimateFacadeGeometry(scene: GeneratedScene, lot: BuildingLot, baseY: number, totalHeight: number, envelope: BuildingEnvelopeProgram): void {
+  const climate = lot.climateProfile;
+  if (!climate || climate === "temperate") return;
+  const point = (x: number, z: number) => localPoint(lot, x, z);
+  const common = ["settlement-building", `building-instance:${lot.id}`, "climate-facade", `climate:${climate}`, "supported"];
+  const primary = envelope.parts[0];
+  const facadeCenterX = primary?.offset.x ?? 0;
+  const facadeWidth = primary?.size.x ?? lot.width;
+  const frontZ = (primary?.offset.z ?? 0) + (primary?.size.z ?? lot.depth) * 0.5;
+  if (climate === "polar") {
+    const windbreak = point(facadeCenterX - facadeWidth * 0.34, frontZ + 1.15);
+    const roof = point(primary?.offset.x ?? 0, primary?.offset.z ?? -lot.depth * 0.08);
+    scene.primitives.push(
+      box(`${lot.id}-polar-windbreak`, 0, windbreak.x, baseY, windbreak.z, Math.min(3.8, facadeWidth * 0.48), feetToMeters(6.5), 0.24, "metal", [...common, "polar-windbreak", "cover"], lot.rotation),
+      box(`${lot.id}-polar-roof-snow-fence`, 2, roof.x, baseY + totalHeight + feetToMeters(1.8), roof.z, Math.min(5.6, facadeWidth * 0.72), feetToMeters(3.2), 0.14, "metal", [...common, "snow-fence", "roof-service"], lot.rotation),
+    );
+    for (const offset of [-0.32, 0, 0.32]) {
+      const panel = point(facadeCenterX + facadeWidth * offset, frontZ + 0.08);
+      scene.primitives.push(box(`${lot.id}-polar-panel-${String(offset).replace("-", "m")}`, 0, panel.x, baseY + feetToMeters(2.4), panel.z, Math.max(0.8, facadeWidth * 0.24), feetToMeters(4.4), 0.12, "ice", [...common, "insulated-cladding"], lot.rotation));
+    }
+    return;
+  }
+  if (climate === "wetland") {
+    const awning = point(0, frontZ + 0.78);
+    scene.primitives.push(box(`${lot.id}-wetland-rain-awning`, 0, awning.x, baseY + feetToMeters(8), awning.z, Math.min(5.8, facadeWidth * 0.7), 0.18, 1.6, "wood", [...common, "rain-awning", "cover"], lot.rotation));
+    for (const xOffset of [-0.32, 0.32]) for (const zOffset of [frontZ + 0.18, frontZ + 1.34]) {
+      const post = point(facadeCenterX + facadeWidth * xOffset, zOffset);
+      scene.primitives.push(cylinder(`${lot.id}-wetland-awning-post-${xOffset}-${zOffset.toFixed(2)}`, 0, post.x, baseY, post.z, 0.16, feetToMeters(8), "wood", [...common, "awning-support", "flood-marker"]));
+    }
+    return;
+  }
+  if (climate === "alpine") {
+    for (const offset of [-0.38, 0.38]) {
+      const buttress = point(facadeCenterX + facadeWidth * offset, frontZ + 0.12);
+      scene.primitives.push(box(`${lot.id}-alpine-buttress-${offset}`, 0, buttress.x, baseY, buttress.z, 1.1, feetToMeters(4.8), 1.15, "rock", [...common, "stone-buttress", "cover"], lot.rotation));
+    }
+    const screen = point(facadeCenterX, (primary?.offset.z ?? 0) - (primary?.size.z ?? lot.depth) * 0.5 - 0.28);
+    scene.primitives.push(box(`${lot.id}-alpine-wind-screen`, 0, screen.x, baseY, screen.z, Math.min(5.8, facadeWidth * 0.7), feetToMeters(5.4), 0.28, "darkStone", [...common, "alpine-wind-screen"], lot.rotation));
+    return;
+  }
+  if (climate === "forest") {
+    const porch = point(0, frontZ + 0.9);
+    scene.primitives.push(box(`${lot.id}-forest-porch`, 0, porch.x, baseY, porch.z, Math.min(5.6, facadeWidth * 0.7), feetToMeters(1.2), 1.8, "wood", [...common, "timber-porch", "standable"], lot.rotation));
+    const store = point(-lot.width * 0.42, -lot.depth * 0.26);
+    scene.primitives.push(box(`${lot.id}-forest-wood-store`, 0, store.x, baseY, store.z, 1.5, feetToMeters(4), 2.4, "wood", [...common, "wood-store", "cover"], lot.rotation));
+    return;
+  }
+  const brace = point(0, frontZ + 0.1);
+  scene.primitives.push(box(`${lot.id}-coastal-storm-brace`, 0, brace.x, baseY + feetToMeters(2), brace.z, Math.min(5.8, facadeWidth * 0.72), 0.22, feetToMeters(4), "wood", [...common, "storm-brace", "storm-shutter"], lot.rotation));
 }
 
 /**
@@ -610,7 +664,9 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },
   };
   addFunctionalModuleGeometry(scene, lot, generated);
-  addWaterfrontExterior(scene, lot, generated, baseY, generated.floorHeightFeet.reduce((sum, height) => sum + feetToMeters(height), 0));
+  const totalHeight = generated.floorHeightFeet.reduce((sum, height) => sum + feetToMeters(height), 0);
+  addSiteClimateFacadeGeometry(scene, lot, baseY, totalHeight, envelope);
+  addWaterfrontExterior(scene, lot, generated, baseY, totalHeight);
   for (const [index, module] of (lot.functionalModules ?? []).entries()) {
     const roomProgram = interiorProgram.rooms.find((room) => room.id === `function-${module.kind}-${index + 1}`);
     if (!roomProgram) continue;
@@ -742,6 +798,7 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
 
   addFocusInteriorBlueprint(scene, lot, generated, envelope, interiorProgram);
   addFunctionalModuleGeometry(scene, lot, generated);
+  addSiteClimateFacadeGeometry(scene, lot, y, totalHeight, envelope);
   addWaterfrontExterior(scene, lot, generated, y, totalHeight);
 
   if (!scene.rooms.some((room) => room.id === `${lot.id}-room`)) {

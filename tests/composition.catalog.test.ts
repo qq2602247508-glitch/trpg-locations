@@ -43,6 +43,19 @@ describe("five-layer composition catalog", () => {
     expect(scene.compositionProgram?.semanticCoverage?.score).toBe(report.score);
   });
 
+  it("lets bounded semantic capabilities select a real generator for unfamiliar wording", () => {
+    const request = { prompt: "雾中银阶沿两条分叉流线跌落，围住两处可渡点", seed: "bge-water-geometry", size: "medium" as const, density: 0.66 };
+    const composition = compileSceneComposition(request, "bge", ["water.meandering-channel", "water.tributary", "water.waterfall", "route.bridge"]);
+    expect(composition.primaryDomain).toBe("river");
+    expect(composition.grammarId).toBe("grammar.river-v1");
+    const scene = generateScene(request, "wilderness", undefined, undefined, composition);
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(scene.archetype).toBe("river-valley");
+    expect(tags.has("river")).toBe(true);
+    expect(tags.has("watercourse")).toBe(true);
+    expect(scene.compositionProgram?.source).toBe("bge");
+  });
+
   it("selects compound motifs by prompt instead of loading every motif in a domain", () => {
     const mangrove = compileSceneComposition({ prompt: "红树林走私港村", seed: "motif-mangrove", size: "medium", density: 0.62 });
     expect(mangrove.motifIds).toContain("motif.mangrove-smuggler-port");
@@ -188,6 +201,10 @@ describe("five-layer composition catalog", () => {
     expect(scene.buildingInstances?.some((building) => building.envelopeProgram?.variant.startsWith("weather-"))).toBe(true);
     expect(tags.has("snow-ridge")).toBe(true);
     expect(tags.has("ice-shelf")).toBe(true);
+    expect(tags.has("climate:polar")).toBe(true);
+    expect(tags.has("polar-windbreak")).toBe(true);
+    expect(tags.has("insulated-cladding")).toBe(true);
+    expect(tags.has("snow-fence")).toBe(true);
     expect(scene.compositionProgram?.semanticCoverage?.score).toBe(100);
     expect(scene.diagnostics.warnings).toHaveLength(0);
   });
@@ -256,6 +273,31 @@ describe("five-layer composition catalog", () => {
     const alternateSeed = generateScene({ prompt, seed: "round48-field-station-b", size: "medium", density: 0.72 }, "adaptive");
     expect(alternateSeed.diagnostics.warnings).toHaveLength(0);
     expect(alternateSeed.primitives.some((primitive) => primitive.tags?.includes("room-connector") && primitive.tags?.includes("opening"))).toBe(true);
+  });
+
+  it("keeps polar ice-cap monitoring stations owned by wilderness terrain", () => {
+    const prompt = "极地冰盖上的地震监测站，有钻芯实验室、通信桅杆、备用发电棚、防风入口和地下冰芯库";
+    const scene = generateScene({ prompt, seed: "polar-site-ownership", size: "medium", density: 0.78 }, "adaptive");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(scene.sceneProgram?.domain).toBe("natural");
+    expect(scene.archetype).toBe("ice");
+    expect(scene.buildingInstances?.some((building) => building.id === "wilderness-core-building" && building.detailLevel === "full-interior")).toBe(true);
+    expect(tags.has("ice-base-plate")).toBe(true);
+    expect(tags.has("climate:polar")).toBe(true);
+    expect(tags.has("polar-windbreak")).toBe(true);
+    expect(tags.has("snow-fence")).toBe(true);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
+  it("does not let retrieval replace a named alpine parent with an unrelated water grammar", () => {
+    const request = { prompt: "高山裸岩山脊上的地震监测站，有钻芯实验室和通信桅杆", seed: "alpine-site-ownership", size: "medium" as const, density: 0.72 };
+    const composition = compileSceneComposition(request, "bge", ["water.meandering-channel", "water.waterfall"]);
+    const scene = generateScene(request, "adaptive", undefined, undefined, composition);
+    expect(composition.primaryDomain).toBe("generic");
+    expect(composition.grammarId).toBe("grammar.generic-v1");
+    expect(scene.sceneProgram?.domain).toBe("natural");
+    expect(scene.archetype).toBe("mountain");
+    expect(scene.compositionProgram?.semanticCoverage?.missing).not.toContain("主河道");
   });
 
   it("keeps an unfamiliar seismic monitoring station inside its natural parent", () => {

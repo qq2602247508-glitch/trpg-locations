@@ -1,6 +1,7 @@
 import type { GeneratedScene, GeneratorContext, MaterialKey, SemanticGenerationHints } from "../schema";
 import type { BuildingFunctionalModuleProgram } from "../site-program/schema";
 import { embeddedFacilityCapabilities, embeddedFacilityProfile } from "../semantic/siteIntent";
+import { resolveCapabilityDomain } from "../composition/capabilityDomain";
 import { instantiateBuildingModule } from "./buildingModule";
 import {
   CELL,
@@ -47,7 +48,7 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   "burial-ground": ["cemetery", "graveyard", "burial ground", "墓地", "墓园", "坟场", "陵园"],
   rift: ["rift", "chasm", "ravine", "裂谷", "裂隙", "深坑", "断崖"],
   mountain: ["mountain", "cliff", "ridge", "山地", "山脊", "高山", "峭壁"],
-  ice: ["ice", "glacier", "tundra", "冰原", "冰川", "冻土", "雪原"],
+  ice: ["ice", "ice sheet", "ice cap", "polar", "glacier", "tundra", "冰原", "冰盖", "冰帽", "极地", "冰川", "冻土", "雪原"],
   ruin: ["ruin", "ruined", "wilderness ruin", "遗迹", "废墟", "残垣", "荒野遗迹"],
   "underground-lake": ["underground lake", "dark lake", "subterranean lake", "地下湖", "地底湖"],
   underdark: ["underdark", "幽暗地域", "地底世界", "地下洞窟", "菌林", "发光水晶", "mushroom", "fungal", "蘑菇", "菌类"],
@@ -83,7 +84,7 @@ function analyzeTerrainMorphology(prompt: string, hints?: SemanticGenerationHint
   };
 }
 
-export function classifyWildernessArchetype(prompt: string, hints?: SemanticGenerationHints): WildernessArchetype {
+export function classifyWildernessArchetype(prompt: string, hints?: SemanticGenerationHints, capabilityIds: readonly string[] = []): WildernessArchetype {
   const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const morphology = analyzeTerrainMorphology(prompt, hints);
   if (WILDERNESS_TERMS["industrial-ruin"].some((term) => normalized.includes(term))) return "industrial-ruin";
@@ -124,6 +125,15 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   if (hints?.environment === "underground") return "underdark";
   if (hints?.environment === "ruin") return "ruin";
   if (hints?.environment === "wilderness" && hints.cover === "dense") return "forest";
+  // Local semantic retrieval may resolve unfamiliar language into known atoms.
+  // It is only consulted after explicit prompt/hint ownership fails.
+  const capabilityDomain = resolveCapabilityDomain(capabilityIds).domain;
+  if (capabilityDomain === "forest") return "forest";
+  if (capabilityDomain === "swamp") return "swamp";
+  if (capabilityDomain === "river") return "river-valley";
+  if (capabilityDomain === "volcanic") return "volcanic";
+  if (capabilityDomain === "crater") return "impact-crater";
+  if (capabilityDomain === "rift") return "rift";
   return selected;
 }
 
@@ -1518,6 +1528,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     baseY,
     functionalModules,
     siteProfile: quarantine ? "quarantine-station" : weatherStation ? "weather-station" : researchStation ? "field-station" : borderOutpost ? "border-outpost" : rangerStation ? "ranger-station" : undefined,
+    climateProfile: archetype === "ice" ? "polar" : archetype === "swamp" ? "wetland" : archetype === "mountain" || archetype === "rift" ? "alpine" : archetype === "forest" ? "forest" : archetype === "river-valley" ? "coastal" : "temperate",
   }, context.rng.fork("wilderness-building"));
   scene.viewProgram = {
     version: 1,
@@ -2466,7 +2477,7 @@ function buildCoralTide(scene: GeneratedScene, width: number, depth: number, rng
 }
 
 export function generateWilderness(context: GeneratorContext): GeneratedScene {
-  const archetype = classifyWildernessArchetype(context.request.prompt, context.semanticHints);
+  const archetype = classifyWildernessArchetype(context.request.prompt, context.semanticHints, context.compositionProgram?.capabilityIds);
   const profile = bounds(context, archetype);
   const titlePool: Record<WildernessArchetype, readonly string[]> = {
     "river-valley": ["Silverfall Valley", "The Two-Bank Reach"],

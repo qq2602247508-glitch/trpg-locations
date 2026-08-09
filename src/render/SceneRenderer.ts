@@ -1339,6 +1339,15 @@ export class SceneRenderer {
     // is useful for props, but makes a cell-based heightfield look like noisy
     // mosaic tiles. Keep authored floors, shelves, banks and semantic grids
     // on one stable material tone; retain subtle variation for loose props.
+    // Semantic terrain layers need stable, region-level contrast. These are
+    // deliberate material roles rather than per-cell noise, so an ice field
+    // can expose snow, blue ice, thaw water and a dark crevasse at a glance.
+    if (tags.includes("snow-ridge-leeward")) return new THREE.Color("#8fa8ad");
+    if (tags.includes("snow-ridge") || tags.includes("snow-ridge-segment")) return new THREE.Color("#d9e4df");
+    if (tags.includes("broken-floe-edge")) return new THREE.Color("#75aeb7");
+    if (tags.includes("ice-base-plate")) return new THREE.Color("#9bc4c6");
+    if (tags.includes("secondary-crevasse")) return new THREE.Color("#315c69");
+    if (tags.includes("thin-ice") || tags.includes("thaw-pool")) return new THREE.Color("#427f89");
     if (tags.includes("block-surface")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0, -0.08, 0.045);
     if (tags.includes("parcel-yard")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0.02, -0.12, 0.08);
     if (tags.includes("terrain") || tags.includes("floor") || tags.includes("semantic-grid") || tags.includes("macro-region")) {

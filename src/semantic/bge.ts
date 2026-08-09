@@ -74,7 +74,10 @@ export async function retrieveCapabilitiesWithBge(prompt: string, options: BgeRe
     if (!response.ok) return fallback;
     const parsed = parseEmbeddings(await response.json(), cards.length + 1); if (!parsed) return fallback;
     const query = parsed[0]!;
-    const ranked = CAPABILITY_CARDS.map((card, index) => ({ id: card.id, score: cosine(query, parsed[index + 1]!) })).filter((entry) => entry.score >= 0.28).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id)).slice(0, options.limit ?? 6);
+    const ranked = CAPABILITY_CARDS.map((card, index) => {
+      const maturityPenalty = card.status === "planned" ? 0.035 : card.status === "prototype" ? 0.015 : 0;
+      return { id: card.id, score: cosine(query, parsed[index + 1]!) - maturityPenalty };
+    }).filter((entry) => entry.score >= 0.28).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id)).slice(0, options.limit ?? 6);
     const result: CapabilityRetrieval = ranked.length > 0 ? { source: "bge", capabilityIds: ranked.map((entry) => entry.id), scores: Object.fromEntries(ranked.map((entry) => [entry.id, Number(entry.score.toFixed(4))])) } : fallback;
     retrievalCache.set(key, result); if (retrievalCache.size > 48) retrievalCache.delete(retrievalCache.keys().next().value ?? key);
     return result;

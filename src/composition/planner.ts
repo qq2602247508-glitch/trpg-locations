@@ -2,6 +2,7 @@ import type { GeneratedScene, GenerationRequest } from "../schema";
 import { embeddedFacilityCapabilities, shouldComposeWildernessFacility } from "../semantic/siteIntent";
 import { CAPABILITY_CARDS, COMPOSITION_GRAMMARS, DESIGNER_MOTIFS, FUNCTIONAL_MODULES } from "./catalog";
 import type { DomainDensityProfile, SceneCompositionProgram, SceneCompositionProgramSummary, SemanticCoverageReport, SemanticRequirement, StyleProgram } from "./schema";
+import { resolveCapabilityDomain } from "./capabilityDomain";
 
 const normalized = (text: string) => text.normalize("NFKC").toLocaleLowerCase("en-US");
 const has = (text: string, terms: readonly string[]) => terms.some((term) => text.includes(term));
@@ -132,7 +133,14 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
 }
 
 export function compileSceneComposition(request: GenerationRequest, source: SceneCompositionProgram["source"] = "local", retrievedCapabilityIds: string[] = []): SceneCompositionProgram {
-  const domain = domainFor(request.prompt);
+  const lexicalDomain = domainFor(request.prompt);
+  // A named natural parent with an embedded facility already has deterministic
+  // macro ownership in the scene planner. Retrieval may enrich the child, but
+  // must not replace a mountain ridge with an unrelated river grammar merely
+  // because a water capability ranked nearby in embedding space.
+  const domain = lexicalDomain === "generic" && !shouldComposeWildernessFacility(request.prompt)
+    ? resolveCapabilityDomain(retrievedCapabilityIds).domain ?? lexicalDomain
+    : lexicalDomain;
   const text = normalized(request.prompt);
   const isWaterCity = domain === "river" && has(text, ["水城", "河道水城", "运河城", "水上市集", "船坞", "沿岸街巷", "canal city", "water city", "water market", "dock", "quay"]);
   const grammarId = isWaterCity ? "grammar.water-city-v1" : COMPOSITION_GRAMMARS.find((entry) => entry.domain === domain)?.id ?? "grammar.generic-v1";
