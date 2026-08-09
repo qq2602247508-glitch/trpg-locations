@@ -472,8 +472,21 @@ export class SceneRenderer {
         return;
       }
     }
-    const span = Math.max(this.worldBounds.maxX - this.worldBounds.minX, this.worldBounds.maxZ - this.worldBounds.minZ, 5);
+    let span = Math.max(this.worldBounds.maxX - this.worldBounds.minX, this.worldBounds.maxZ - this.worldBounds.minZ, 5);
     const target = this.controls.target.clone();
+    const authoredView = this.currentScene?.viewProgram;
+    if (authoredView?.mode === "scene") {
+      const focusX = authoredView.focusCells.x * GRID_METERS;
+      const focusZ = authoredView.focusCells.z * GRID_METERS;
+      span = Math.max(8 * GRID_METERS, authoredView.radiusCells * GRID_METERS * 2);
+      const included = this.currentScene?.primitives.filter((primitive) => authoredView.includeTags.some((tag) => primitive.tags?.includes(tag))
+        && Math.hypot(primitive.position.x - focusX, primitive.position.z - focusZ) <= span * 0.72) ?? [];
+      const focusY = included.length > 0
+        ? Math.max(0.12, Math.max(...included.map((primitive) => primitive.position.y + primitive.size.y)) * 0.38)
+        : 0.12;
+      target.set(focusX, focusY, focusZ);
+      this.controls.target.copy(target);
+    }
     this.camera.position.set(target.x + span * 1.18, target.y + Math.max(6, span * 0.42), target.z + span * 0.96);
     this.camera.lookAt(target);
     this.controls.update();
@@ -1073,10 +1086,23 @@ export class SceneRenderer {
 
   private positionCamera(): void {
     let { minX, maxX, minZ, maxZ, maxY } = this.worldBounds;
+    const authoredView = this.currentScene?.viewProgram;
+    if (authoredView?.mode === "site" || authoredView?.mode === "building") {
+      const focusX = authoredView.focusCells.x * GRID_METERS;
+      const focusZ = authoredView.focusCells.z * GRID_METERS;
+      const radius = Math.max(8, authoredView.radiusCells) * GRID_METERS;
+      minX = focusX - radius;
+      maxX = focusX + radius;
+      minZ = focusZ - radius;
+      maxZ = focusZ + radius;
+      const included = this.currentScene?.primitives.filter((primitive) => authoredView.includeTags.some((tag) => primitive.tags?.includes(tag))
+        && Math.hypot(primitive.position.x - focusX, primitive.position.z - focusZ) <= radius * 1.25) ?? [];
+      if (included.length > 0) maxY = Math.max(...included.map((primitive) => primitive.position.y + primitive.size.y));
+    }
     const singleBuilding = this.currentScene?.buildingInstances?.length === 1
       ? this.currentScene.buildingInstances[0]
       : undefined;
-    const sitePrimitives = singleBuilding && this.currentScene?.primitives.some((primitive) => primitive.tags?.includes("site-program"))
+    const sitePrimitives = !authoredView && singleBuilding && this.currentScene?.primitives.some((primitive) => primitive.tags?.includes("site-program"))
       ? this.currentScene.primitives.filter((primitive) => primitive.tags?.includes("site-program")
         || primitive.tags?.includes(`building-instance:${singleBuilding.id}`)
         || primitive.tags?.includes("building-pad"))
@@ -1144,7 +1170,37 @@ export class SceneRenderer {
    * handful of pixels in the corner and defeated visual inspection.
    */
   private topCameraBounds(): WorldBounds {
-    if (!this.currentScene || typeof this.activeFloorView !== "number") return this.worldBounds;
+    if (!this.currentScene) return this.worldBounds;
+    const focusedIdTag = this.focusedBuildingId ? `building-instance:${this.focusedBuildingId}` : undefined;
+    const focusedVisible = focusedIdTag
+      ? this.currentScene.primitives.filter((primitive) => primitive.tags?.includes(focusedIdTag) === true
+        && (typeof this.activeFloorView !== "number" || primitive.level === this.activeFloorView)
+        && primitive.tags?.includes("focus-cutaway") !== true
+        && (this.activeFloorView === "roof" || (primitive.material !== "roof" && !primitive.tags?.includes("roof"))))
+      : [];
+    if (focusedVisible.length > 0) return this.boundsForPrimitives(focusedVisible, GRID_METERS * 1.25);
+
+    if (typeof this.activeFloorView !== "number") {
+      const authoredView = this.currentScene.viewProgram;
+      if (authoredView?.mode === "site" || authoredView?.mode === "building") {
+        const focusX = authoredView.focusCells.x * GRID_METERS;
+        const focusZ = authoredView.focusCells.z * GRID_METERS;
+        const radius = Math.max(8, authoredView.radiusCells) * GRID_METERS;
+        const included = this.currentScene.primitives.filter((primitive) => authoredView.includeTags.some((tag) => primitive.tags?.includes(tag))
+          && Math.hypot(primitive.position.x - focusX, primitive.position.z - focusZ) <= radius * 1.25);
+        const maxY = included.length > 0
+          ? Math.max(...included.map((primitive) => primitive.position.y + primitive.size.y))
+          : this.worldBounds.maxY;
+        return {
+          minX: focusX - radius,
+          maxX: focusX + radius,
+          minZ: focusZ - radius,
+          maxZ: focusZ + radius,
+          maxY,
+        };
+      }
+      return this.worldBounds;
+    }
     const authoredRoofView = this.currentScene.floorLabels?.[this.activeFloorView]?.includes("屋顶") === true;
     const visible = this.currentScene.primitives.filter((primitive) => primitive.level === this.activeFloorView
       && (authoredRoofView || (primitive.material !== "roof"
@@ -1152,12 +1208,16 @@ export class SceneRenderer {
         && !(primitive.tags?.includes("roof-platform") && !primitive.tags?.includes("wall-walk")))));
     if (visible.length === 0) return this.worldBounds;
 
+    return this.boundsForPrimitives(visible, GRID_METERS * 1.5);
+  }
+
+  private boundsForPrimitives(primitives: ScenePrimitive[], pad: number): WorldBounds {
     let minX = Number.POSITIVE_INFINITY;
     let maxX = Number.NEGATIVE_INFINITY;
     let minZ = Number.POSITIVE_INFINITY;
     let maxZ = Number.NEGATIVE_INFINITY;
     let maxY = 2;
-    for (const primitive of visible) {
+    for (const primitive of primitives) {
       const rotation = primitive.rotationY ?? 0;
       const cosine = Math.abs(Math.cos(rotation));
       const sine = Math.abs(Math.sin(rotation));
@@ -1169,7 +1229,6 @@ export class SceneRenderer {
       maxZ = Math.max(maxZ, primitive.position.z + halfZ);
       maxY = Math.max(maxY, primitive.position.y + primitive.size.y);
     }
-    const pad = GRID_METERS * 1.5;
     return {
       minX: minX - pad,
       maxX: maxX + pad,

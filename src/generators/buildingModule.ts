@@ -389,8 +389,8 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   const rightWallWidth = Math.max(0.3, primaryEast - entryDoorLocalX - mainDoorGap / 2);
   addRotatedBox("south-wall-left", primaryWest + leftWallWidth / 2, primaryFrontZ, leftWallWidth, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "opening", "building-shell", "focus-cutaway"]);
   addRotatedBox("south-wall-right", primaryEast - rightWallWidth / 2, primaryFrontZ, rightWallWidth, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "opening", "building-shell", "focus-cutaway"]);
-  addRotatedBox("partition-a", primaryOffset.x - width * 0.2, primaryOffset.z, 0.22, wallHeight, depth * 0.36, baseY, generated.material, ["wall", "room-partition", "door-frame"]);
-  addRotatedBox("partition-b", primaryOffset.x - width * 0.2, primaryOffset.z - depth * 0.38, 0.22, wallHeight, depth * 0.18, baseY, generated.material, ["wall", "room-partition", "door-frame"]);
+  addRotatedBox("partition-a", primaryOffset.x - width * 0.2, primaryOffset.z, 0.13, wallHeight, depth * 0.36, baseY, generated.material, ["wall", "room-partition", "door-frame"]);
+  addRotatedBox("partition-b", primaryOffset.x - width * 0.2, primaryOffset.z - depth * 0.38, 0.13, wallHeight, depth * 0.18, baseY, generated.material, ["wall", "room-partition", "door-frame"]);
   const upperWidth = width * 0.72;
   const upperDepth = depth * 0.64;
   addRotatedBox("upper-floor", primaryOffset.x + 0.08, primaryOffset.z - 0.05, upperWidth, FLOOR_SLAB_METERS, upperDepth, upperY, "wood", ["floor", "standable", "upper-floor"], 1);
@@ -458,6 +458,34 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   );
   addRotatedBox("furnishing-public", width * 0.15, 0, Math.max(1.5, width * 0.28), feetToMeters(3), 1.2, baseY + FLOOR_SLAB_METERS, lot.kind === "clinic" ? "metal" : "wood", [labels.tags[0] ?? "furniture", "cover"]);
   addRotatedBox("furnishing-service", -width * 0.34, -depth * 0.12, Math.max(1.1, width * 0.16), feetToMeters(4), 1.1, baseY + FLOOR_SLAB_METERS, lot.kind === "factory" || lot.kind === "blacksmith" ? "metal" : "wood", [labels.tags[1] ?? "service", "cover"]);
+  if (lot.siteProfile === "field-station" || lot.siteProfile === "weather-station") {
+    for (const [benchIndex, offsetZ] of [-0.18, 0.18].entries()) {
+      addRotatedBox(
+        `station-sample-bench-${benchIndex + 1}`,
+        primaryOffset.x + width * 0.14,
+        primaryOffset.z + depth * offsetZ,
+        Math.max(1.2, width * 0.34),
+        feetToMeters(3.1),
+        0.72,
+        baseY + FLOOR_SLAB_METERS,
+        "metal",
+        ["field-laboratory", benchIndex === 0 ? "dirty-sample-bench" : "clean-sample-bench", "laboratory-fixture", "cover"],
+      );
+    }
+    addRotatedBox("station-clean-buffer-left", primaryOffset.x - width * 0.02, primaryOffset.z - depth * 0.28, width * 0.22, feetToMeters(6.5), 0.1, baseY, "metal", ["clean-buffer", "screen", "opening", "controlled-threshold"]);
+    addRotatedBox("station-clean-buffer-right", primaryOffset.x + width * 0.34, primaryOffset.z - depth * 0.28, width * 0.22, feetToMeters(6.5), 0.1, baseY, "metal", ["clean-buffer", "screen", "opening", "controlled-threshold"]);
+    addRotatedBox("station-instrument-console", primaryOffset.x - width * 0.32, primaryOffset.z + depth * 0.18, 0.72, feetToMeters(4.8), Math.max(1.2, depth * 0.24), baseY + FLOOR_SLAB_METERS, "metal", ["instrument-console", "field-laboratory", "cover"]);
+    const sink = point(primaryOffset.x - width * 0.06, primaryOffset.z - depth * 0.34);
+    scene.primitives.push(cylinder(`${lot.id}-station-wash-sink`, 0, sink.x, baseY + FLOOR_SLAB_METERS, sink.z, 0.62, feetToMeters(3.4), "metal", [...tags, "wash-sink", "clean-buffer", "laboratory-fixture"]));
+  }
+  if (lot.siteProfile === "quarantine-station") {
+    for (const [cotIndex, offsetX, offsetZ] of [[1, -0.25, -0.16], [2, 0.06, -0.16], [3, -0.25, 0.18], [4, 0.06, 0.18]] as const) {
+      addRotatedBox(`quarantine-cot-${cotIndex}`, primaryOffset.x + width * offsetX, primaryOffset.z + depth * offsetZ, 0.72, feetToMeters(2.1), 1.55, baseY + FLOOR_SLAB_METERS, "wood", ["quarantine-cot", "ward-rhythm", "cover"]);
+    }
+    addRotatedBox("quarantine-gate-left", primaryOffset.x + width * 0.22, primaryOffset.z, 0.1, feetToMeters(7), depth * 0.32, baseY, "metal", ["controlled-threshold", "screening-gate", "opening"]);
+    addRotatedBox("quarantine-gate-right", primaryOffset.x + width * 0.22, primaryOffset.z - depth * 0.38, 0.1, feetToMeters(7), depth * 0.18, baseY, "metal", ["controlled-threshold", "screening-gate", "opening"]);
+    addRotatedBox("quarantine-nurse-counter", primaryOffset.x + width * 0.34, primaryOffset.z + depth * 0.24, 0.72, feetToMeters(3.2), depth * 0.22, baseY + FLOOR_SLAB_METERS, "metal", ["nurse-counter", "quarantine-reception", "cover"]);
+  }
   const extensionRooms: Array<{ id: string; x: number; z: number }> = [];
   for (const [extensionIndex, extension] of envelope.parts.slice(1).entries()) {
     const extensionHeight = wallHeight * Math.max(0.52, extension.heightRatio);

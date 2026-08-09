@@ -1,5 +1,6 @@
 import type { SceneKind } from "../schema";
 import { classifyInput } from "../semantic/classify";
+import { shouldComposeWildernessFacility } from "../semantic/siteIntent";
 import type {
   CoverageOperator,
   MorphologyOperator,
@@ -56,16 +57,7 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   // spatial domain (for example "modern city hospital").
   // An explicit dungeon noun owns the topology even when the prompt also names
   // a room function such as laboratory, temple, prison, or archive.
-  const hasWildernessBuilding = has(text, [
-    "木屋", "小屋", "猎人屋", "林务站", "林务所", "巡护站", "护林站",
-    "检疫站", "气象站", "科研站", "研究站", "观测站", "通信站", "雷达站", "边防站",
-    "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station",
-    "quarantine station", "weather station", "meteorological station", "research station", "field station", "radio station",
-  ])
-    && has(text, [
-      "森林", "树林", "林间", "巨树", "树根", "山地", "河谷", "沼泽", "湿地", "红树林", "海岸", "冻土", "冰原", "冰川",
-      "forest", "woodland", "tree", "mountain", "valley", "swamp", "wetland", "mangrove", "coast", "tundra", "ice", "glacier",
-    ]);
+  const hasWildernessBuilding = shouldComposeWildernessFacility(text);
   if (hasWildernessBuilding) return { domain: "natural", primaryKind: "wilderness" };
   const hasCompoundSettlement = has(text, [
     "修道院群", "浮空修道院", "空心古树内部", "树内城市", "树上城市",

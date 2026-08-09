@@ -141,6 +141,17 @@ export interface BuildingProgramSummary {
   topology: "courtyard" | "winged" | "vertical" | "defensive" | "institutional" | "composite";
 }
 
+/** Authored camera-interest contract. It records what a default overview must
+ * keep legible without baking camera policy into a renderer-only heuristic. */
+export interface ViewProgram {
+  version: 1;
+  mode: "scene" | "site" | "building";
+  focusCells: Vec2;
+  radiusCells: number;
+  includeTags: string[];
+  reason: string;
+}
+
 export interface GeneratedScene {
   version: 1;
   kind: SceneKind;
@@ -176,6 +187,8 @@ export interface GeneratedScene {
   /** How buildings and circulation were adapted onto that parent terrain. */
   settlementAdaptation?: SettlementAdaptationProgramSummary;
   buildingProgram?: BuildingProgramSummary;
+  /** Auditable default framing intent consumed by Three.js and exported JSON. */
+  viewProgram?: ViewProgram;
   /** Auditable five-layer atom/module/motif/grammar composition result. */
   compositionProgram?: SceneCompositionProgramSummary;
 }

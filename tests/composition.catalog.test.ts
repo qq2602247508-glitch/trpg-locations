@@ -162,6 +162,8 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("tidal-dock")).toBe(true);
     expect(tags.has("lookout-tower")).toBe(true);
     expect(tags.has("medical-vault")).toBe(true);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("quarantine-cot")).length).toBeGreaterThanOrEqual(4);
+    expect(tags.has("screening-gate")).toBe(true);
     expect(scene.compositionProgram?.semanticCoverage?.score).toBe(100);
     const building = scene.buildingInstances?.find((entry) => entry.id === "wilderness-core-building");
     const postSiteCanopies = scene.primitives.filter((primitive) => primitive.tags?.includes("site-program") && primitive.tags?.includes("mangrove") && primitive.tags?.includes("canopy"));
@@ -219,6 +221,14 @@ describe("five-layer composition catalog", () => {
     expect(count(dense, "snow-ridge")).toBeGreaterThan(count(sparse, "snow-ridge"));
     expect(count(dense, "thaw-pool")).toBeGreaterThan(count(sparse, "thaw-pool"));
     expect(count(dense, "ice-shelf")).toBeGreaterThan(count(sparse, "ice-shelf"));
+    expect(count(dense, "ice-base-plate")).toBeGreaterThan(count(sparse, "ice-base-plate"));
+    expect(count(dense, "snow-ridge-leeward")).toBeGreaterThan(count(sparse, "snow-ridge-leeward"));
+    expect(dense.primitives.some((primitive) => primitive.id === "ice-field")).toBe(false);
+    expect(dense.compositionProgram?.primaryDomain).toBe("ice");
+    expect(dense.compositionProgram?.grammarId).toBe("grammar.ice-field-v1");
+    expect(dense.compositionProgram?.motifIds).toContain("motif.eroded-ice-ridges");
+    expect(dense.compositionProgram?.semanticCoverage?.score).toBe(100);
+    expect(dense.viewProgram?.mode).toBe("scene");
     expect(dense.routes.length).toBeGreaterThan(sparse.routes.length);
     expect(dense.routes.filter((route) => route.id.startsWith("ice-snow-ridge-route-")).length).toBeGreaterThan(sparse.routes.filter((route) => route.id.startsWith("ice-snow-ridge-route-")).length);
     expect(dense.routes.filter((route) => route.id.startsWith("ice-snow-ridge-route-")).every((route) => route.points.length >= 5)).toBe(true);
@@ -237,10 +247,37 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("communications-tower")).toBe(true);
     expect(tags.has("generator-shed")).toBe(true);
     expect(tags.has("reserve-vault")).toBe(true);
+    expect(tags.has("dirty-sample-bench")).toBe(true);
+    expect(tags.has("clean-sample-bench")).toBe(true);
+    expect(tags.has("clean-buffer")).toBe(true);
+    expect(scene.viewProgram).toMatchObject({ version: 1, mode: "site", focusCells: building?.positionCells });
+    expect(scene.viewProgram?.includeTags).toContain("site-program");
     expect(scene.diagnostics.warnings).toHaveLength(0);
     const alternateSeed = generateScene({ prompt, seed: "round48-field-station-b", size: "medium", density: 0.72 }, "adaptive");
     expect(alternateSeed.diagnostics.warnings).toHaveLength(0);
     expect(alternateSeed.primitives.some((primitive) => primitive.tags?.includes("room-connector") && primitive.tags?.includes("opening"))).toBe(true);
+  });
+
+  it("keeps an unfamiliar seismic monitoring station inside its natural parent", () => {
+    const prompt = "高原泥炭湿地地震监测站，有钻芯实验室、样本清洗间、通信桅杆、备用发电棚、架高步道和地下岩芯库";
+    const request = { prompt, seed: "seismic-parent-contract", size: "medium" as const, density: 0.74 };
+    const scene = generateScene(request, "adaptive");
+    const other = generateScene({ ...request, seed: "seismic-parent-contract-b" }, "adaptive");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    const signature = (candidate: typeof scene) => candidate.primitives
+      .filter((primitive) => primitive.tags?.some((tag) => tag === "wetland" || tag === "watercourse" || tag === "building-pad"))
+      .map((primitive) => `${primitive.id}:${primitive.position.x.toFixed(2)}:${primitive.position.z.toFixed(2)}:${primitive.size.x.toFixed(2)}:${primitive.size.z.toFixed(2)}`)
+      .join("|");
+    expect(scene.sceneProgram?.domain).toBe("natural");
+    expect(scene.archetype).toBe("swamp");
+    expect(scene.buildingInstances?.some((building) => building.envelopeProgram?.variant.startsWith("field-"))).toBe(true);
+    expect(tags.has("field-laboratory")).toBe(true);
+    expect(tags.has("communications-tower")).toBe(true);
+    expect(tags.has("generator-shed")).toBe(true);
+    expect(tags.has("reserve-vault")).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score).toBe(100);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+    expect(signature(scene)).not.toBe(signature(other));
   });
 
   it("changes mangrove parent topology across seeds, not only building props", () => {
