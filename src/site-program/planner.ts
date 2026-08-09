@@ -188,7 +188,7 @@ function inferMorphology(text: string, siteType: SiteType, features: readonly st
             : "timeless";
   const roadPattern: SettlementMorphologyProgram["roadPattern"] = features.includes("impact-crater-settlement") || features.includes("volcanic-settlement") ? "radial-ring"
     : features.includes("water-city") ? "canal-banks"
-      : features.includes("hillside-district") ? "contour"
+      : features.includes("hillside-district") || features.includes("coastal-cliff") ? "contour"
         : siteType === "harbor-district" || features.includes("fantasy-harbor") ? "harbor-spine"
           : era === "modern" || era === "future" || features.includes("industrial-plant") ? "rectilinear"
             : "anchor-web";
@@ -215,7 +215,7 @@ function inferMorphology(text: string, siteType: SiteType, features: readonly st
           { id: "temple", kind: "sacred", point: { x: width * 0.78, z: depth * 0.2 } },
           { id: "works", kind: "industry", point: { x: width * 0.76, z: depth * 0.78 } },
         ];
-  return { era, growth, roadPattern, constraints: features.filter((feature) => ["water-city", "fantasy-harbor", "impact-crater-settlement", "hillside-district", "vertical-slum", "river-crossing", "hollow-tree-city", "mangrove-smuggler-port", "salt-crystal-monastery"].includes(feature)), anchors };
+  return { era, growth, roadPattern, constraints: features.filter((feature) => ["water-city", "fantasy-harbor", "impact-crater-settlement", "hillside-district", "coastal-cliff", "vertical-slum", "river-crossing", "hollow-tree-city", "mangrove-smuggler-port", "salt-crystal-monastery"].includes(feature)), anchors };
 }
 
 function roleSequence(siteType: SiteType, features: readonly string[]): readonly DistrictRole[] {
@@ -412,6 +412,44 @@ function organicRoadsAndBlocks(siteType: SiteType, width: number, depth: number,
     roads.push(road("road-crater-ring", "street", 2.1, ring, "crowd"));
     roads.push(road("road-crater-gate", "arterial", 2.7, curvedPath(gate, ring[6] ?? centre, 2.4), "rural"));
     roads.push(road("road-crater-ramp", "trail", 1.4, curvedPath(ring[9] ?? centre, { x: width * 0.5, z: depth * 0.5 }, -3), "rural", -5));
+  } else if (morphology.roadPattern === "contour") {
+    const upperZ = depth * 0.2;
+    const middleZ = depth * 0.43;
+    const lowerZ = depth * 0.66;
+    roads.push(
+      road("road-contour-upper", "street", 1.7, [
+        { x: width * 0.08, z: upperZ + rng.float(-0.6, 0.6) },
+        { x: width * 0.35, z: upperZ - 1.2 },
+        { x: width * 0.64, z: upperZ + 0.8 },
+        { x: width * 0.92, z: upperZ - 0.4 },
+      ], "patrol", 30),
+      road("road-contour-middle", "street", 2.1, [
+        { x: width * 0.06, z: middleZ + 0.8 },
+        { x: width * 0.31, z: middleZ - 1.4 },
+        { x: width * 0.61, z: middleZ + 1.1 },
+        { x: width * 0.94, z: middleZ - 0.7 },
+      ], "crowd", 20),
+      road("road-contour-lower", "street", 2.2, [
+        { x: width * 0.05, z: lowerZ - 0.5 },
+        { x: width * 0.29, z: lowerZ + 1.3 },
+        { x: width * 0.58, z: lowerZ - 1.1 },
+        { x: width * 0.93, z: lowerZ + 0.4 },
+      ], "cargo", 10),
+      road("road-contour-switchback-west", "trail", 1.35, [
+        { x: width * 0.2, z: lowerZ, y: 10 },
+        { x: width * 0.28, z: depth * 0.55, y: 15 },
+        { x: width * 0.22, z: middleZ, y: 20 },
+        { x: width * 0.3, z: depth * 0.31, y: 25 },
+        { x: width * 0.24, z: upperZ, y: 30 },
+      ], "rural", 10),
+      road("road-contour-switchback-east", "trail", 1.2, [
+        { x: width * 0.78, z: lowerZ, y: 10 },
+        { x: width * 0.7, z: depth * 0.55, y: 15 },
+        { x: width * 0.76, z: middleZ, y: 20 },
+        { x: width * 0.68, z: depth * 0.31, y: 25 },
+        { x: width * 0.74, z: upperZ, y: 30 },
+      ], "service", 10),
+    );
   } else if (morphology.roadPattern === "harbor-spine" || morphology.roadPattern === "canal-banks") {
     const quayZ = depth * 0.82;
     if (morphology.roadPattern === "harbor-spine") roads.push(road("road-quay-spine", "quay", 2.8, [
@@ -441,7 +479,7 @@ function organicRoadsAndBlocks(siteType: SiteType, width: number, depth: number,
   if (density > 0.82) roads.push(road("road-density-alley", "lane", 0.9, curvedPath({ x: width * 0.28, z: depth * 0.68 }, { x: width * 0.72, z: depth * 0.3 }, 3.5), "service"));
 
   const scaleBand = Math.sqrt((width * depth) / (60 * 48));
-  const morphologyMultiplier = morphology.roadPattern === "canal-banks" ? 1.35 : 1;
+  const morphologyMultiplier = morphology.roadPattern === "canal-banks" ? 1.35 : morphology.roadPattern === "contour" ? 1.12 : 1;
   const blockCount = Math.max(6, Math.round((8 + density * 7) * scaleBand * morphologyMultiplier));
   const roles = roleSequence(siteType, features);
   const blocks: BlockProgram[] = [];
@@ -458,6 +496,15 @@ function organicRoadsAndBlocks(siteType: SiteType, width: number, depth: number,
       center = {
         x: side === 0 ? width * rng.float(0.10, 0.37) : width * rng.float(0.63, 0.90),
         z: depth * (0.08 + 0.84 * ((column + 0.5) / rows)) + rng.float(-1.6, 1.6),
+      };
+    }
+    if (morphology.roadPattern === "contour") {
+      const band = index % 3;
+      const row = Math.floor(index / 3);
+      const rows = Math.max(2, Math.ceil(blockCount / 3));
+      center = {
+        x: width * (0.1 + 0.8 * ((row + 0.5) / rows)) + rng.float(-1.8, 1.8),
+        z: depth * ([0.2, 0.43, 0.66][band] ?? 0.43) + rng.float(-1.5, 1.5),
       };
     }
     center = { x: Math.max(5, Math.min(width - 5, center.x)), z: Math.max(5, Math.min(depth - 7, center.z)) };

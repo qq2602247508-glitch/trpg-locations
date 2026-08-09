@@ -64,7 +64,7 @@ export interface TerrainProgramSummary {
 export interface SettlementAdaptationProgramSummary {
   version: 1;
   terrainKind: SiteTerrainProgram["kind"];
-  roadMode: "terrain-owned" | "planned";
+  roadMode: "terrain-owned" | "planned" | "hybrid";
   relocatedBuildings: number;
   supportSurfaceCount: number;
   bridgeCount: number;

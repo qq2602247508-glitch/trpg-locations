@@ -18,7 +18,8 @@ function roadPieces(road: RoadProgram, terrain: SettlementTerrain) {
       const mx = (from.x + to.x) / 2; const mz = (from.z + to.z) / 2;
       const surface = terrain.surfaceAt(mx, mz);
       if (surface === "water" || surface === "lava" || surface === "void") return undefined;
-      return corridor(`site-${road.id}-${index + 1}-${step + 1}`, 0, from.x, from.z, to.x, to.z, terrain.elevationAt(mx, mz) + FLOOR_SLAB_METERS + 0.02, road.widthCells, road.hierarchy === "trail" ? "earth" : "stone", ["road", `road:${road.hierarchy}`, `purpose:${road.purpose}`, "site-program", "standable", "terrain-adapted"]);
+      const contourRoad = terrain.summary.kind === "coastal-cliff";
+      return corridor(`site-${road.id}-${index + 1}-${step + 1}`, 0, from.x, from.z, to.x, to.z, terrain.elevationAt(mx, mz) + FLOOR_SLAB_METERS + 0.02, road.widthCells, contourRoad ? "earth" : road.hierarchy === "trail" ? "earth" : "stone", ["road", `road:${road.hierarchy}`, `purpose:${road.purpose}`, "site-program", "standable", "terrain-adapted", ...(contourRoad ? ["contour-road", "cliff-route"] : [])]);
     }).filter((piece): piece is NonNullable<typeof piece> => Boolean(piece));
   });
 }
@@ -914,8 +915,15 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   // islands.  Standalone river sites still keep the terrain-only grammar.
   const waterCity = program.requiredFeatures.includes("water-city");
   const semanticTerrain = (["river", "impact-crater", "caldera", "ice-crevasse", "underdark", "megastructure", "bridge-megastructure", "coastal-cliff", "swamp-bone", "wreck-field"].includes(terrain.summary.kind) && !(terrain.summary.kind === "river" && waterCity)) || isFloating || isHollowTree || isMangrovePort;
+  // Most semantic terrains own their complete circulation grammar so that a
+  // generic road web cannot flatten a crater, caldera, crevasse, or cavern.
+  // Coastal cliffs are different: the terrain generator owns the terraces and
+  // cave, while the settlement planner owns the inhabited contour streets and
+  // switchbacks that stitch those terraces together.
+  const plannedTerrainRoads = terrain.summary.kind === "coastal-cliff"
+    && program.morphology.roadPattern === "contour";
   if (!semanticTerrain) addBlockAndParcelSurfaces(scene, program, elevationAt);
-  if (!semanticTerrain) {
+  if (!semanticTerrain || plannedTerrainRoads) {
     for (const road of program.roads) scene.primitives.push(...roadPieces(road, legacySpecialElevation ? { ...terrain, elevationAt, surfaceAt: () => "ground" } : terrain));
     addRoadJunctions(scene, program, elevationAt);
   }
@@ -1164,7 +1172,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   const buildingRoots = scene.rooms.filter((room) => room.id.startsWith("settlement-building-") && room.id.endsWith("-room"));
   for (const [index, room] of buildingRoots.entries()) connectRooms(scene.rooms, index === 0 ? plaza.id : (buildingRoots[index - 1]?.id ?? plaza.id), room.id);
 
-  if (!semanticTerrain) for (const road of program.roads) scene.routes.push(createRoute(`route-${road.id}`, road.hierarchy === "arterial" ? "primary" : "alternate", road.points.map((point) => ({ ...point, y: elevationAt(point.x, point.z) })), { purpose: road.purpose === "cargo" || road.purpose === "service" ? "service" : "crowd", traffic: road.hierarchy === "arterial" ? 0.94 : road.hierarchy === "street" ? 0.86 : road.hierarchy === "lane" || road.hierarchy === "trail" ? 0.44 : 0.7, schedule: road.purpose === "patrol" ? "night" : road.purpose === "service" ? "all" : "day" }));
+  if (!semanticTerrain || plannedTerrainRoads) for (const road of program.roads) scene.routes.push(createRoute(`route-${road.id}`, road.hierarchy === "arterial" ? "primary" : "alternate", road.points.map((point) => ({ ...point, y: elevationAt(point.x, point.z) })), { purpose: road.purpose === "cargo" || road.purpose === "service" ? "service" : "crowd", traffic: road.hierarchy === "arterial" ? 0.94 : road.hierarchy === "street" ? 0.86 : road.hierarchy === "lane" || road.hierarchy === "trail" ? 0.44 : 0.7, schedule: road.purpose === "patrol" ? "night" : road.purpose === "service" ? "all" : "day" }));
   const core = scene.buildingInstances?.filter((building) => building.detailLevel === "full-interior") ?? [];
   const wantsRoofRoute = ["屋顶", "房顶", "追逐", "roof", "rooftop", "chase"].some((term) => context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term));
   if (wantsRoofRoute && !waterCity && core.length > 0) {
@@ -1214,7 +1222,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   scene.settlementAdaptation = {
     version: 1,
     terrainKind: terrain.summary.kind,
-    roadMode: semanticTerrain ? "terrain-owned" : "planned",
+    roadMode: plannedTerrainRoads ? "hybrid" : semanticTerrain ? "terrain-owned" : "planned",
     relocatedBuildings: adaptedBuildings,
     supportSurfaceCount: terrain.summary.supportSurfaces,
     bridgeCount,

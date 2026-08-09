@@ -50,6 +50,7 @@ interface PrimitiveBatch {
   shape: ScenePrimitive["shape"];
   material: MaterialKey;
   ghost: boolean;
+  focusCluster?: string;
   primitives: ScenePrimitive[];
 }
 
@@ -87,6 +88,10 @@ export function overlayTouchesFloor(levels: readonly number[], view: FloorView):
 
 export function routeMatchesTime(schedule: GeneratedScene["routes"][number]["schedule"], time: "day" | "night"): boolean {
   return schedule === undefined || schedule === "all" || schedule === time;
+}
+
+function focusClusterTag(primitive: ScenePrimitive): string | undefined {
+  return primitive.tags?.find((tag) => tag.startsWith("focus-cluster:"));
 }
 
 const MATERIAL_STYLE: Record<
@@ -410,6 +415,7 @@ export class SceneRenderer {
     this.applyRouteFilters();
     this.applyOverlayFloorFilter(this.gridRoot, view);
     this.applyOverlayFloorFilter(this.tacticalRoot, view);
+    this.applyPlanningView();
     const tacticalGround = this.gridRoot.getObjectByName("Tactical ground");
     if (tacticalGround) {
       const selected = typeof view === "number"
@@ -473,6 +479,29 @@ export class SceneRenderer {
         const viewX = (cosine + sine) / Math.SQRT2;
         const viewZ = (-sine + cosine) / Math.SQRT2;
         this.camera.position.set(target.x + viewX * span * 2.15, target.y + Math.max(3.8, span * 0.36), target.z + viewZ * span * 2.15);
+        this.camera.lookAt(target);
+        this.controls.update();
+        return;
+      }
+    }
+    if (typeof this.activeFloorView === "number" && this.currentScene) {
+      const visible = this.floorInspectionPrimitives(this.activeFloorView);
+      if (visible.length > 0) {
+        const bounds = this.boundsForPrimitives(visible, GRID_METERS * 0.75);
+        const span = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 5);
+        const minY = Math.min(...visible.map((primitive) => primitive.position.y));
+        const maxY = Math.max(...visible.map((primitive) => primitive.position.y + primitive.size.y));
+        const target = new THREE.Vector3(
+          (bounds.minX + bounds.maxX) / 2,
+          (minY + maxY) / 2,
+          (bounds.minZ + bounds.maxZ) / 2,
+        );
+        this.controls.target.copy(target);
+        this.camera.position.set(
+          target.x + span * 0.94,
+          target.y + Math.max(3.2, span * 0.31),
+          target.z + span * 0.76,
+        );
         this.camera.lookAt(target);
         this.controls.update();
         return;
@@ -720,7 +749,7 @@ export class SceneRenderer {
     }
 
     const surfaceTags = new Set(["floor", "platform", "ledge", "terrain", "bridge", "boardwalk", "ice-island", "road", "plaza", "quay", "clearing"]);
-    const surfaceLinesByLevel = new Map<number, number[]>();
+    const surfaceLinesByKey = new Map<string, { level: number; focusCluster?: string; positions: number[] }>();
     const belongsToFocus = (primitive: ScenePrimitive): boolean => !this.focusedBuildingId
       || primitive.tags?.includes(`building-instance:${this.focusedBuildingId}`) === true;
     const addSurfaceGrid = (surface: ScenePrimitive): void => {
@@ -735,8 +764,11 @@ export class SceneRenderer {
         surface.position.y + surface.size.y + 0.035,
         surface.position.z - localX * sine + localZ * cosine,
       ];
-      const linePositions = surfaceLinesByLevel.get(surface.level) ?? [];
-      surfaceLinesByLevel.set(surface.level, linePositions);
+      const cluster = focusClusterTag(surface);
+      const key = `${surface.level}|${cluster ?? "none"}`;
+      const entry = surfaceLinesByKey.get(key) ?? { level: surface.level, focusCluster: cluster, positions: [] };
+      surfaceLinesByKey.set(key, entry);
+      const linePositions = entry.positions;
       const push = (a: [number, number, number], b: [number, number, number]) => linePositions.push(...a, ...b);
       const minLocalX = -surface.size.x / 2;
       const maxLocalX = surface.size.x / 2;
@@ -746,13 +778,14 @@ export class SceneRenderer {
       for (let z = minLocalZ; z <= maxLocalZ + 0.001; z += GRID_METERS) push(toWorld(minLocalX, z), toWorld(maxLocalX, z));
     };
     for (const surface of scene.primitives) addSurfaceGrid(surface);
-    for (const [level, linePositions] of surfaceLinesByLevel) {
+    for (const entry of surfaceLinesByKey.values()) {
       const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(entry.positions, 3));
       const material = new THREE.LineBasicMaterial({ color: 0x9bb8bd, transparent: true, opacity: 0.78, depthTest: true, depthWrite: false, toneMapped: false });
       const grid = new THREE.LineSegments(geometry, material);
-      grid.name = `surface grid batch · level ${level + 1}`;
-      grid.userData.levels = [level];
+      grid.name = `surface grid batch · level ${entry.level + 1}`;
+      grid.userData.levels = [entry.level];
+      grid.userData.focusCluster = entry.focusCluster;
       grid.renderOrder = 2;
       this.gridRoot.add(grid);
     }
@@ -760,7 +793,7 @@ export class SceneRenderer {
     // Stair treads are walkable faces too. Draw a small grid on every tread,
     // transformed with the authored stair rotation, instead of leaving stairs
     // as ungridded solid ramps.
-    const stairLinesByLevel = new Map<number, number[]>();
+    const stairLinesByKey = new Map<string, { level: number; focusCluster?: string; positions: number[] }>();
     for (const stair of scene.primitives.filter((primitive) => primitive.shape === "stairs" && belongsToFocus(primitive))) {
       const steps = Math.max(2, Math.round(stair.size.y / 0.18));
       const treadDepth = stair.size.z / steps;
@@ -771,8 +804,11 @@ export class SceneRenderer {
         y,
         stair.position.z - localX * sine + localZ * cosine,
       ];
-      const linePositions = stairLinesByLevel.get(stair.level) ?? [];
-      stairLinesByLevel.set(stair.level, linePositions);
+      const cluster = focusClusterTag(stair);
+      const key = `${stair.level}|${cluster ?? "none"}`;
+      const entry = stairLinesByKey.get(key) ?? { level: stair.level, focusCluster: cluster, positions: [] };
+      stairLinesByKey.set(key, entry);
+      const linePositions = entry.positions;
       const push = (a: [number, number, number], b: [number, number, number]) => linePositions.push(...a, ...b);
       for (let step = 0; step < steps; step += 1) {
         const z0 = -stair.size.z / 2 + step * treadDepth;
@@ -782,13 +818,14 @@ export class SceneRenderer {
         push(toWorld(-stair.size.x / 2, z0, y), toWorld(stair.size.x / 2, z0, y));
       }
     }
-    for (const [level, linePositions] of stairLinesByLevel) {
+    for (const entry of stairLinesByKey.values()) {
       const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(entry.positions, 3));
       const material = new THREE.LineBasicMaterial({ color: 0xb9d7c8, transparent: true, opacity: 0.9, depthTest: true, depthWrite: false, toneMapped: false });
       const grid = new THREE.LineSegments(geometry, material);
-      grid.name = `stair grid batch · level ${level + 1}`;
-      grid.userData.levels = [level];
+      grid.name = `stair grid batch · level ${entry.level + 1}`;
+      grid.userData.levels = [entry.level];
+      grid.userData.focusCluster = entry.focusCluster;
       grid.renderOrder = 2;
       this.gridRoot.add(grid);
     }
@@ -864,11 +901,12 @@ export class SceneRenderer {
       const layer = this.floorLayers.get(primitive.level) ?? this.createFloorLayer(primitive.level);
       const host = isRoof ? layer.roof : layer.structure;
       const chunk = spatialBatchKey(primitive.position, this.worldBounds);
+      const focusCluster = focusClusterTag(primitive);
       const planningClass = primitive.tags?.includes("settlement-building") ? "buildings"
         : primitive.material === "water" || primitive.tags?.some((tag) => ["road", "rail-track", "dock", "bridge", "quay", "watercourse"].includes(tag)) ? "roads"
           : primitive.tags?.some((tag) => ["block-surface", "parcel-yard", "open-space"].includes(tag)) ? "parcels"
             : "context";
-      const key = `${primitive.level}|${isRoof ? "roof" : "structure"}|${primitive.shape}|${primitive.material}|${ghost ? "ghost" : "solid"}|${chunk}|${planningClass}`;
+      const key = `${primitive.level}|${isRoof ? "roof" : "structure"}|${primitive.shape}|${primitive.material}|${ghost ? "ghost" : "solid"}|${chunk}|${planningClass}|${focusCluster ?? "none"}`;
       const existing = batchMap.get(key);
       if (existing) {
         existing.primitives.push(primitive);
@@ -878,6 +916,7 @@ export class SceneRenderer {
           shape: primitive.shape,
           material: primitive.material,
           ghost,
+          focusCluster,
           primitives: [primitive],
         });
       }
@@ -894,7 +933,8 @@ export class SceneRenderer {
       mesh.userData.planningClass = sampleTags.includes("settlement-building") ? "buildings"
         : batch.material === "water" || sampleTags.some((tag) => ["road", "rail-track", "dock", "bridge", "quay", "watercourse"].includes(tag)) ? "roads"
           : sampleTags.some((tag) => ["block-surface", "parcel-yard", "open-space"].includes(tag)) ? "parcels"
-            : "context";
+          : "context";
+      mesh.userData.focusCluster = batch.focusCluster;
       mesh.castShadow = batch.material !== "water" && batch.material !== "warmLight";
       mesh.receiveShadow = batch.material !== "warmLight";
       const matrix = new THREE.Matrix4();
@@ -928,13 +968,23 @@ export class SceneRenderer {
   }
 
   private applyPlanningView(): void {
+    const activeCluster = typeof this.activeFloorView === "number"
+      ? this.activeFloorFocusClusterTag(this.activeFloorView)
+      : undefined;
     this.modelRoot.traverse((object) => {
       if (!(object instanceof THREE.InstancedMesh)) return;
       const category = object.userData.planningClass;
-      object.visible = this.planningView === "all"
+      const clusterVisible = activeCluster === undefined || object.userData.focusCluster === activeCluster;
+      object.visible = clusterVisible && (this.planningView === "all"
         || category === this.planningView
-        || (this.planningView === "parcels" && (category === "roads" || category === "parcels"));
+        || (this.planningView === "parcels" && (category === "roads" || category === "parcels")));
     });
+    // Planning isolation is meant to expose the authored road/block/building
+    // relationship. Keeping every tactical surface grid visible turns a clean
+    // road graph into a white wireframe cloud, especially around stairs and
+    // multi-level cliff settlements. Restore the tactical grids immediately
+    // when returning to the complete scene.
+    this.gridRoot.visible = this.planningView === "all";
   }
 
   private createFloorLayer(level: number): FloorLayer {
@@ -1025,6 +1075,9 @@ export class SceneRenderer {
   }
 
   private applyOverlayFloorFilter(root: THREE.Group, view: FloorView): void {
+    const activeCluster = root === this.gridRoot && typeof view === "number"
+      ? this.activeFloorFocusClusterTag(view)
+      : undefined;
     for (const object of root.children) {
       const levels = Array.isArray(object.userData.levels)
         ? object.userData.levels.filter((level): level is number => typeof level === "number")
@@ -1033,9 +1086,10 @@ export class SceneRenderer {
       // grid at once turns the building into a stack of moire planes. Keep the
       // 1F tactical grid as the spatial reference in cut mode; numeric views
       // still show the exact grid for every standable upper or basement face.
-      object.visible = root === this.gridRoot && view === "cut"
+      const clusterVisible = activeCluster === undefined || object.userData.focusCluster === activeCluster;
+      object.visible = clusterVisible && (root === this.gridRoot && view === "cut"
         ? levels.length === 0 || levels.includes(0)
-        : levels.length === 0 || overlayTouchesFloor(levels, view);
+        : levels.length === 0 || overlayTouchesFloor(levels, view));
     }
   }
 
@@ -1049,6 +1103,48 @@ export class SceneRenderer {
         && routeMatchesTime(schedule, this.timeOfDay);
     }
     this.routeRoot.visible = this.routesVisible;
+  }
+
+  /**
+   * Numeric basement views may contain several unrelated cellars spread across
+   * a settlement. Feature generators can mark one coherent inspection group
+   * with `focus-cluster:*`; camera fitting then frames that group instead of
+   * shrinking every basement into a few pixels. The geometry remains present
+   * and the convention is reusable by caves, crypts, vaults, and machinery
+   * levels without teaching the renderer their domain names.
+   */
+  private floorFocusCluster(primitives: ScenePrimitive[]): ScenePrimitive[] {
+    const groups = new Map<string, ScenePrimitive[]>();
+    for (const primitive of primitives) {
+      for (const tag of primitive.tags ?? []) {
+        if (!tag.startsWith("focus-cluster:")) continue;
+        const group = groups.get(tag) ?? [];
+        group.push(primitive);
+        groups.set(tag, group);
+      }
+    }
+    if (groups.size === 0) return primitives;
+    return [...groups.values()].sort((left, right) => right.length - left.length)[0] ?? primitives;
+  }
+
+  private activeFloorFocusClusterTag(level: number): string | undefined {
+    if (!this.currentScene) return undefined;
+    const counts = new Map<string, number>();
+    for (const primitive of this.currentScene.primitives) {
+      if (primitive.level !== level) continue;
+      const tag = focusClusterTag(primitive);
+      if (tag) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+  }
+
+  private floorInspectionPrimitives(level: number): ScenePrimitive[] {
+    if (!this.currentScene) return [];
+    const authoredRoofView = this.currentScene.floorLabels?.[level]?.includes("屋顶") === true;
+    return this.floorFocusCluster(this.currentScene.primitives.filter((primitive) => primitive.level === level
+      && (authoredRoofView || (primitive.material !== "roof"
+        && !primitive.tags?.includes("roof")
+        && !(primitive.tags?.includes("roof-platform") && !primitive.tags?.includes("wall-walk"))))));
   }
 
   private recenterCameraForFloor(view: FloorView): void {
@@ -1070,11 +1166,7 @@ export class SceneRenderer {
     }
     let visible: ScenePrimitive[] = [];
     if (typeof view === "number") {
-      const authoredRoofView = this.currentScene.floorLabels?.[view]?.includes("屋顶") === true;
-      visible = this.currentScene.primitives.filter((primitive) => primitive.level === view
-        && (authoredRoofView || (primitive.material !== "roof"
-          && !primitive.tags?.includes("roof")
-          && !(primitive.tags?.includes("roof-platform") && !primitive.tags?.includes("wall-walk")))));
+      visible = this.floorInspectionPrimitives(view);
     }
     if (visible.length === 0) return;
     const minX = Math.min(...visible.map((primitive) => primitive.position.x - primitive.size.x / 2));
@@ -1211,11 +1303,7 @@ export class SceneRenderer {
       }
       return this.worldBounds;
     }
-    const authoredRoofView = this.currentScene.floorLabels?.[this.activeFloorView]?.includes("屋顶") === true;
-    const visible = this.currentScene.primitives.filter((primitive) => primitive.level === this.activeFloorView
-      && (authoredRoofView || (primitive.material !== "roof"
-        && !primitive.tags?.includes("roof")
-        && !(primitive.tags?.includes("roof-platform") && !primitive.tags?.includes("wall-walk")))));
+    const visible = this.floorInspectionPrimitives(this.activeFloorView);
     if (visible.length === 0) return this.worldBounds;
 
     return this.boundsForPrimitives(visible, GRID_METERS * 1.5);

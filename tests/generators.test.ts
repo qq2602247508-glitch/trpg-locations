@@ -485,7 +485,10 @@ describe("scene generators", () => {
     expect(scene.sceneProgram?.domain).toBe("settlement");
     expect(scene.siteProgram).toBeDefined();
     expect(scene.siteProgram?.siteType).toBe("village");
+    expect(scene.siteProgram?.roadPattern).toBe("contour");
+    expect(scene.settlementAdaptation?.roadMode).toBe("hybrid");
     expect(scene.terrainProgram?.kind).toBe("coastal-cliff");
+    expect(hasTag(scene, "contour-road")).toBe(true);
     expect(scene.buildingInstances?.some((building) => building.archetype === "home")).toBe(true);
     expect(scene.buildingInstances?.some((building) => building.archetype === "tower")).toBe(true);
     expect(scene.buildingInstances?.some((building) => building.archetype === "warehouse")).toBe(true);
@@ -494,6 +497,7 @@ describe("scene generators", () => {
     expect(hasTag(scene, "sea-cave")).toBe(true);
     expect(hasTag(scene, "tide-pool")).toBe(true);
     expect(hasTag(scene, "stilt-foundation")).toBe(true);
+    expect(hasTag(scene, "focus-cluster:sea-cave")).toBe(true);
     expect(scene.primitives.some((primitive) => primitive.level === 3 && primitive.tags?.includes("sea-cave"))).toBe(true);
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
     expect(scene.diagnostics.warnings).toEqual([]);

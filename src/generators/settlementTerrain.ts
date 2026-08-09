@@ -784,6 +784,10 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
             primitive("coastal-sea-cave-pillar-a", "sphere", 3, caveX - 2.4, caveY, caveZ - 1.7, 3.2, feetToMeters(7), 3.2, "rock", ["coastal-cliff", "sea-cave", "stone-pillar", "cover", "terrain-program"]),
             primitive("coastal-sea-cave-pillar-b", "sphere", 3, caveX + 2.7, caveY, caveZ + 1.9, 3.5, feetToMeters(8), 3.5, "rock", ["coastal-cliff", "sea-cave", "stone-pillar", "cover", "terrain-program"]),
           );
+          for (const primitive of scene.primitives) {
+            if (!primitive.id.startsWith("coastal-sea-cave-")) continue;
+            primitive.tags = [...(primitive.tags ?? []), "focus-cluster:sea-cave"];
+          }
           scene.routes.push(createRoute("coastal-sea-cave-route", "alternate", [
             { x: caveX + 1.1, z: caveZ - 7.8, y: 0 },
             { x: caveX + 1.1, z: caveZ - 4.5, y: caveY },
