@@ -194,6 +194,7 @@ textarea:focus-visible {
   gap: 14px;
   width: min(1800px, 100%);
   min-height: calc(100vh - 78px);
+  align-items: start;
   padding: 14px;
   margin: 0 auto;
 }
@@ -208,6 +209,7 @@ textarea:focus-visible {
 
 .side-panel {
   align-self: stretch;
+  max-height: calc(100vh - 106px);
   overflow: auto;
   scrollbar-color: rgba(161, 198, 176, 0.28) transparent;
 }
@@ -517,6 +519,7 @@ textarea:focus-visible {
 .stage {
   display: flex;
   flex-direction: column;
+  height: calc(100vh - 106px);
   min-height: 620px;
   padding: 0;
   overflow: hidden;

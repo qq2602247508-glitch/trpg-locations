@@ -335,7 +335,7 @@ export class SceneRenderer {
     const isBasement = typeof view === "number" && this.currentScene?.floorLabels?.[view]?.startsWith("B") === true;
     const priorHeight = selected.floorHeightFeet.slice(0, Math.min(numericLevel, selected.floorHeightFeet.length)).reduce((sum, value) => sum + value, 0) * 0.3048;
     const currentHeight = (selected.floorHeightFeet[Math.min(numericLevel, selected.floorHeightFeet.length - 1)] ?? 10) * 0.3048;
-    const focusY = typeof view === "number"
+    const fallbackFocusY = typeof view === "number"
       ? isBasement
         ? (selected.baseYMeters ?? 0) - 10 * 0.3048 + Math.max(0.8, currentHeight * 0.35)
         : (selected.baseYMeters ?? 0) + priorHeight + Math.max(0.8, currentHeight * 0.35)
@@ -355,8 +355,12 @@ export class SceneRenderer {
     const maxX = visibleBuildingPrimitives.length > 0 ? Math.max(...visibleBuildingPrimitives.map((primitive) => primitive.position.x + primitive.size.x / 2)) : selected.positionCells.x * GRID_METERS + selected.footprintCells.x * GRID_METERS / 2;
     const minZ = visibleBuildingPrimitives.length > 0 ? Math.min(...visibleBuildingPrimitives.map((primitive) => primitive.position.z - primitive.size.z / 2)) : selected.positionCells.z * GRID_METERS - selected.footprintCells.z * GRID_METERS / 2;
     const maxZ = visibleBuildingPrimitives.length > 0 ? Math.max(...visibleBuildingPrimitives.map((primitive) => primitive.position.z + primitive.size.z / 2)) : selected.positionCells.z * GRID_METERS + selected.footprintCells.z * GRID_METERS / 2;
-    const target = new THREE.Vector3((minX + maxX) / 2, focusY, (minZ + maxZ) / 2);
-    const span = Math.max(maxX - minX, maxZ - minZ, 7 * GRID_METERS) * (isBasement ? 0.78 : 1.08);
+    const minY = visibleBuildingPrimitives.length > 0 ? Math.min(...visibleBuildingPrimitives.map((primitive) => primitive.position.y)) : fallbackFocusY - currentHeight * 0.35;
+    const maxY = visibleBuildingPrimitives.length > 0 ? Math.max(...visibleBuildingPrimitives.map((primitive) => primitive.position.y + primitive.size.y)) : fallbackFocusY + currentHeight * 0.65;
+    const targetY = visibleBuildingPrimitives.length > 0 ? (minY + maxY) / 2 : fallbackFocusY;
+    const target = new THREE.Vector3((minX + maxX) / 2, targetY, (minZ + maxZ) / 2);
+    const verticalSpan = Math.max(1, maxY - minY);
+    const span = Math.max(maxX - minX, maxZ - minZ, verticalSpan * 1.45, 7 * GRID_METERS) * (isBasement ? 0.78 : 1.02);
     // The focus blueprint cuts its local east and south walls. Approach from
     // that same local diagonal after applying the building's authored yaw;
     // a fixed world-space camera could otherwise look straight at the two
@@ -368,7 +372,11 @@ export class SceneRenderer {
     this.cameraMode = "perspective";
     this.controls.enabled = true;
     this.controls.target.copy(target);
-    this.camera.position.set(target.x + viewX * span * 1.92, target.y + span * 1.02, target.z + viewZ * span * 1.92);
+    this.camera.position.set(
+      target.x + viewX * span * 1.58,
+      target.y + Math.max(verticalSpan * 0.9, span * 0.58),
+      target.z + viewZ * span * 1.58,
+    );
     this.camera.near = 0.1;
     this.camera.far = Math.max(300, span * 20);
     this.controls.minDistance = Math.max(1.8, span * 0.35);
