@@ -264,9 +264,15 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   let lastStats: RenderStats = renderer.getStats();
   let planningView: "all" | "roads" | "parcels" | "buildings" = "all";
 
-  elements.prompt.value = DEFAULT_PROMPT;
-  elements.seed.value = createSeed();
-  elements.kind.value = "adaptive";
+  const auditParams = new URLSearchParams(window.location.search);
+  const requestedDensity = Number(auditParams.get("density"));
+  const requestedSize = auditParams.get("size");
+  const requestedKind = auditParams.get("kind");
+  elements.prompt.value = auditParams.get("prompt")?.trim() || DEFAULT_PROMPT;
+  elements.seed.value = auditParams.get("seed")?.trim() || createSeed();
+  elements.kind.value = requestedKind && Array.from(elements.kind.options).some((option) => option.value === requestedKind) ? requestedKind : "adaptive";
+  if (requestedSize && Array.from(elements.size.options).some((option) => option.value === requestedSize)) elements.size.value = requestedSize;
+  if (Number.isFinite(requestedDensity)) elements.density.value = String(Math.round(Math.max(20, Math.min(100, requestedDensity))));
   updateDensityLabel(elements);
 
   renderer.onStats = (stats) => {

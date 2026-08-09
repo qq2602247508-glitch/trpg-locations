@@ -94,6 +94,10 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   if (morphology.crater) return "volcanic";
   if (morphology.burial) return "burial-ground";
   if (morphology.dryChannel) return "dry-riverbed";
+  // Cold wetlands are not ordinary temperate swamps or generic mountains.
+  // Their frozen substrate owns the macro terrain while thaw pools and
+  // boardwalks remain composable wetland layers, regardless of word order.
+  if (includesAny(normalized, WILDERNESS_TERMS.ice) && includesAny(normalized, WILDERNESS_TERMS.swamp)) return "ice";
   // Water is a topology, woodland is a coverage layer. A mixed prompt must
   // retain a continuous river rather than becoming a flat forest with props.
   if (morphology.channel && morphology.woodland) return "river-valley";
@@ -986,20 +990,101 @@ function buildBurialGround(scene: GeneratedScene, width: number, depth: number, 
   scene.description = `Burial-field morphology with rolling grave mounds, branching paths, ${graveCount} grouped graves, a mausoleum, a sunken crypt, and broken perimeter gaps.`;
 }
 
-function buildIce(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
-  scene.primitives.push(box("ice-field", 0, width / 2, 0, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "ice", ["floor", "terrain", "ice"]), water("ice-frozen-lake", 0, width / 2, -0.02, depth * 0.56, width * 0.68, 0.08, depth * 0.34, ["ice", "hazard"]));
-  const islands = 4;
+function buildIce(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const macro = rng.fork("macro");
+  const meso = rng.fork("meso");
+  const tactical = rng.fork("tactical");
+  const phase = macro.float(-Math.PI, Math.PI);
+  const lakeX = width * macro.float(0.42, 0.58);
+  const lakeZ = depth * macro.float(0.48, 0.64);
+  const lakeWidth = width * macro.float(0.42, 0.62);
+  const lakeDepth = depth * macro.float(0.2, 0.34);
+  scene.primitives.push(box("ice-field", 0, width / 2, 0, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "ice", ["floor", "terrain", "ice"]));
+  for (const [segment, dx, dz, widthRatio, depthRatio, rotation] of [
+    [0, -0.12, -0.02, 0.62, 0.78, -0.12],
+    [1, 0.05, 0.02, 0.58, 0.92, 0.08],
+    [2, 0.18, -0.06, 0.42, 0.68, -0.22],
+  ] as const) {
+    scene.primitives.push(water(
+      `ice-frozen-lake-${segment}`,
+      0,
+      lakeX + lakeWidth * dx,
+      -0.08,
+      lakeZ + lakeDepth * dz,
+      lakeWidth * widthRatio,
+      0.14,
+      lakeDepth * depthRatio,
+      ["ice", "hazard", "thaw-basin", "ice-meso"],
+      rotation,
+    ));
+  }
+  const ridgeCount = 2 + Math.round(density * 5);
+  for (let index = 0; index < ridgeCount; index += 1) {
+    const startX = meso.float(3, width * 0.42);
+    const endX = meso.float(width * 0.58, width - 3);
+    const baseZ = depth * (0.14 + (index + 0.5) / (ridgeCount + 1) * 0.7) + Math.sin(index * 1.7 + phase) * depth * 0.06;
+    const rise = feetToMeters(meso.float(2.5, 6.5 + density * 4));
+    scene.primitives.push(
+      corridor(`ice-snow-ridge-${index}`, 0, startX, baseZ - meso.float(1, 4), endX, baseZ + meso.float(-3, 3), rise, meso.float(2.2, 4.8), "ice", ["ice", "ice-meso", "snow-ridge", "terrain", "standable", "high-ground"]),
+    );
+    scene.tactical.push(tacticalFeature(`ice-ridge-high-${index}`, "highGround", (startX + endX) / 2, baseZ, rise, 2, "A wind-packed snow ridge provides elevated cover and a long sight line."));
+  }
+  const thawPoolCount = 1 + Math.round(density * 5);
+  for (let index = 0; index < thawPoolCount; index += 1) {
+    const x = meso.float(5, width - 5);
+    const z = meso.float(depth * 0.18, depth * 0.86);
+    const poolWidth = meso.float(2.5, 5.5 + density * 3);
+    const poolDepth = meso.float(2.2, 4.8 + density * 2.5);
+    for (const [fragment, dx, dz, scaleX, scaleZ, rotation] of [
+      [0, -0.16, 0.02, 0.7, 0.78, -0.18],
+      [1, 0.1, -0.08, 0.72, 0.62, 0.15],
+      [2, 0.2, 0.12, 0.45, 0.52, -0.3],
+    ] as const) {
+      scene.primitives.push(water(
+        `ice-thaw-pool-${index}-${fragment}`,
+        0,
+        x + poolWidth * dx,
+        -0.14,
+        z + poolDepth * dz,
+        poolWidth * scaleX,
+        0.18,
+        poolDepth * scaleZ,
+        ["ice", "ice-meso", "thaw-pool", "hazard", "thin-ice"],
+        rotation,
+      ));
+    }
+    scene.tactical.push(tacticalFeature(`ice-thaw-hazard-${index}`, "hazard", x, z, -0.14, Math.max(1, Math.min(poolWidth, poolDepth) / 2), "A dark thaw pool weakens the surrounding ice and interrupts direct movement."));
+  }
+  const islands = 4 + Math.round(density * 9);
   for (let index = 0; index < islands; index += 1) {
-    const x = width * (0.22 + index * 0.18) + rng.float(-2, 2);
-    const z = depth * (0.28 + (index % 2) * 0.42) + rng.float(-2, 2);
-    scene.primitives.push(box(`ice-island-${index}`, 0, x, FLOOR_SLAB_METERS * 0.8, z, rng.int(4, 7), FLOOR_SLAB_METERS, rng.int(3, 6), "ice", ["floor", "ice-island", "cover"]));
-    scene.tactical.push(tacticalFeature(`ice-island-cover-${index}`, "cover", x, z, 0, 2, "A low ice shelf provides the only stable cover over the frozen lake."));
+    const x = tactical.float(4, width - 4);
+    const z = tactical.float(4, depth - 4);
+    const rise = feetToMeters(tactical.float(1.5, 5.5));
+    const shelfWidth = tactical.int(3, 7);
+    const shelfDepth = tactical.int(3, 6);
+    scene.primitives.push(
+      box(`ice-island-${index}-core`, 0, x, rise, z, shelfWidth * 0.72, FLOOR_SLAB_METERS + rise, shelfDepth, "ice", ["floor", "terrain", "ice", "ice-meso", "ice-island", "ice-shelf", "standable", "cover"], tactical.float(-0.16, 0.16)),
+      box(`ice-island-${index}-spur`, 0, x + shelfWidth * tactical.float(-0.22, 0.22), rise * 0.82, z + shelfDepth * tactical.float(-0.22, 0.22), shelfWidth * 0.58, FLOOR_SLAB_METERS + rise * 0.82, shelfDepth * 0.58, "ice", ["floor", "terrain", "ice", "ice-meso", "ice-island", "ice-shelf", "standable", "cover"], tactical.float(-0.3, 0.3)),
+    );
+    scene.tactical.push(tacticalFeature(`ice-island-cover-${index}`, "cover", x, z, rise, 2, "A raised ice shelf provides stable cover above the fractured surface."));
+  }
+  const crackCount = Math.round(density * 4);
+  for (let index = 0; index < crackCount; index += 1) {
+    const startX = tactical.float(3, width * 0.35);
+    const endX = tactical.float(width * 0.65, width - 3);
+    const z = tactical.float(depth * 0.18, depth * 0.84);
+    scene.primitives.push(
+      corridor(`ice-secondary-crack-shadow-${index}`, 0, startX, z, endX, z + tactical.float(-5, 5), -feetToMeters(3.5), tactical.float(0.55, 1.05), "darkStone", ["ice", "ice-meso", "secondary-crevasse", "void", "hazard", "vertical-face"]),
+      corridor(`ice-secondary-crack-water-${index}`, 0, startX, z, endX, z + tactical.float(-5, 5), -feetToMeters(1.8), tactical.float(0.35, 0.72), "water", ["ice", "ice-meso", "secondary-crevasse", "water", "hazard"]),
+    );
   }
   scene.rooms.push(createRoom("ice-north-field", "Wind-scoured ice", "natural", 0, width / 2, depth * 0.2, width - 4, 8), createRoom("ice-lake-room", "Frozen underground lake", "natural", 0, width / 2, depth * 0.56, width * 0.7, depth * 0.35), createRoom("ice-south-field", "Broken floe field", "natural", 0, width / 2, depth * 0.84, width - 4, 6));
   connectRooms(scene.rooms, "ice-north-field", "ice-lake-room");
   connectRooms(scene.rooms, "ice-lake-room", "ice-south-field");
   scene.routes.push(createRoute("ice-primary-route", "primary", [{ x: 1, z: depth * 0.2 }, { x: width * 0.28, z: depth * 0.4 }, { x: width * 0.72, z: depth * 0.7 }, { x: width - 1, z: depth * 0.84 }]));
+  if (density >= 0.45) scene.routes.push(createRoute("ice-ridge-route", "alternate", [{ x: 2, z: depth * 0.72, y: feetToMeters(2) }, { x: width * 0.38, z: depth * 0.64, y: feetToMeters(4) }, { x: width * 0.66, z: depth * 0.35, y: feetToMeters(3) }, { x: width - 2, z: depth * 0.28, y: feetToMeters(2) }]));
   scene.tactical.push(tacticalFeature("ice-thin-surface", "hazard", width * 0.5, depth * 0.56, -0.02, 3, "Thin ice turns the lake into a moving hazard zone."), tacticalFeature("ice-entrance", "entrance", 1, depth * 0.2, 0, 2, "A whiteout trail enters from the north."));
+  scene.description = `Layered ice terrain with ${ridgeCount} wind-packed snow ridges, ${thawPoolCount} thaw pools, ${islands} raised shelves, ${crackCount} secondary crevasses, and ${density >= 0.45 ? 2 : 1} tactical routes.`;
 }
 
 function buildRuin(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
@@ -1200,7 +1285,13 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const hunter = ["猎人", "hunter"].some((term) => text.includes(term));
   const quarantine = ["检疫站", "隔离棚", "quarantine station", "quarantine shed"].some((term) => text.includes(term));
   const weatherStation = ["气象站", "气象观测站", "weather station", "meteorological station"].some((term) => text.includes(term));
+  const researchStation = ["科研站", "研究站", "观测站", "通信站", "雷达站", "research station", "observation station", "field station", "radio station"].some((term) => text.includes(term)) && !weatherStation;
+  const borderOutpost = ["边防站", "边境哨所", "边境岗哨", "border outpost", "frontier outpost"].some((term) => text.includes(term));
+  const rangerStation = ["林务站", "林务所", "巡护站", "护林站", "ranger station", "forestry station"].some((term) => text.includes(term));
   const mangrove = ["红树林", "mangrove"].some((term) => text.includes(term));
+  const coldWetland = archetype === "ice"
+    && ["冻土", "冰原", "tundra", "permafrost"].some((term) => text.includes(term))
+    && ["湿地", "水沢", "wetland", "marsh"].some((term) => text.includes(term));
   const wantsTrapLine = ["陷阱线", "陷阱", "绊索", "trap line", "trapline", "snare"].some((term) => text.includes(term));
   const wantsFootbridge = ["木桥", "溪边木桥", "footbridge", "foot bridge"].some((term) => text.includes(term));
   const wantsCanopyObservatory = ["树冠观察台", "树冠平台", "瞭望台", "观察台", "canopy observatory", "lookout"].some((term) => text.includes(term));
@@ -1213,6 +1304,12 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const wantsGeneratorShed = ["发电机棚", "发电机房", "generator shed", "generator house"].some((term) => text.includes(term));
   const wantsIceFissure = ["冰水裂沟", "冰裂沟", "冰隙", "ice-water fissure", "ice fissure", "crevasse"].some((term) => text.includes(term));
   const wantsReserveVault = ["地下储备仓", "地下储藏室", "地下补给库", "地下物资库", "秘密药品库", "药品库", "underground reserve", "reserve vault", "supply vault", "medicine vault", "medical cache"].some((term) => text.includes(term));
+  if (coldWetland) {
+    for (const primitiveEntry of scene.primitives) {
+      if (!primitiveEntry.tags?.some((tag) => tag === "water" || tag === "thaw-basin" || tag === "thaw-pool")) continue;
+      primitiveEntry.tags = [...new Set([...(primitiveEntry.tags ?? []), "wetland", "cold-wetland"] )];
+    }
+  }
   const streamWanted = ["溪", "溪流", "小溪", "stream", "creek"].some((term) => text.includes(term));
   const riverAnchor = archetype === "river-valley"
     ? scene.primitives
@@ -1281,10 +1378,14 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     { id: "weather-observation", kind: "observation", label: "Meteorological instrument deck", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 16, tags: ["weather-instruments", "communications-tower"] },
     { id: "weather-generator", kind: "workshop", label: "Generator service room", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 15, tags: ["generator-shed", "power-service"] },
     { id: "weather-reserve", kind: "archive", label: "Underground reserve store", levelRole: "basement", minimumFootprintCells: 16, tags: ["reserve-vault", "underground-reserve"] },
+  ] : researchStation ? [
+    { id: "field-laboratory", kind: "laboratory", label: "Field laboratory", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 18, tags: ["field-laboratory", "sample-processing"] },
+    { id: "field-observation", kind: "observation", label: "Observation and radio deck", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 14, tags: ["field-observation", "radio-deck"] },
+    { id: "field-archive", kind: "archive", label: "Underground specimen archive", levelRole: "basement", minimumFootprintCells: 15, tags: ["specimen-archive", "reserve-vault"] },
   ] : [];
   instantiateBuildingModule(scene, {
     id: "wilderness-core-building",
-    kind: quarantine ? "clinic" : weatherStation ? "guild" : alchemical ? "guild" : "home",
+    kind: quarantine ? "clinic" : weatherStation || researchStation ? "guild" : alchemical ? "guild" : "home",
     x,
     z,
     width: alchemical ? 11 : 9,
@@ -1298,6 +1399,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     entrance,
     baseY,
     functionalModules,
+    siteProfile: quarantine ? "quarantine-station" : weatherStation ? "weather-station" : researchStation ? "field-station" : borderOutpost ? "border-outpost" : rangerStation ? "ranger-station" : undefined,
   }, context.rng.fork("wilderness-building"));
   const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
 
@@ -1395,7 +1497,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     if (quarantine) scene.tactical.push(tacticalFeature("wilderness-medical-vault-secret", "secret", x, z - 1.5, vaultY, 1, "A locked medicine cache is concealed behind the basement shelving."));
   }
 
-  if (weatherStation && wantsGeneratorShed) {
+  if ((weatherStation || researchStation) && wantsGeneratorShed) {
     const generatorX = Math.max(5, Math.min(width - 5, x + 9));
     const generatorZ = Math.max(5, Math.min(depth - 5, z + 4));
     scene.primitives.push(
@@ -1425,7 +1527,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     );
   }
 
-  if (weatherStation && wantsCommunicationsTower) {
+  if ((weatherStation || researchStation) && wantsCommunicationsTower) {
     const towerX = Math.max(5, Math.min(width - 5, x - 8.5));
     const towerZ = Math.max(5, Math.min(depth - 5, z - 5));
     const towerBase = terrainSurfaceY(scene, towerX, towerZ, terrainBaseY);
@@ -1455,7 +1557,12 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     // Replace the single ice slab with two real banks. The deep fissure must
     // remain legible even with materials disabled, so the gap and its vertical
     // faces are geometry rather than a dark decal over a continuous floor.
-    scene.primitives = scene.primitives.filter((primitiveEntry) => primitiveEntry.id !== "ice-field");
+    scene.primitives = scene.primitives.filter((primitiveEntry) => {
+      if (primitiveEntry.id === "ice-field") return false;
+      if (!primitiveEntry.tags?.includes("ice-meso")) return true;
+      const primitiveZ = primitiveEntry.position.z / CELL;
+      return Math.abs(primitiveZ - fissureZ) > gapHalf + 2.5;
+    });
     scene.primitives.push(
       box("wilderness-ice-bank-north", 0, width / 2, terrainBaseY - FLOOR_SLAB_METERS, northDepth / 2 + 1, width - 2, FLOOR_SLAB_METERS, northDepth, "ice", ["floor", "terrain", "ice", "rift-bank", "standable"]),
       box("wilderness-ice-bank-south", 0, width / 2, terrainBaseY - FLOOR_SLAB_METERS, fissureZ + gapHalf + southDepth / 2, width - 2, FLOOR_SLAB_METERS, southDepth, "ice", ["floor", "terrain", "ice", "rift-bank", "standable"]),
@@ -2234,7 +2341,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "burial-ground") buildBurialGround(scene, profile.width, profile.depth, profile.density, context.rng.fork("burial-ground"));
   else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, profile.density, context.rng.fork("rift"));
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
-  else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, context.rng.fork("ice"));
+  else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, profile.density, context.rng.fork("ice"));
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));
   else if (archetype === "forest") buildForest(scene, profile.width, profile.depth, profile.density, context.rng.fork("forest"), context.request.prompt);
   else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, profile.density, context.rng.fork("swamp"));

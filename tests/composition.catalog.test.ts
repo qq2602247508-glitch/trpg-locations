@@ -178,6 +178,9 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("ice-fissure")).toBe(true);
     expect(tags.has("reserve-vault")).toBe(true);
     expect(scene.routes.some((route) => route.id === "wilderness-ice-fissure-crossing-route")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.envelopeProgram?.variant.startsWith("weather-"))).toBe(true);
+    expect(tags.has("snow-ridge")).toBe(true);
+    expect(tags.has("ice-shelf")).toBe(true);
     expect(scene.compositionProgram?.semanticCoverage?.score).toBe(100);
     expect(scene.diagnostics.warnings).toHaveLength(0);
   });
@@ -192,7 +195,41 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("lookout-tower")).toBe(true);
     expect(tags.has("trench")).toBe(true);
     expect(tags.has("reserve-vault")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.envelopeProgram?.variant.startsWith("border-"))).toBe(true);
     expect(scene.compositionProgram?.semanticCoverage?.score).toBe(100);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
+  it("makes ice density alter meso structure and routes deterministically", () => {
+    const prompt = "冰原气象观测场，有冻融池、雪脊、冰缝和两条安全路线";
+    const sparse = generateScene({ prompt, seed: "ice-density-contract", size: "medium", density: 0.2 }, "adaptive");
+    const dense = generateScene({ prompt, seed: "ice-density-contract", size: "medium", density: 0.9 }, "adaptive");
+    const replay = generateScene({ prompt, seed: "ice-density-contract", size: "medium", density: 0.9 }, "adaptive");
+    const other = generateScene({ prompt, seed: "ice-density-other", size: "medium", density: 0.9 }, "adaptive");
+    const count = (scene: typeof sparse, tag: string) => scene.primitives.filter((entry) => entry.tags?.includes(tag)).length;
+    const signature = (scene: typeof sparse) => scene.primitives
+      .filter((entry) => entry.tags?.includes("ice-meso"))
+      .map((entry) => `${entry.id}:${entry.position.x.toFixed(2)}:${entry.position.z.toFixed(2)}:${entry.size.x.toFixed(2)}:${entry.size.z.toFixed(2)}`)
+      .join("|");
+    expect(count(dense, "snow-ridge")).toBeGreaterThan(count(sparse, "snow-ridge"));
+    expect(count(dense, "thaw-pool")).toBeGreaterThan(count(sparse, "thaw-pool"));
+    expect(count(dense, "ice-shelf")).toBeGreaterThan(count(sparse, "ice-shelf"));
+    expect(dense.routes.length).toBeGreaterThan(sparse.routes.length);
+    expect(signature(dense)).toBe(signature(replay));
+    expect(signature(dense)).not.toBe(signature(other));
+  });
+
+  it("generalizes unfamiliar research stations without falling back to a home envelope", () => {
+    const prompt = "高山冻土湿地上的无线电研究站，有样本实验室、通信塔、发电机棚、架高栈道和地下样本库";
+    const scene = generateScene({ prompt, seed: "unknown-field-station", size: "medium", density: 0.7 }, "adaptive");
+    const building = scene.buildingInstances?.find((entry) => entry.id === "wilderness-core-building");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(building?.archetype).toBe("guild");
+    expect(building?.envelopeProgram?.variant.startsWith("field-")).toBe(true);
+    expect(building?.buildingProgram?.requiredFeatures).toEqual(expect.arrayContaining(["field-laboratory", "specimen-archive"]));
+    expect(tags.has("communications-tower")).toBe(true);
+    expect(tags.has("generator-shed")).toBe(true);
+    expect(tags.has("reserve-vault")).toBe(true);
     expect(scene.diagnostics.warnings).toHaveLength(0);
   });
 
