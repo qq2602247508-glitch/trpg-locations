@@ -543,6 +543,14 @@ function populateBuildingOptions(select: HTMLSelectElement, scene: GeneratedScen
   const requestedFeatures = new Set(
     featureTerms.filter(([, terms]) => terms.some((term) => normalizedPrompt.includes(term))).map(([feature]) => feature),
   );
+  const featureOrder = [...requestedFeatures].sort((first, second) => {
+    const firstTerms = featureTerms.find(([feature]) => feature === first)?.[1] ?? [];
+    const secondTerms = featureTerms.find(([feature]) => feature === second)?.[1] ?? [];
+    const firstIndex = Math.min(...firstTerms.map((term) => normalizedPrompt.indexOf(term)).filter((index) => index >= 0));
+    const secondIndex = Math.min(...secondTerms.map((term) => normalizedPrompt.indexOf(term)).filter((index) => index >= 0));
+    return firstIndex - secondIndex;
+  });
+  const featurePriority = new Map(featureOrder.map((feature, index) => [feature, featureOrder.length - index]));
   let bestId: string | undefined;
   let bestScore = 0;
   for (const [index, building] of buildings.entries()) {
@@ -551,7 +559,8 @@ function populateBuildingOptions(select: HTMLSelectElement, scene: GeneratedScen
     const matched = [...new Set(features.filter((feature) => requestedFeatures.has(feature)))];
     const featureLabel = matched.length > 0 ? ` · ${matched.join("/")}` : "";
     select.add(new Option(`${index + 1}. ${building.archetype} · ${building.district} · ${detail}${featureLabel}`, building.id));
-    const score = matched.length * 10 + (building.detailLevel === "full-interior" ? 2 : building.detailLevel === "facade" ? 1 : 0);
+    const score = matched.reduce((total, feature) => total + (featurePriority.get(feature) ?? 0) * 12, 0)
+      + (building.detailLevel === "full-interior" ? 2 : building.detailLevel === "facade" ? 1 : 0);
     if (score > bestScore) {
       bestScore = score;
       bestId = building.id;
