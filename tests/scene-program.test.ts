@@ -75,6 +75,24 @@ describe("SceneProgram v1", () => {
     expect(salt.coverage).toContain("ice");
   });
 
+  it("gives a water-city prompt its own semantic regions instead of generic settlement blocks", () => {
+    const program = planSceneProgramLocally("河道水城，弯曲主河、三条支流、石桥、木桥、水上市集、船坞与沿岸不规则街巷", "adaptive");
+    expect(program.domain).toBe("settlement");
+    expect(program.primaryKind).toBe("settlement");
+    expect(program.era).toBe("medieval");
+    expect(program.topology).toBe("network");
+    expect(program.regions.map((item) => item.id)).toEqual(expect.arrayContaining([
+      "main-canal",
+      "branch-quays",
+      "crossings",
+      "water-market",
+      "frontage-wards",
+      "service-backstreets",
+    ]));
+    expect(program.regions.find((item) => item.id === "main-canal")?.elevation).toBe("low");
+    expect(program.regions.find((item) => item.id === "crossings")?.elevation).toBe("raised");
+  });
+
   it.each([
     ["陨石坑", "impact-crater", "impact-crater"],
     ["D&D 龙骨埋葬地", "burial-ground", "dragon-spine"],

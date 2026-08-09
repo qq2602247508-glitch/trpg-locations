@@ -639,7 +639,7 @@ function renderDiagnostics(container: HTMLElement, scene: GeneratedScene): void 
   const list = document.createElement("ul");
   list.className = "diagnostic-list";
   const notes = [
-    ...(scene.sceneProgram ? [{ type: "规划", text: `${scene.sceneProgram.ruleset.toUpperCase()} · ${scene.sceneProgram.era} · ${scene.sceneProgram.gameplay} · ${scene.sceneProgram.morphology.join(" + ")}` }] : []),
+    ...(scene.sceneProgram ? [{ type: "规划", text: `${scene.sceneProgram.domain} · ${scene.sceneProgram.ruleset.toUpperCase()} · ${scene.sceneProgram.era} · ${scene.sceneProgram.gameplay} · ${scene.sceneProgram.morphology.join(" + ")}` }] : []),
     ...(scene.compositionProgram ? [{ type: "组合", text: `${scene.compositionProgram.grammarId} · ${scene.compositionProgram.motifIds.join(" + ") || "generic"} · 语义覆盖 ${scene.compositionProgram.semanticCoverage?.score ?? 100}%` }] : []),
     ...diagnostics.warnings.map((note) => ({ type: "警告", text: note })),
     ...diagnostics.repairs.map((note) => ({ type: "修复", text: note })),

@@ -32,6 +32,10 @@ function inferRuleset(text: string): Ruleset {
 function inferEra(text: string): SceneEra {
   if (has(text, ["1920", "1920s", "爵士时代", "民国"])) return "1920s";
   if (has(text, ["前现代", "前工业", "旧城", "古城", "premodern", "pre-modern"])) return "medieval";
+  // Unqualified water-city and Deepwater-style prompts should read as
+  // premodern canal settlements, not as contemporary grid developments.
+  // Explicit 1920s/modern terms above still win for COC or realistic scenes.
+  if (has(text, ["水城", "河道水城", "运河城", "深水城", "canal city", "water city"])) return "medieval";
   if (has(text, ["现代", "当代", "modern", "医院", "警局", "地铁", "机场"])) return "modern";
   if (has(text, ["未来", "赛博", "太空", "future", "cyber"])) return "future";
   if (has(text, ["工业", "维多利亚", "蒸汽", "industrial", "victorian"])) return "industrial";
@@ -216,6 +220,17 @@ function settlementRegions(): SceneProgramRegion[] {
   ];
 }
 
+function waterCitySettlementRegions(): SceneProgramRegion[] {
+  return [
+    region("main-canal", "Main canal and tidal market basin", "natural", 0.24, "low", ["main-canal", "watercourse", "boat-lane"], ["drowning", "exposed-water"]),
+    region("branch-quays", "Branch canals and irregular quays", "circulation", 0.2, "level", ["branch-canal", "quay", "bank-route"], ["narrow-crossing"]),
+    region("crossings", "Stone bridge and timber footbridge", "approach", 0.12, "raised", ["stone-bridge", "wood-bridge", "crossing-hierarchy"], ["chokepoint"]),
+    region("water-market", "Water market and cargo dock", "commercial", 0.16, "level", ["market-dock", "dock", "cargo-route"], ["water-edge-ambush"]),
+    region("frontage-wards", "Irregular waterfront building wards", "residential", 0.18, "raised", ["independent-buildings", "mixed-frontage", "back-lanes"], []),
+    region("service-backstreets", "Back lanes and warehouse service routes", "service", 0.1, "low", ["warehouse-route", "service-lane", "alternate-route"], ["dead-end"]),
+  ];
+}
+
 function dungeonRegions(text: string): SceneProgramRegion[] {
   const style = has(text, ["矿井", "矿坑", "mine"]) ? "mine" : has(text, ["神殿", "祭坛", "temple"]) ? "temple" : has(text, ["龙巢", "lair"]) ? "lair" : "crypt";
   return [
@@ -237,7 +252,12 @@ export function planSceneProgramLocally(prompt: string, requestedKind: SceneKind
   const era = inferEra(text);
   const { domain, primaryKind } = inferDomain(text, requestedKind);
   const { morphology, coverage } = inferOperators(text);
-  const regions = primaryKind === "dungeon" ? dungeonRegions(text) : domain === "settlement" ? settlementRegions() : domain === "building" || domain === "interior" ? buildingRegions(text) : naturalRegions(text, morphology, coverage);
+  const isWaterCity = domain === "settlement" && has(text, ["水城", "河道水城", "运河城", "水上市集", "船坞", "canal city", "water city", "water market", "dock", "quay"]);
+  const regions = primaryKind === "dungeon"
+    ? dungeonRegions(text)
+    : domain === "settlement"
+      ? isWaterCity ? waterCitySettlementRegions() : settlementRegions()
+      : domain === "building" || domain === "interior" ? buildingRegions(text) : naturalRegions(text, morphology, coverage);
   const landmarks = unique(regions.flatMap((item) => item.features).filter((_, index) => index < 8));
   const hazards = unique(regions.flatMap((item) => item.hazards).filter((_, index) => index < 8));
   const gameplayMode = ruleset === "coc" ? "investigation" : has(text, ["追逐", "chase"]) ? "chase" : ruleset === "dnd" ? "combat" : "mixed";
