@@ -1348,6 +1348,14 @@ export class SceneRenderer {
     if (tags.includes("ice-base-plate")) return new THREE.Color("#9bc4c6");
     if (tags.includes("secondary-crevasse")) return new THREE.Color("#315c69");
     if (tags.includes("thin-ice") || tags.includes("thaw-pool")) return new THREE.Color("#427f89");
+    if (tags.includes("snow-patch")) return new THREE.Color("#d9e5df");
+    if (tags.includes("cold-forest-floor")) return new THREE.Color(material === "earth" ? "#5f6255" : "#315348");
+    if (tags.includes("deadwood") || tags.includes("snag")) return new THREE.Color("#4d443b");
+    if (tags.includes("conifer-crown")) return new THREE.Color("#284f38");
+    if (tags.includes("broadleaf-crown")) return new THREE.Color("#47734a");
+    if (tags.includes("ancient-crown-lobe")) return new THREE.Color("#356440");
+    if (tags.includes("understory-tree") || tags.includes("young-tree")) return new THREE.Color("#5b7d49");
+    if (tags.includes("tree") && material === "wood") return new THREE.Color("#5a4534");
     if (tags.includes("block-surface")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0, -0.08, 0.045);
     if (tags.includes("parcel-yard")) return new THREE.Color(MATERIAL_STYLE[material].color).offsetHSL(0.02, -0.12, 0.08);
     if (tags.includes("terrain") || tags.includes("floor") || tags.includes("semantic-grid") || tags.includes("macro-region")) {

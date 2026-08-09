@@ -138,6 +138,57 @@ describe("five-layer composition catalog", () => {
     expect(dense.routes.filter((route) => route.id.startsWith("forest-canopy-bridge-route")).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("builds a mixed forest ecology with density-driven relief", () => {
+    const prompt = "茂密森林里层层绿色冠幕遮住天空，粗壮立柱之间有三处光斑空场，地面被藤蔓与倒伏长杆阻断";
+    const request = { prompt, seed: "forest-atom-quality", size: "medium" as const };
+    const sparse = generateScene({ ...request, density: 0.25 }, "adaptive");
+    const dense = generateScene({ ...request, density: 0.82 }, "adaptive");
+    const tags = new Set(dense.primitives.flatMap((primitive) => primitive.tags ?? []));
+    for (const species of ["broadleaf", "conifer", "snag", "understory"]) {
+      expect(tags.has(`tree-species:${species}`)).toBe(true);
+    }
+    const terrainBands = (scene: typeof dense) => new Set(scene.primitives
+      .filter((primitive) => primitive.id.startsWith("forest-morphology-cell-"))
+      .flatMap((primitive) => primitive.tags?.filter((tag) => tag.startsWith("elevation:")) ?? [])).size;
+    const verticalFaces = (scene: typeof dense) => scene.primitives.filter((primitive) => primitive.tags?.includes("forest-morphology-boundary")).length;
+    expect(terrainBands(dense)).toBeGreaterThan(terrainBands(sparse));
+    expect(verticalFaces(dense)).toBeGreaterThan(verticalFaces(sparse));
+    expect(dense.primitives.filter((primitive) => primitive.tags?.includes("tree")).length).toBeGreaterThan(sparse.primitives.filter((primitive) => primitive.tags?.includes("tree")).length * 1.8);
+  });
+
+  it("keeps contour-following forest routes deterministic and seed-sensitive", () => {
+    const prompt = "起伏针叶林，林间小径连接三片空地、倒木和树冠哨台";
+    const request = { prompt, seed: "forest-contour-seed-a", size: "medium" as const, density: 0.82 };
+    const first = generateScene(request, "adaptive");
+    const replay = generateScene(request, "adaptive");
+    const other = generateScene({ ...request, seed: "forest-contour-seed-b" }, "adaptive");
+    const signature = (scene: typeof first) => scene.routes
+      .filter((route) => route.id.startsWith("forest-"))
+      .map((route) => `${route.id}:${route.points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)},${point.z.toFixed(2)}`).join(";")}`)
+      .join("|");
+    expect(signature(first)).toBe(signature(replay));
+    expect(signature(first)).not.toBe(signature(other));
+    for (const route of first.routes.filter((entry) => entry.id === "forest-primary-route" || entry.id === "forest-hunter-trail")) {
+      for (let index = 1; index < route.points.length; index += 1) {
+        expect(Math.abs(route.points[index]!.y - route.points[index - 1]!.y)).toBeLessThanOrEqual(2.05);
+      }
+    }
+  });
+
+  it("turns cold-forest language into a visible terrain state", () => {
+    const scene = generateScene({
+      prompt: "寒冷山麓针叶林，密集冷杉、倒木、林下蕨类、三片不规则空地和树冠哨台",
+      seed: "cold-forest-state",
+      size: "medium",
+      density: 0.82,
+    }, "adaptive");
+    const snow = scene.primitives.filter((primitive) => primitive.tags?.includes("snow-patch"));
+    expect(snow.length).toBeGreaterThan(8);
+    expect(snow.every((primitive) => primitive.tags?.includes("terrain-state"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("cold-forest-floor"))).toBe(true);
+    expect(scene.description).toContain("high-ground snow patches");
+  });
+
   it("realizes forest cabin requirements as authored geometry", () => {
     const prompt = "原始森林里的猎人小屋，有柴棚、陷阱线、溪边木桥和树冠观察台";
     const scene = generateScene({ prompt, seed: "forest-cabin-requirements", size: "medium", density: 0.62 }, "adaptive");

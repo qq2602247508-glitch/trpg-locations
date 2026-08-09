@@ -1235,11 +1235,16 @@ function buildUndergroundLake(scene: GeneratedScene, width: number, depth: numbe
 function buildForest(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"], prompt: string): void {
   const cols = Math.max(30, Math.floor(width));
   const rows = Math.max(26, Math.floor(depth));
+  const promptText = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const coldForest = ["寒冷", "冰雪", "雪线", "冻原", "冷杉", "cold", "snow", "frozen", "alpine"].some((term) => promptText.includes(term));
   const macro = rng.fork("macro-terrain");
   const ecology = rng.fork("ecology");
   const micro = rng.fork("micro");
   const phaseA = macro.float(-Math.PI, Math.PI);
   const phaseB = macro.float(-Math.PI, Math.PI);
+  const maximumTerrainLevel = density < 0.34 ? 3 : density < 0.7 ? 4 : 5;
+  const ridgeAAt = (x: number) => rows * (0.3 + Math.sin(x * 0.075 + phaseA) * 0.09);
+  const ridgeBAt = (x: number) => rows * (0.72 + Math.sin(x * 0.058 - phaseB) * 0.075);
   const clearingScale = 1.18 - density * 0.42;
   const clearings = [
     { x: cols * macro.float(0.27, 0.35), z: rows * macro.float(0.27, 0.36), rx: cols * 0.105 * clearingScale, rz: rows * 0.11 * clearingScale },
@@ -1256,30 +1261,133 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
     const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
     if (edge === 0 || (streamWanted && Math.abs(z - streamAt(x)) < 1.25)) { heights.push(undefined); continue; }
-    const elevationWarp = 0.76 + density * 0.72;
-    const broad = (Math.sin(x * 0.105 + phaseA) * 0.9 + Math.cos(z * 0.12 + phaseB) * 0.75 + Math.sin((x + z) * 0.055) * 0.45) * elevationWarp
-      + Math.sin(x * 0.047 - z * 0.032 + phaseB) * (0.25 + density * 0.4);
-    const level = broad > 1.15 ? 3 : broad > 0.3 ? 2 : broad > -0.65 ? 1 : 0;
+    const elevationWarp = 0.72 + density * 0.76;
+    const broad = (Math.sin(x * 0.105 + phaseA) * 0.78 + Math.cos(z * 0.12 + phaseB) * 0.68 + Math.sin((x + z) * 0.055) * 0.4) * elevationWarp
+      + Math.sin(x * 0.047 - z * 0.032 + phaseB) * (0.22 + density * 0.34);
+    const ridgeA = Math.exp(-1 * (((z - ridgeAAt(x)) / (rows * 0.105)) ** 2)) * (0.9 + density * 1.05);
+    const ridgeB = Math.exp(-1 * (((z - ridgeBAt(x)) / (rows * 0.12)) ** 2)) * (0.7 + density * 0.85);
+    const centralBasin = Math.exp(-1 * (((x - cols * 0.52) / (cols * 0.19)) ** 2 + ((z - rows * 0.52) / (rows * 0.2)) ** 2)) * (0.85 + density * 0.45);
+    const relief = broad + ridgeA + ridgeB - centralBasin;
+    const level = Math.max(0, Math.min(maximumTerrainLevel, Math.round((relief + 1.15) * (1.05 + density * 0.18))));
     const clearing = clearingAt(x, z);
-    heights.push(clearing >= 0 ? Math.max(0, Math.min(2, level)) : level);
+    heights.push(clearing >= 0 ? Math.max(0, Math.min(maximumTerrainLevel - 2, level)) : level);
   }
   const rendered = renderMorphologyField(scene, {
-    prefix: "forest-morphology", cols, rows, heights, stepFeet: 5,
+    prefix: "forest-morphology", cols, rows, heights, stepFeet: 5 + density * 1.5,
     materialFor: (_level, x, z) => clearingAt(x, z) >= 0 ? "earth" : "moss",
-    tagsFor: (_level, x, z) => clearingAt(x, z) >= 0 ? ["forest", "clearing", `clearing:${clearingAt(x, z) + 1}`, "standable"] : ["forest", "woodland-floor", "standable"],
+    tagsFor: (_level, x, z) => clearingAt(x, z) >= 0
+      ? ["forest", "clearing", `clearing:${clearingAt(x, z) + 1}`, "standable", ...(coldForest ? ["cold-forest-floor"] : [])]
+      : ["forest", "woodland-floor", "standable", ...(coldForest ? ["cold-forest-floor"] : [])],
   });
   const levelAt = (x: number, z: number) => heights[Math.max(0, Math.min(rows - 1, Math.floor(z))) * cols + Math.max(0, Math.min(cols - 1, Math.floor(x)))] ?? 0;
   const surfaceY = (x: number, z: number) => rendered.yOf(levelAt(x, z));
+  let snowPatchCount = 0;
+  if (coldForest) {
+    const snowTarget = Math.round(7 + density * 13);
+    for (let attempt = 0; attempt < snowTarget * 5 && snowPatchCount < snowTarget; attempt += 1) {
+      const x = micro.float(2, cols - 2); const z = micro.float(2, rows - 2);
+      if (heights[Math.floor(z) * cols + Math.floor(x)] === undefined || levelAt(x, z) < maximumTerrainLevel - 1 || clearingAt(x, z) >= 0) continue;
+      scene.primitives.push(primitive(
+        `forest-snow-patch-${snowPatchCount}`,
+        "sphere",
+        0,
+        x,
+        surfaceY(x, z) + feetToMeters(0.12),
+        z,
+        feetToMeters(micro.float(4, 9)),
+        feetToMeters(micro.float(0.18, 0.38)),
+        feetToMeters(micro.float(3, 7)),
+        "ice",
+        ["forest", "cold-forest", "snow-patch", "terrain-state"],
+      ));
+      snowPatchCount += 1;
+    }
+  }
   const primaryPoints = [{ x: 1.5, z: rows * 0.18 }, ...clearings.map((entry) => ({ x: entry.x, z: entry.z })), { x: cols - 2, z: rows * 0.84 }];
   const alternatePoints = [{ x: 2, z: rows * 0.82 }, { x: cols * 0.2, z: rows * 0.55 }, clearings[1]!, { x: cols * 0.8, z: rows * 0.25 }, { x: cols - 2, z: rows * 0.17 }];
-  scene.routes.push(
-    createRoute("forest-primary-route", "primary", primaryPoints.map((point) => ({ ...point, y: surfaceY(point.x, point.z) }))),
-    createRoute("forest-hunter-trail", "alternate", alternatePoints.map((point) => ({ ...point, y: surfaceY(point.x, point.z) }))),
-  );
-  for (let index = 1; index < primaryPoints.length; index += 1) {
-    const from = primaryPoints[index - 1]!; const to = primaryPoints[index]!;
-    scene.primitives.push(corridor(`forest-trail-segment-${index}`, 0, from.x, from.z, to.x, to.z, Math.min(surfaceY(from.x, from.z), surfaceY(to.x, to.z)) + 0.02, 1.25, "earth", ["forest", "route", "trail", "surface-grid"]));
-  }
+  const nearestWalkableCell = (target: { x: number; z: number }) => {
+    const originX = Math.max(1, Math.min(cols - 2, Math.round(target.x)));
+    const originZ = Math.max(1, Math.min(rows - 2, Math.round(target.z)));
+    for (let radius = 0; radius < 8; radius += 1) for (let dz = -radius; dz <= radius; dz += 1) for (let dx = -radius; dx <= radius; dx += 1) {
+      if (Math.max(Math.abs(dx), Math.abs(dz)) !== radius) continue;
+      const x = originX + dx; const z = originZ + dz;
+      if (x > 0 && x < cols - 1 && z > 0 && z < rows - 1 && heights[z * cols + x] !== undefined) return { x, z };
+    }
+    return { x: originX, z: originZ };
+  };
+  const terrainPath = (startTarget: { x: number; z: number }, endTarget: { x: number; z: number }) => {
+    const start = nearestWalkableCell(startTarget); const end = nearestWalkableCell(endTarget);
+    const startKey = start.z * cols + start.x; const endKey = end.z * cols + end.x;
+    const frontier: Array<{ key: number; priority: number }> = [{ key: startKey, priority: 0 }];
+    const costs = new Map<number, number>([[startKey, 0]]); const cameFrom = new Map<number, number>();
+    const push = (entry: { key: number; priority: number }) => {
+      frontier.push(entry); let index = frontier.length - 1;
+      while (index > 0) { const parent = Math.floor((index - 1) / 2); if (frontier[parent]!.priority <= entry.priority) break; frontier[index] = frontier[parent]!; index = parent; }
+      frontier[index] = entry;
+    };
+    const pop = () => {
+      const root = frontier[0]!; const tail = frontier.pop()!;
+      if (frontier.length > 0) { let index = 0; frontier[0] = tail; while (true) { const left = index * 2 + 1; const right = left + 1; if (left >= frontier.length) break; const child = right < frontier.length && frontier[right]!.priority < frontier[left]!.priority ? right : left; if (frontier[child]!.priority >= frontier[index]!.priority) break; [frontier[index], frontier[child]] = [frontier[child]!, frontier[index]!]; index = child; } }
+      return root;
+    };
+    const neighbours = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const;
+    while (frontier.length > 0) {
+      const current = pop().key; if (current === endKey) break;
+      const cx = current % cols; const cz = Math.floor(current / cols); const currentLevel = heights[current] ?? 0;
+      for (const [dx, dz] of neighbours) {
+        const nx = cx + dx; const nz = cz + dz; if (nx <= 0 || nx >= cols - 1 || nz <= 0 || nz >= rows - 1) continue;
+        const nextKey = nz * cols + nx; const nextLevel = heights[nextKey]; if (nextLevel === undefined) continue;
+        const climb = Math.abs(nextLevel - currentLevel); const diagonal = dx !== 0 && dz !== 0 ? 1.42 : 1;
+        const edgeCost = diagonal + climb * climb * 6.5 + (climb > 1 ? 18 : 0);
+        const nextCost = (costs.get(current) ?? Number.POSITIVE_INFINITY) + edgeCost;
+        if (nextCost >= (costs.get(nextKey) ?? Number.POSITIVE_INFINITY)) continue;
+        costs.set(nextKey, nextCost); cameFrom.set(nextKey, current);
+        const heuristic = Math.hypot(end.x - nx, end.z - nz) * 0.9;
+        push({ key: nextKey, priority: nextCost + heuristic });
+      }
+    }
+    const keys = [endKey]; let cursor = endKey; let guard = cols * rows;
+    while (cursor !== startKey && guard-- > 0) { const previous = cameFrom.get(cursor); if (previous === undefined) break; keys.push(previous); cursor = previous; }
+    if (cursor !== startKey) return [start, end].map((point) => ({ ...point, y: surfaceY(point.x, point.z) }));
+    return keys.reverse().map((key) => { const x = key % cols; const z = Math.floor(key / cols); return { x, z, y: surfaceY(x, z) }; });
+  };
+  const pathThroughAnchors = (points: Array<{ x: number; z: number }>) => points.flatMap((from, index) => {
+    const to = points[index + 1]; if (!to) return [];
+    const segment = terrainPath(from, to); return index === 0 ? segment : segment.slice(1);
+  });
+  const simplifyTerrainPath = (sampled: Array<{ x: number; z: number; y: number }>) => {
+    if (sampled.length <= 2) return sampled;
+    const simplified = [sampled[0]!];
+    let lastDirection = "";
+    for (let index = 1; index < sampled.length - 1; index += 1) {
+      const previous = sampled[index - 1]!; const point = sampled[index]!; const next = sampled[index + 1]!;
+      const direction = `${Math.sign(point.x - previous.x)},${Math.sign(point.z - previous.z)}`;
+      const nextDirection = `${Math.sign(next.x - point.x)},${Math.sign(next.z - point.z)}`;
+      const elevationBoundary = Math.abs(point.y - previous.y) > 0.08 || Math.abs(next.y - point.y) > 0.08;
+      const last = simplified.at(-1)!;
+      if (elevationBoundary || direction !== nextDirection || direction !== lastDirection || Math.hypot(point.x - last.x, point.z - last.z) >= 6) simplified.push(point);
+      lastDirection = direction;
+    }
+    simplified.push(sampled.at(-1)!); return simplified;
+  };
+  const addTrail = (id: string, kind: "primary" | "alternate", points: Array<{ x: number; z: number }>, widthCells: number) => {
+    const sampled = pathThroughAnchors(points);
+    const simplified = simplifyTerrainPath(sampled);
+    scene.routes.push(createRoute(id, kind, simplified));
+    for (let index = 1; index < simplified.length; index += 1) {
+      const from = simplified[index - 1]!; const to = simplified[index]!;
+      const common = ["forest", "route", "trail", "surface-grid", "terrain-following"];
+      if (Math.abs(to.y - from.y) <= feetToMeters(1.25)) {
+        scene.primitives.push(corridor(`${id}-segment-${index}`, 0, from.x, from.z, to.x, to.z, (from.y + to.y) / 2 + 0.02, widthCells, "earth", common));
+      } else {
+        const low = from.y <= to.y ? { xCells: from.x, zCells: from.z, yMeters: from.y } : { xCells: to.x, zCells: to.z, yMeters: to.y };
+        const high = from.y <= to.y ? { xCells: to.x, zCells: to.z, yMeters: to.y } : { xCells: from.x, zCells: from.z, yMeters: from.y };
+        scene.primitives.push(stairConnection(`${id}-rise-${index}`, 0, low, high, widthCells, "earth", [...common, "vertical-route", "supported"]).primitive);
+      }
+    }
+  };
+  addTrail("forest-primary-route", "primary", primaryPoints, 1.25);
+  addTrail("forest-hunter-trail", "alternate", alternatePoints, 0.85);
   if (streamWanted) {
     const segments = 18;
     for (let index = 0; index < segments; index += 1) {
@@ -1290,17 +1398,48 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
     scene.routes.push(createRoute("forest-stream-flow", "waterflow", Array.from({ length: 8 }, (_, index) => { const x = 1 + (cols - 2) * index / 7; return { x, z: streamAt(x), y: feetToMeters(1 - index * 0.08) }; })));
   }
   const routeDistance = (x: number, z: number, points: Array<{ x: number; z: number }>) => Math.min(...points.map((point) => Math.hypot(x - point.x, z - point.z)));
+  const clearingDistance = (x: number, z: number) => Math.min(...clearings.map((clearing) => Math.sqrt(((x - clearing.x) / clearing.rx) ** 2 + ((z - clearing.z) / clearing.rz) ** 2)));
   const treeTarget = Math.round(48 + density * 205);
+  const coniferBias = ["针叶", "松林", "冷杉", "conifer", "pine", "fir"].some((term) => promptText.includes(term));
+  const broadleafBias = ["阔叶", "橡树", "榕树", "broadleaf", "oak", "banyan"].some((term) => promptText.includes(term));
+  const speciesCounts = { broadleaf: 0, conifer: 0, snag: 0, understory: 0 };
   let trees = 0;
   for (let attempt = 0; attempt < treeTarget * 6 && trees < treeTarget; attempt += 1) {
     const clusterX = ecology.float(2, cols - 2); const clusterZ = ecology.float(2, rows - 2);
     const x = Math.max(1.5, Math.min(cols - 1.5, clusterX + ecology.float(-3.2, 3.2)));
     const z = Math.max(1.5, Math.min(rows - 1.5, clusterZ + ecology.float(-3.2, 3.2)));
-    if (clearingAt(x, z) >= 0 || routeDistance(x, z, [...primaryPoints, ...alternatePoints]) < 1.1 || (streamWanted && Math.abs(z - streamAt(x)) < 2.2)) continue;
-    const trunk = ecology.float(0.34, 0.74) * (density > 0.75 ? 1.08 : 1);
-    const height = feetToMeters(ecology.int(20, 46)); const y = surfaceY(x, z);
-    scene.primitives.push(cylinder(`forest-tree-${trees}`, 0, x, y, z, trunk, height, "darkStone", ["forest", "tree", "tree-cluster", "natural-cover", "cover"]));
-    scene.primitives.push(primitive(`forest-canopy-${trees}`, ecology.int(0, 2) === 0 ? "sphere" : "cone", 0, x, y + height * 0.78, z, trunk * CELL * ecology.float(3.7, 5.5), height * ecology.float(0.32, 0.5), trunk * CELL * ecology.float(3.7, 5.5), "moss", ["forest", "canopy", "closed-canopy", "cover"]));
+    const clearingBand = clearingDistance(x, z);
+    if (clearingBand < 1 || clearingBand < 1.38 && ecology.next() > 0.34 || routeDistance(x, z, [...primaryPoints, ...alternatePoints]) < 1.1 || (streamWanted && Math.abs(z - streamAt(x)) < 2.2)) continue;
+    const roll = ecology.next();
+    const species = clearingBand < 1.38 ? (roll < 0.62 ? "understory" : roll < 0.82 ? "snag" : "broadleaf")
+      : coniferBias ? (roll < 0.66 ? "conifer" : roll < 0.82 ? "broadleaf" : roll < 0.92 ? "snag" : "understory")
+      : broadleafBias ? (roll < 0.66 ? "broadleaf" : roll < 0.78 ? "conifer" : roll < 0.9 ? "understory" : "snag")
+        : roll < 0.42 ? "broadleaf" : roll < 0.72 ? "conifer" : roll < 0.86 ? "understory" : "snag";
+    speciesCounts[species] += 1;
+    const trunk = ecology.float(species === "understory" ? 0.2 : 0.34, species === "broadleaf" ? 0.82 : 0.66) * (density > 0.75 ? 1.08 : 1);
+    const heightFeet = species === "understory" ? ecology.int(10, 20) : species === "snag" ? ecology.int(18, 34) : species === "conifer" ? ecology.int(28, 52) : ecology.int(24, 48);
+    const height = feetToMeters(heightFeet); const y = surfaceY(x, z);
+    const treeTags = ["forest", "tree", "tree-cluster", "natural-cover", "cover", `tree-species:${species}`];
+    scene.primitives.push(cylinder(`forest-tree-${trees}`, 0, x, y, z, trunk, height, "wood", [...treeTags, ...(species === "snag" ? ["deadwood", "snag"] : [])]));
+    if (species === "broadleaf") {
+      const crown = trunk * CELL * ecology.float(4.1, 5.8);
+      scene.primitives.push(
+        primitive(`forest-canopy-${trees}-a`, "sphere", 0, x - 0.45, y + height * 0.78, z + 0.2, crown, height * ecology.float(0.28, 0.4), crown * 0.9, "moss", ["forest", "canopy", "closed-canopy", "cover", "broadleaf-crown"]),
+        primitive(`forest-canopy-${trees}-b`, "sphere", 0, x + 0.5, y + height * 0.83, z - 0.28, crown * 0.82, height * ecology.float(0.22, 0.34), crown, "moss", ["forest", "canopy", "closed-canopy", "cover", "broadleaf-crown"]),
+      );
+      if (trees % 7 === 0) for (const angle of [0.3, 2.4, 4.5]) scene.primitives.push(box(`forest-root-flare-${trees}-${angle}`, 0, x + Math.cos(angle) * 0.7, y + feetToMeters(0.7), z + Math.sin(angle) * 0.7, 0.42, feetToMeters(1.4), 1.8, "wood", ["forest", "root-flare", "cover"], angle));
+    } else if (species === "conifer") {
+      const crown = trunk * CELL * ecology.float(4.2, 5.2);
+      scene.primitives.push(
+        primitive(`forest-canopy-${trees}-lower`, "cone", 0, x, y + height * 0.6, z, crown, height * 0.5, crown, "moss", ["forest", "canopy", "closed-canopy", "conifer-crown"]),
+        primitive(`forest-canopy-${trees}-upper`, "cone", 0, x, y + height * 0.82, z, crown * 0.68, height * 0.34, crown * 0.68, "moss", ["forest", "canopy", "closed-canopy", "conifer-crown"]),
+      );
+    } else if (species === "understory") {
+      const crown = trunk * CELL * ecology.float(3.8, 4.8);
+      scene.primitives.push(primitive(`forest-canopy-${trees}`, "sphere", 0, x, y + height * 0.74, z, crown, height * 0.38, crown, "moss", ["forest", "canopy", "understory-tree", "young-tree"]));
+    } else {
+      for (const [branchIndex, angle] of [0.25, 2.3].entries()) scene.primitives.push(box(`forest-snag-branch-${trees}-${branchIndex}`, 0, x + Math.cos(angle) * 0.38, y + height * (0.5 + branchIndex * 0.16), z + Math.sin(angle) * 0.38, 1.15, feetToMeters(0.36), 0.16, "wood", ["forest", "snag", "deadwood", "cover"], angle));
+    }
     if (trees % 13 === 0) scene.tactical.push(tacticalFeature(`forest-tree-cover-${trees}`, "cover", x, z, y, 1, "A mature tree and its roots break lines of sight."));
     trees += 1;
   }
@@ -1322,7 +1461,7 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
     const anchor = clearings[index % clearings.length]!; const x = anchor.x + anchor.rx * 0.72; const z = anchor.z - anchor.rz * 0.46; const y = surfaceY(x, z); const height = feetToMeters(45 + index * 4); const platformY = y + feetToMeters(15 + index * 3);
     ancientPlatforms.push({ x, z, y, platformY });
     scene.primitives.push(cylinder(`forest-ancient-tree-${index}`, 0, x, y, z, 2.2 + index * 0.15, height, "wood", ["forest", "tree", "giant-tree", "landmark", "support"]));
-    scene.primitives.push(primitive(`forest-ancient-canopy-${index}`, "sphere", 0, x, y + height * 0.76, z, feetToMeters(30), feetToMeters(18), feetToMeters(30), "moss", ["forest", "canopy", "closed-canopy", "landmark"]));
+    for (const [lobe, dx, dz, scale] of [[0, -1.8, 0.8, 1], [1, 1.5, -0.5, 0.88], [2, 0.4, 1.8, 0.72]] as const) scene.primitives.push(primitive(`forest-ancient-canopy-${index}-${lobe}`, "sphere", 0, x + dx, y + height * (0.73 + lobe * 0.035), z + dz, feetToMeters(30) * scale, feetToMeters(18) * (0.72 + scale * 0.24), feetToMeters(30) * scale, "moss", ["forest", "canopy", "closed-canopy", "landmark", "ancient-crown-lobe"]));
     scene.primitives.push(cylinder(`forest-canopy-platform-${index}`, 0, x, platformY, z, 3.3, feetToMeters(1), "wood", ["forest", "canopy-platform", "platform", "high-ground", "standable", "supported"]));
     for (const [rootIndex, angle] of [0.2, 2.25, 4.3].entries()) {
       scene.primitives.push(box(`forest-ancient-root-${index}-${rootIndex}`, 0, x + Math.cos(angle) * 2.1, y + feetToMeters(1.2), z + Math.sin(angle) * 2.1, 1.05, feetToMeters(2.4), 4.8, "wood", ["forest", "giant-tree", "root-buttress", "cover", "climbable"], angle));
@@ -1358,8 +1497,8 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   );
   connectRooms(scene.rooms, "forest-edge", "forest-clearing-1"); connectRooms(scene.rooms, "forest-clearing-1", "forest-clearing-2"); connectRooms(scene.rooms, "forest-clearing-2", "forest-clearing-3"); connectRooms(scene.rooms, "forest-clearing-3", "forest-deep");
   scene.tactical.push(tacticalFeature("forest-entrance", "entrance", 1.5, rows * 0.18, surfaceY(1.5, rows * 0.18), 2, "A narrow game trail enters beneath a layered canopy."), tacticalFeature("forest-clearing-choke", "chokepoint", clearings[1]!.x, clearings[1]!.z, surfaceY(clearings[1]!.x, clearings[1]!.z), 3, "The middle clearing exposes movement between two dense tree walls."));
-  scene.description = `Layered forest composition with ${rendered.walkable} terrain cells, ${rendered.cliffs} vertical faces, three irregular clearings, ${trees} clustered trees, ${undergrowthCount} undergrowth attempts, ${logCount} fallen logs, ${ancientCount} reachable canopy platforms${streamWanted ? ", and a shallow stream" : ""}.`;
-  scene.floorHeightFeet = [Math.ceil((rendered.yOf(3) + feetToMeters(54)) / 0.3048)];
+  scene.description = `Layered forest composition with ${rendered.walkable} terrain cells, ${rendered.cliffs} vertical faces, ${maximumTerrainLevel + 1} elevation bands, three irregular clearings, ${trees} clustered trees (${speciesCounts.broadleaf} broadleaf, ${speciesCounts.conifer} conifer, ${speciesCounts.snag} snags, ${speciesCounts.understory} understory), ${undergrowthCount} undergrowth attempts, ${logCount} fallen logs, ${ancientCount} reachable canopy platforms${coldForest ? `, ${snowPatchCount} high-ground snow patches` : ""}${streamWanted ? ", and a shallow stream" : ""}.`;
+  scene.floorHeightFeet = [Math.ceil((rendered.yOf(maximumTerrainLevel) + feetToMeters(54)) / 0.3048)];
 }
 
 function terrainSurfaceY(scene: GeneratedScene, xCells: number, zCells: number, fallback: number): number {
