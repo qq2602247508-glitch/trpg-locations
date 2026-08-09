@@ -49,15 +49,15 @@ function requestedBuildingKinds(text: string): SettlementBuildingKind[] {
     if (!contains(text, terms)) return;
     for (let index = 0; index < requestedCount(terms); index += 1) requested.push(kind);
   };
-  add("warehouse", ["仓库", "仓储", "warehouse"]);
+  add("warehouse", ["仓库", "仓储", "货栈", "warehouse"]);
   add("tavern", ["酒馆", "旅店", "旅馆", "酒店", "酒吧", "tavern", "inn", "hotel", "bar"]);
   add("guild", ["公会", "学院", "学校", "大学", "警察驻所", "警察局", "警局", "办公室", "guild", "academy", "school", "college", "university", "police station", "police post", "office"]);
   add("shrine", ["神殿", "神庙", "教堂", "礼拜堂", "shrine", "temple", "church", "chapel"]);
-  add("tower", ["岗楼", "瞭望塔", "巡逻塔", "观测塔", "观星穹顶", "灯塔", "无线电塔", "钟塔", "控制塔", "watchtower", "guard tower", "patrol tower", "observation tower", "observatory dome", "lighthouse", "radio tower", "bell tower", "control tower"]);
-  add("mill", ["磨坊", "mill"]);
+  add("tower", ["岗楼", "巡逻岗", "河上巡逻岗", "瞭望塔", "巡逻塔", "观测塔", "观星穹顶", "灯塔", "无线电塔", "钟塔", "控制塔", "watchtower", "guard tower", "patrol tower", "observation tower", "observatory dome", "lighthouse", "radio tower", "bell tower", "control tower"]);
+  add("mill", ["磨坊", "水磨坊", "潮汐磨坊", "木制水轮", "水轮", "mill", "waterwheel", "tidal mill"]);
   add("blacksmith", ["铁匠", "武器工坊", "blacksmith", "weapon workshop"]);
   add("clinic", ["诊所", "医院", "野战医院", "clinic", "hospital"]);
-  add("factory", ["工厂", "厂房", "发电站", "泵房", "工坊", "维修机库", "factory", "power station", "pump house", "pumphouse", "workshop", "hangar"]);
+  add("factory", ["工厂", "厂房", "染坊", "染料作坊", "发电站", "泵房", "工坊", "维修机库", "factory", "dye works", "dye workshop", "power station", "pump house", "pumphouse", "workshop", "hangar"]);
   add("barn", ["马厩", "谷仓", "粮仓", "stable", "barn", "granary"]);
   add("manor", ["庄园", "宅邸", "manor", "mansion"]);
   add("home", ["矿工宿舍", "工人住宅", "住宅", "宿舍", "棚屋", "居住模块", "worker housing", "dormitory", "residence", "shack", "habitat"]);
@@ -97,7 +97,7 @@ function requestedFunctionalModules(text: string): BuildingFunctionalModuleProgr
     requiresVerticalLandmark: true,
     tags: ["distillation", "tank", "pipe", "maintenance-platform"],
   });
-  add("archive", floodedArchive ? "Half-flooded secured archive" : "Secured archive", ["档案库", "档案室", "藏经洞", "书库", "archive", "records vault"], "basement", {
+  add("archive", floodedArchive ? "Half-flooded secured archive" : "Secured archive", ["档案库", "档案室", "地下档案库", "地下试剂库", "试剂库", "藏经洞", "书库", "archive", "records vault", "reagent vault"], "basement", {
     minimumFootprintCells: 16,
     requiresWater: floodedArchive,
     tags: ["archive", "reserve-vault", "shelf", "restricted", ...(floodedArchive ? ["flooded", "water-access"] : [])],
@@ -149,7 +149,7 @@ function requestedSiteFeatures(text: string): string[] {
   add("radio-observatory", ["无线电观测", "气象站", "无线电塔", "radio observatory", "weather station"]);
   add("river-crossing", ["河上", "石桥", "河谷", "浅滩", "河桥", "river bridge", "river crossing", "ford"]);
   add("gate-district", ["城门街区", "城门到市场", "gate district", "city gate"]);
-  const explicitWaterCity = contains(text, ["河道水城", "水上城市", "水上市集", "主运河", "支流", "运河", "潮汐沟渠", "水闸", "water city", "canal", "tidal channel", "sluice"]);
+  const explicitWaterCity = contains(text, ["河道水城", "水上城市", "水上市集", "水镇", "潮汐水镇", "主运河", "支流", "运河", "泄洪渠", "潮汐沟渠", "水闸", "水轮", "water city", "canal", "tidal channel", "sluice", "waterwheel"]);
   if (explicitWaterCity) features.push("water-city");
   add("hillside-district", ["山坡贵族区", "等高线道路", "山顶神殿", "hillside", "contour road"]);
   add("war-damaged", ["战争破坏", "坍塌住宅", "临时街垒", "破损道路", "war-damaged", "barricade"]);

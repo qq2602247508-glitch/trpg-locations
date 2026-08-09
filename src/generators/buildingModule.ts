@@ -237,6 +237,10 @@ function addWaterfrontExterior(scene: GeneratedScene, lot: BuildingLot, generate
       box(`${lot.id}-waterfront-market-canopy`, 0, canopy.x, y + feetToMeters(7.2), canopy.z, Math.min(lot.width * 0.72, 7.5), 0.16, 1.8, "wood", [...tags, "market-canopy", "cover"], lot.rotation),
       box(`${lot.id}-waterfront-market-counter`, 0, edge.x, y + feetToMeters(2.2), edge.z, Math.min(lot.width * 0.58, 5.2), feetToMeters(2.2), 0.7, "wood", [...tags, "market-counter", "cover"], lot.rotation),
     );
+    for (const [index, offset] of [-0.42, 0.42].entries()) {
+      const support = point(lot.width * offset * 0.72, frontage + 0.72);
+      scene.primitives.push(cylinder(`${lot.id}-waterfront-market-support-${index + 1}`, 0, support.x, y, support.z, 0.16, feetToMeters(7.2), "wood", [...tags, "market-canopy-support", "structural-support"]));
+    }
     return;
   }
   const loadingWidth = Math.min(lot.width * 0.78, 8.5);

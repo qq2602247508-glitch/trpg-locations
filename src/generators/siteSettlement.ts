@@ -1,4 +1,4 @@
-import type { GeneratedScene, GeneratorContext } from "../schema";
+import type { BuildingInstance, GeneratedScene, GeneratorContext } from "../schema";
 import { planSettlementSite, summarizeSiteProgram, type RoadProgram } from "../site-program";
 import { instantiateBuildingModule } from "./buildingModule";
 import { classifySettlementArchetype } from "./settlement";
@@ -605,6 +605,159 @@ function addWaterCity(scene: GeneratedScene, width: number, depth: number): void
   scene.routes.push(createRoute("water-city-canal-route", "waterflow", main.map((point) => ({ ...point, y: 0.025 })), { purpose: "water", traffic: 0.72, schedule: "all" }));
 }
 
+function buildingLocalPoint(building: BuildingInstance, localX: number, localZ: number): { x: number; z: number } {
+  const cosine = Math.cos(building.rotationY);
+  const sine = Math.sin(building.rotationY);
+  return {
+    x: building.positionCells.x + localX * cosine + localZ * sine,
+    z: building.positionCells.z - localX * sine + localZ * cosine,
+  };
+}
+
+function roofHeight(building: BuildingInstance): number {
+  return (building.baseYMeters ?? FLOOR_SLAB_METERS) + (building.exteriorHeightMeters ?? feetToMeters(20)) + 0.14;
+}
+
+function roofEdgeTowards(building: BuildingInstance, target: BuildingInstance): { x: number; z: number } {
+  const dx = target.positionCells.x - building.positionCells.x;
+  const dz = target.positionCells.z - building.positionCells.z;
+  const cosine = Math.cos(building.rotationY);
+  const sine = Math.sin(building.rotationY);
+  const localX = dx * cosine - dz * sine;
+  const localZ = dx * sine + dz * cosine;
+  const halfX = Math.max(1.2, building.footprintCells.x * 0.34);
+  const halfZ = Math.max(1.2, building.footprintCells.z * 0.34);
+  const scale = Math.min(
+    Math.abs(localX) < 0.001 ? Number.POSITIVE_INFINITY : halfX / Math.abs(localX),
+    Math.abs(localZ) < 0.001 ? Number.POSITIVE_INFINITY : halfZ / Math.abs(localZ),
+  );
+  return buildingLocalPoint(building, localX * scale, localZ * scale);
+}
+
+/**
+ * Compiles a legible landmark layer after independently seeded buildings have
+ * been placed. Every landmark is attached to an actual building roof or
+ * facade, so the settlement planner can reuse the same grammar on a different
+ * canal shape without falling back to fixed world coordinates.
+ */
+function addWaterCityLandmarks(scene: GeneratedScene, prompt: string): void {
+  const buildings = scene.buildingInstances ?? [];
+  if (buildings.length === 0) return;
+  const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const wantsRoofBridge = ["屋顶连桥", "屋顶桥", "屋顶货运桥", "货运屋顶桥", "房顶连桥", "roof bridge", "rooftop bridge", "rooftop cargo bridge"].some((term) => normalized.includes(term));
+  const landmarkTags = ["water-city", "water-city-landmark", "site-program", "supported"];
+
+  const shrine = buildings.find((building) => building.archetype === "shrine");
+  if (shrine) {
+    const baseY = shrine.baseYMeters ?? FLOOR_SLAB_METERS;
+    const existingRoof = roofHeight(shrine);
+    const tower = buildingLocalPoint(shrine, 0, -shrine.footprintCells.z * 0.22);
+    const towerDiameter = Math.max(2.2, Math.min(shrine.footprintCells.x, shrine.footprintCells.z) * 0.3);
+    const towerHeight = Math.max(feetToMeters(24), (shrine.exteriorHeightMeters ?? feetToMeters(18)) * 1.32);
+    scene.primitives.push(
+      cylinder(`${shrine.id}-water-city-bell-tower`, 1, tower.x, baseY, tower.z, towerDiameter, towerHeight, "stone", [...landmarkTags, "sacred-landmark", "bell-tower", "vertical-landmark", `building-instance:${shrine.id}`]),
+      primitive(`${shrine.id}-water-city-bell-spire`, "cone", 2, tower.x, baseY + towerHeight, tower.z, towerDiameter * 1.524, Math.max(feetToMeters(8), towerHeight * 0.34), towerDiameter * 1.524, "roof", [...landmarkTags, "sacred-landmark", "bell-spire", "roof", `building-instance:${shrine.id}`]),
+      box(`${shrine.id}-water-city-processional-landing`, 0, shrine.positionCells.x, baseY + FLOOR_SLAB_METERS + 0.04, shrine.positionCells.z + shrine.footprintCells.z * 0.42, Math.max(3, shrine.footprintCells.x * 0.48), FLOOR_SLAB_METERS, 1.8, "stone", [...landmarkTags, "sacred-landmark", "processional-landing", "standable", `building-instance:${shrine.id}`], shrine.rotationY),
+    );
+    for (const [index, side] of [-1, 1].entries()) {
+      const buttress = buildingLocalPoint(shrine, side * shrine.footprintCells.x * 0.34, -shrine.footprintCells.z * 0.08);
+      scene.primitives.push(box(`${shrine.id}-water-city-buttress-${index + 1}`, 0, buttress.x, baseY, buttress.z, 0.55, Math.max(feetToMeters(8), existingRoof - baseY), 1.15, "stone", [...landmarkTags, "sacred-landmark", "buttress", "structural-support", `building-instance:${shrine.id}`], shrine.rotationY));
+    }
+    scene.tactical.push(tacticalFeature(`${shrine.id}-water-city-bell-overwatch`, "highGround", tower.x, tower.z, baseY + towerHeight, 2, "The attached bell tower marks the sacred axis and overlooks both canal banks."));
+  }
+
+  const patrolTower = buildings.find((building) => building.archetype === "tower");
+  if (patrolTower) {
+    const roofY = roofHeight(patrolTower);
+    const platformSize = Math.max(3, Math.min(patrolTower.footprintCells.x, patrolTower.footprintCells.z) * 0.72);
+    scene.primitives.push(
+      box(`${patrolTower.id}-water-city-patrol-platform`, 2, patrolTower.positionCells.x, roofY, patrolTower.positionCells.z, platformSize, FLOOR_SLAB_METERS, platformSize, "darkStone", [...landmarkTags, "patrol-tower", "patrol-platform", "roof-platform", "standable", "high-ground", `building-instance:${patrolTower.id}`], patrolTower.rotationY),
+      cylinder(`${patrolTower.id}-water-city-signal-mast`, 2, patrolTower.positionCells.x, roofY + FLOOR_SLAB_METERS, patrolTower.positionCells.z, 0.28, feetToMeters(13), "wood", [...landmarkTags, "patrol-tower", "signal-mast", "vertical-landmark", `building-instance:${patrolTower.id}`]),
+      box(`${patrolTower.id}-water-city-roof-hatch`, 2, patrolTower.positionCells.x, roofY + FLOOR_SLAB_METERS, patrolTower.positionCells.z + platformSize * 0.18, 0.9, feetToMeters(2.5), 0.9, "wood", [...landmarkTags, "patrol-tower", "roof-hatch", "vertical-opening", "cover", `building-instance:${patrolTower.id}`], patrolTower.rotationY),
+    );
+    for (const [index, localX, localZ] of [
+      [1, -platformSize * 0.42, -platformSize * 0.42],
+      [2, platformSize * 0.42, -platformSize * 0.42],
+      [3, -platformSize * 0.42, platformSize * 0.42],
+      [4, platformSize * 0.42, platformSize * 0.42],
+    ] as const) {
+      const merlon = buildingLocalPoint(patrolTower, localX, localZ);
+      scene.primitives.push(box(`${patrolTower.id}-water-city-merlon-${index}`, 2, merlon.x, roofY + FLOOR_SLAB_METERS, merlon.z, 0.48, feetToMeters(3.2), 0.48, "darkStone", [...landmarkTags, "patrol-tower", "parapet", "cover", `building-instance:${patrolTower.id}`], patrolTower.rotationY));
+    }
+    scene.tactical.push(tacticalFeature(`${patrolTower.id}-water-city-patrol-overwatch`, "highGround", patrolTower.positionCells.x, patrolTower.positionCells.z, roofY, 2.5, "The supported roof platform forms a recognizable canal patrol landmark."));
+  }
+
+  const marketAnchor = buildings.find((building) => building.district === "commercial")
+    ?? buildings.find((building) => building.archetype === "tavern" || building.archetype === "warehouse");
+  if (marketAnchor) {
+    const baseY = (marketAnchor.baseYMeters ?? FLOOR_SLAB_METERS) + FLOOR_SLAB_METERS + 0.04;
+    const frontageZ = marketAnchor.footprintCells.z * 0.52;
+    for (let bay = 0; bay < 3; bay += 1) {
+      const localX = (bay - 1) * Math.max(2.1, marketAnchor.footprintCells.x * 0.22);
+      const canopy = buildingLocalPoint(marketAnchor, localX, frontageZ + 1.15);
+      const canopyWidth = Math.max(1.8, marketAnchor.footprintCells.x * 0.2);
+      scene.primitives.push(
+        box(`${marketAnchor.id}-water-city-market-canopy-${bay + 1}`, 0, canopy.x, baseY + feetToMeters(8), canopy.z, canopyWidth, 0.16, 2.1, "wood", [...landmarkTags, "market-landmark", "market-canopy", "dockside-awning", "cover", `building-instance:${marketAnchor.id}`], marketAnchor.rotationY),
+        box(`${marketAnchor.id}-water-city-market-counter-${bay + 1}`, 0, canopy.x, baseY, canopy.z, canopyWidth * 0.82, feetToMeters(3), 0.7, "wood", [...landmarkTags, "market-landmark", "market-counter", "cover", `building-instance:${marketAnchor.id}`], marketAnchor.rotationY),
+      );
+      for (const [postIndex, side] of [-1, 1].entries()) {
+        const post = buildingLocalPoint(marketAnchor, localX + side * canopyWidth * 0.42, frontageZ + 1.15);
+        scene.primitives.push(cylinder(`${marketAnchor.id}-water-city-market-post-${bay + 1}-${postIndex + 1}`, 0, post.x, baseY, post.z, 0.16, feetToMeters(8), "wood", [...landmarkTags, "market-landmark", "market-canopy-support", "structural-support", `building-instance:${marketAnchor.id}`]));
+      }
+    }
+    scene.tactical.push(tacticalFeature(`${marketAnchor.id}-water-city-market-choke`, "chokepoint", marketAnchor.positionCells.x, marketAnchor.positionCells.z, baseY, 2, "Three supported market bays create a crowded, readable canal-front combat lane."));
+  }
+
+  if (!wantsRoofBridge) return;
+  const candidates = buildings.filter((building) => building.detailLevel !== "mass");
+  const pairs: Array<{ a: BuildingInstance; b: BuildingInstance; distance: number; heightDelta: number }> = [];
+  for (let aIndex = 0; aIndex < candidates.length; aIndex += 1) {
+    for (let bIndex = aIndex + 1; bIndex < candidates.length; bIndex += 1) {
+      const a = candidates[aIndex];
+      const b = candidates[bIndex];
+      if (!a || !b) continue;
+      const distance = Math.hypot(a.positionCells.x - b.positionCells.x, a.positionCells.z - b.positionCells.z);
+      const heightDelta = Math.abs(roofHeight(a) - roofHeight(b));
+      if (distance > 18 || heightDelta > feetToMeters(5)) continue;
+      pairs.push({ a, b, distance, heightDelta });
+    }
+  }
+  pairs.sort((left, right) => left.distance - right.distance || left.heightDelta - right.heightDelta);
+  const used = new Set<string>();
+  let bridgeCount = 0;
+  for (const pair of pairs) {
+    if (bridgeCount >= 2 || used.has(pair.a.id) || used.has(pair.b.id)) continue;
+    const from = roofEdgeTowards(pair.a, pair.b);
+    const to = roofEdgeTowards(pair.b, pair.a);
+    const span = Math.hypot(to.x - from.x, to.z - from.z);
+    if (span < 1.5 || span > 13) continue;
+    const fromY = roofHeight(pair.a);
+    const toY = roofHeight(pair.b);
+    const deckY = Math.max(fromY, toY);
+    const id = `water-city-roof-bridge-${bridgeCount + 1}`;
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const length = Math.max(0.001, Math.hypot(dx, dz));
+    const sideX = -dz / length;
+    const sideZ = dx / length;
+    scene.primitives.push(
+      box(`${id}-landing-a`, 2, from.x, fromY, from.z, 1.8, FLOOR_SLAB_METERS, 1.8, "wood", [...landmarkTags, "roof-route", "roof-bridge-landing", "standable", `building-instance:${pair.a.id}`]),
+      box(`${id}-landing-b`, 2, to.x, toY, to.z, 1.8, FLOOR_SLAB_METERS, 1.8, "wood", [...landmarkTags, "roof-route", "roof-bridge-landing", "standable", `building-instance:${pair.b.id}`]),
+      corridor(`${id}-deck`, 2, from.x, from.z, to.x, to.z, deckY, 1.25, "wood", [...landmarkTags, "roof-route", "roof-bridge", "bridge", "standable", "high-ground"]),
+      corridor(`${id}-rail-left`, 2, from.x + sideX * 0.58, from.z + sideZ * 0.58, to.x + sideX * 0.58, to.z + sideZ * 0.58, deckY + feetToMeters(3), 0.1, "wood", [...landmarkTags, "roof-route", "roof-bridge-railing", "bridge-rail"]),
+      corridor(`${id}-rail-right`, 2, from.x - sideX * 0.58, from.z - sideZ * 0.58, to.x - sideX * 0.58, to.z - sideZ * 0.58, deckY + feetToMeters(3), 0.1, "wood", [...landmarkTags, "roof-route", "roof-bridge-railing", "bridge-rail"]),
+    );
+    scene.routes.push(createRoute(`${id}-route`, "alternate", [
+      { x: from.x, z: from.z, y: fromY },
+      { x: to.x, z: to.z, y: toY },
+    ], { purpose: "escape", traffic: 0.38, schedule: "all" }));
+    scene.tactical.push(tacticalFeature(`${id}-choke`, "chokepoint", (from.x + to.x) / 2, (from.z + to.z) / 2, deckY, 1.2, "The roof bridge joins two real roof edges and creates an exposed elevated chokepoint."));
+    used.add(pair.a.id);
+    used.add(pair.b.id);
+    bridgeCount += 1;
+  }
+}
+
 function addImpactCraterSettlement(scene: GeneratedScene, width: number, depth: number): void {
   const cx = width * 0.5; const cz = depth * 0.5;
   const radiusX = width * 0.22; const radiusZ = depth * 0.23;
@@ -970,6 +1123,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       scene.primitives.push(stairs(`flood-access-stair-${parcel.id}`, 0, parcel.entrance.x, 0, parcel.entrance.z, 1.2, siteElevation, 3.8, "wood", ["flooded-site", "vertical-opening", "site-program"], parcel.rotationY));
     }
   }
+  if (waterCity) addWaterCityLandmarks(scene, context.request.prompt);
 
   const central = program.openSpaces[0];
   const plaza = createRoom("settlement-plaza-room", program.siteType === "village" ? "Village green and public well" : program.siteType === "harbor-district" ? "Fish market plaza" : "Central plaza", "circulation", 0, central?.center.x ?? program.bounds.x / 2, central?.center.z ?? program.bounds.z / 2, central?.size.x ?? 8, central?.size.z ?? 8);
@@ -982,7 +1136,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   if (!semanticTerrain) for (const road of program.roads) scene.routes.push(createRoute(`route-${road.id}`, road.hierarchy === "arterial" ? "primary" : "alternate", road.points.map((point) => ({ ...point, y: elevationAt(point.x, point.z) })), { purpose: road.purpose === "cargo" || road.purpose === "service" ? "service" : "crowd", traffic: road.hierarchy === "arterial" ? 0.94 : road.hierarchy === "street" ? 0.86 : road.hierarchy === "lane" || road.hierarchy === "trail" ? 0.44 : 0.7, schedule: road.purpose === "patrol" ? "night" : road.purpose === "service" ? "all" : "day" }));
   const core = scene.buildingInstances?.filter((building) => building.detailLevel === "full-interior") ?? [];
   const wantsRoofRoute = ["屋顶", "房顶", "追逐", "roof", "rooftop", "chase"].some((term) => context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term));
-  if (wantsRoofRoute && core.length > 0) {
+  if (wantsRoofRoute && !waterCity && core.length > 0) {
     const anchor = core[0];
     if (anchor) {
       const roofY = (anchor.baseYMeters ?? FLOOR_SLAB_METERS) + (anchor.exteriorHeightMeters ?? feetToMeters(20)) + 0.12;
@@ -1022,6 +1176,8 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   scene.diagnostics.metrics.siteNonRectangularBlockRatio = program.diagnostics.nonRectangularBlockRatio;
   scene.diagnostics.metrics.siteBuildingPrograms = scene.buildingInstances?.filter((building) => Boolean(building.interiorProgram)).length ?? 0;
   scene.diagnostics.metrics.siteFocusInteriorPrimitives = scene.primitives.filter((primitive) => primitive.tags?.includes("focus-interior")).length;
+  scene.diagnostics.metrics.siteWaterCityLandmarks = scene.primitives.filter((primitive) => primitive.tags?.includes("water-city-landmark")).length;
+  scene.diagnostics.metrics.siteRoofBridges = scene.primitives.filter((primitive) => primitive.tags?.includes("roof-bridge")).length;
   const bridgeCount = scene.primitives.filter((primitive) => primitive.tags?.some((tag) => tag === "bridge" || tag.includes("bridge"))).length;
   const verticalConnectionCount = scene.primitives.filter((primitive) => primitive.tags?.some((tag) => tag === "vertical-route" || tag === "vertical-opening")).length;
   scene.settlementAdaptation = {

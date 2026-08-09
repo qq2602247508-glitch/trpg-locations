@@ -275,6 +275,13 @@ describe("five-layer composition catalog", () => {
     expect(scene.buildingInstances?.filter((building) => building.detailLevel === "full-interior").length).toBeGreaterThanOrEqual(5);
     expect(scene.buildingInstances?.some((building) => building.archetype === "shrine")).toBe(true);
     expect(scene.buildingInstances?.some((building) => building.archetype === "tower")).toBe(true);
+    const landmarkTags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(landmarkTags.has("bell-tower")).toBe(true);
+    expect(landmarkTags.has("patrol-platform")).toBe(true);
+    expect(landmarkTags.has("market-canopy-support")).toBe(true);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("roof-bridge")).length).toBeGreaterThanOrEqual(1);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("roof-bridge-landing")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("roof-bridge-railing")).length).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps an unfamiliar salt-marsh academy village as a composite settlement", () => {
@@ -293,6 +300,28 @@ describe("five-layer composition catalog", () => {
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("archive"))).toBe(true);
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("terrain-adapted") && primitive.tags?.includes("road"))).toBe(true);
     expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
+  it("keeps a tidal mill alchemy town in the settlement domain", () => {
+    const scene = generateScene({
+      prompt: "建在旧潮汐磨坊群之间的炼金水镇，有泄洪渠、染坊、钟塔、木制水轮、屋顶货运桥、地下试剂库和河上巡逻岗",
+      seed: "tidal-alchemy-town",
+      size: "medium",
+      density: 0.68,
+    }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.siteProgram?.roadPattern).toBe("canal-banks");
+    expect(scene.terrainProgram?.kind).toBe("river");
+    expect(scene.buildingInstances?.some((building) => building.archetype === "mill")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "factory")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "tower")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("water-city"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("archive"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("roof-bridge"))).toBe(true);
+    expect(scene.compositionProgram?.grammarId).toBe("grammar.water-city-v1");
+    expect(scene.compositionProgram?.semanticCoverage?.score).toBeGreaterThanOrEqual(90);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+    expect(scene.diagnostics.valid).toBe(true);
   });
 
   it("makes forest density alter clearings and canopy topology", () => {
