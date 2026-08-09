@@ -148,6 +148,54 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("fallen-log-defense")).toBe(true);
   });
 
+  it("composes a mangrove quarantine station from wetland and building modules", () => {
+    const prompt = "海岸红树林里的检疫站，有高脚建筑、隔离棚、潮汐码头、巡逻塔和秘密药品库";
+    const scene = generateScene({ prompt, seed: "mangrove-quarantine-station", size: "medium", density: 0.62 }, "adaptive");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(scene.archetype).toBe("swamp");
+    expect(scene.buildingInstances?.some((building) => building.archetype === "clinic" && building.detailLevel === "full-interior")).toBe(true);
+    expect(tags.has("mangrove")).toBe(true);
+    expect(tags.has("tidal-channel")).toBe(true);
+    expect(tags.has("stilt-foundation")).toBe(true);
+    expect(tags.has("quarantine-shed")).toBe(true);
+    expect(tags.has("tidal-dock")).toBe(true);
+    expect(tags.has("lookout-tower")).toBe(true);
+    expect(tags.has("medical-vault")).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score).toBe(100);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
+  it("composes a tundra weather station from ice, wetland and service modules", () => {
+    const prompt = "冻土湿地上的气象站，有架高栈道、通信塔、发电机棚、冰水裂沟和地下储备仓";
+    const scene = generateScene({ prompt, seed: "tundra-weather-station", size: "medium", density: 0.62 }, "adaptive");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(scene.archetype).toBe("ice");
+    expect(scene.buildingInstances?.some((building) => building.archetype === "guild" && building.detailLevel === "full-interior")).toBe(true);
+    expect(tags.has("stilt-foundation")).toBe(true);
+    expect(tags.has("boardwalk")).toBe(true);
+    expect(tags.has("communications-tower")).toBe(true);
+    expect(tags.has("generator-shed")).toBe(true);
+    expect(tags.has("ice-fissure")).toBe(true);
+    expect(tags.has("reserve-vault")).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-ice-fissure-crossing-route")).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score).toBe(100);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
+  it("generalizes wetland station atoms to an unfamiliar border outpost", () => {
+    const prompt = "海岸盐沼湿地上的边防站，有高脚宿舍、瞭望塔、架高栈道、壕沟和地下补给库";
+    const scene = generateScene({ prompt, seed: "salt-marsh-border-outpost", size: "medium", density: 0.7 }, "adaptive");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(scene.archetype).toBe("swamp");
+    expect(scene.buildingInstances?.some((building) => building.detailLevel === "full-interior")).toBe(true);
+    expect(tags.has("stilt-foundation")).toBe(true);
+    expect(tags.has("lookout-tower")).toBe(true);
+    expect(tags.has("trench")).toBe(true);
+    expect(tags.has("reserve-vault")).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score).toBe(100);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
   it("changes mangrove parent topology across seeds, not only building props", () => {
     const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、半淹档案库和水下温室";
     const first = generateScene({ prompt, seed: "mangrove-macro-a", size: "medium", density: 0.62 }, "adaptive");

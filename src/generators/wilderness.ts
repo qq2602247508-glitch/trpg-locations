@@ -1,4 +1,5 @@
 import type { GeneratedScene, GeneratorContext, MaterialKey, SemanticGenerationHints } from "../schema";
+import type { BuildingFunctionalModuleProgram } from "../site-program/schema";
 import { instantiateBuildingModule } from "./buildingModule";
 import {
   CELL,
@@ -85,6 +86,7 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const morphology = analyzeTerrainMorphology(prompt, hints);
   if (WILDERNESS_TERMS["industrial-ruin"].some((term) => normalized.includes(term))) return "industrial-ruin";
+  if (includesAny(normalized, ["红树林", "mangrove"])) return "swamp";
   if (WILDERNESS_TERMS["coral-tide"].some((term) => normalized.includes(term))) return "coral-tide";
   if (morphology.impactCrater) return "impact-crater";
   if (WILDERNESS_TERMS["floating-islands"].some((term) => normalized.includes(term))) return "floating-islands";
@@ -985,12 +987,12 @@ function buildBurialGround(scene: GeneratedScene, width: number, depth: number, 
 }
 
 function buildIce(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
-  scene.primitives.push(box("ice-field", 0, width / 2, 0, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "earth", ["floor", "terrain", "ice"]), water("ice-frozen-lake", 0, width / 2, -0.02, depth * 0.56, width * 0.68, 0.08, depth * 0.34, ["ice", "hazard"]));
+  scene.primitives.push(box("ice-field", 0, width / 2, 0, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "ice", ["floor", "terrain", "ice"]), water("ice-frozen-lake", 0, width / 2, -0.02, depth * 0.56, width * 0.68, 0.08, depth * 0.34, ["ice", "hazard"]));
   const islands = 4;
   for (let index = 0; index < islands; index += 1) {
     const x = width * (0.22 + index * 0.18) + rng.float(-2, 2);
     const z = depth * (0.28 + (index % 2) * 0.42) + rng.float(-2, 2);
-    scene.primitives.push(box(`ice-island-${index}`, 0, x, FLOOR_SLAB_METERS * 0.8, z, rng.int(4, 7), FLOOR_SLAB_METERS, rng.int(3, 6), "rock", ["floor", "ice-island", "cover"]));
+    scene.primitives.push(box(`ice-island-${index}`, 0, x, FLOOR_SLAB_METERS * 0.8, z, rng.int(4, 7), FLOOR_SLAB_METERS, rng.int(3, 6), "ice", ["floor", "ice-island", "cover"]));
     scene.tactical.push(tacticalFeature(`ice-island-cover-${index}`, "cover", x, z, 0, 2, "A low ice shelf provides the only stable cover over the frozen lake."));
   }
   scene.rooms.push(createRoom("ice-north-field", "Wind-scoured ice", "natural", 0, width / 2, depth * 0.2, width - 4, 8), createRoom("ice-lake-room", "Frozen underground lake", "natural", 0, width / 2, depth * 0.56, width * 0.7, depth * 0.35), createRoom("ice-south-field", "Broken floe field", "natural", 0, width / 2, depth * 0.84, width - 4, 6));
@@ -1187,16 +1189,30 @@ function ancientPlatformsNear(scene: GeneratedScene, xCells: number, zCells: num
 
 function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorContext, width: number, depth: number, archetype: WildernessArchetype): void {
   const text = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
-  const wantsBuilding = ["木屋", "小屋", "猎人屋", "炼金师小屋", "林间屋", "林务站", "林务所", "巡护站", "护林站", "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station", "驿站"].some((term) => text.includes(term));
-  if (!wantsBuilding || (archetype !== "forest" && archetype !== "river-valley" && archetype !== "mountain" && archetype !== "swamp")) return;
+  const wantsBuilding = [
+    "木屋", "小屋", "猎人屋", "炼金师小屋", "林间屋", "林务站", "林务所", "巡护站", "护林站",
+    "检疫站", "气象站", "科研站", "研究站", "观测站", "通信站", "雷达站", "边防站",
+    "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station", "驿站",
+    "quarantine station", "weather station", "meteorological station", "research station", "field station", "radio station",
+  ].some((term) => text.includes(term));
+  if (!wantsBuilding || !["forest", "river-valley", "mountain", "swamp", "ice"].includes(archetype)) return;
   const alchemical = ["炼金", "alchemy", "alchemist"].some((term) => text.includes(term));
   const hunter = ["猎人", "hunter"].some((term) => text.includes(term));
+  const quarantine = ["检疫站", "隔离棚", "quarantine station", "quarantine shed"].some((term) => text.includes(term));
+  const weatherStation = ["气象站", "气象观测站", "weather station", "meteorological station"].some((term) => text.includes(term));
+  const mangrove = ["红树林", "mangrove"].some((term) => text.includes(term));
   const wantsTrapLine = ["陷阱线", "陷阱", "绊索", "trap line", "trapline", "snare"].some((term) => text.includes(term));
   const wantsFootbridge = ["木桥", "溪边木桥", "footbridge", "foot bridge"].some((term) => text.includes(term));
   const wantsCanopyObservatory = ["树冠观察台", "树冠平台", "瞭望台", "观察台", "canopy observatory", "lookout"].some((term) => text.includes(term));
   const wantsLookoutTower = ["瞭望塔", "巡逻塔", "观察塔", "lookout tower", "watchtower"].some((term) => text.includes(term));
   const wantsTrench = ["陷阱沟", "壕沟", "沟渠", "trench", "ditch"].some((term) => text.includes(term));
   const wantsLogDefense = ["倒木防线", "倒木", "木桩防线", "fallen-log defense", "log barricade"].some((term) => text.includes(term));
+  const wantsIsolationShed = ["隔离棚", "隔离区", "quarantine shed", "isolation shed"].some((term) => text.includes(term));
+  const wantsTidalDock = ["潮汐码头", "潮汐栈桥", "码头", "tidal dock", "tidal pier"].some((term) => text.includes(term));
+  const wantsCommunicationsTower = ["通信塔", "无线电塔", "天线塔", "communications tower", "radio tower", "antenna tower"].some((term) => text.includes(term));
+  const wantsGeneratorShed = ["发电机棚", "发电机房", "generator shed", "generator house"].some((term) => text.includes(term));
+  const wantsIceFissure = ["冰水裂沟", "冰裂沟", "冰隙", "ice-water fissure", "ice fissure", "crevasse"].some((term) => text.includes(term));
+  const wantsReserveVault = ["地下储备仓", "地下储藏室", "地下补给库", "地下物资库", "秘密药品库", "药品库", "underground reserve", "reserve vault", "supply vault", "medicine vault", "medical cache"].some((term) => text.includes(term));
   const streamWanted = ["溪", "溪流", "小溪", "stream", "creek"].some((term) => text.includes(term));
   const riverAnchor = archetype === "river-valley"
     ? scene.primitives
@@ -1215,9 +1231,11 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     .map((item) => ({ item, distance: Math.hypot(item.position.x / CELL - x, item.position.z / CELL - z) }))
     .filter((entry) => entry.distance < 3)
     .sort((left, right) => left.distance - right.distance)[0]?.item;
-  const baseY = supportSurface
+  const terrainBaseY = supportSurface
     ? supportSurface.position.y + supportSurface.size.y
     : archetype === "river-valley" || archetype === "mountain" ? feetToMeters(10) : FLOOR_SLAB_METERS * 2;
+  const raisedFoundationFeet = quarantine || weatherStation || archetype === "swamp" ? (archetype === "ice" ? 4 : 6) : 0;
+  const baseY = terrainBaseY + feetToMeters(raisedFoundationFeet);
   // Clear only procedural clutter in the building pad. Authored terrain,
   // rivers, cliffs and routes remain the owner of the surrounding site.
   scene.primitives = scene.primitives.filter((item) => {
@@ -1230,12 +1248,43 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     const px = item.position.x / CELL; const pz = item.position.z / CELL;
     return Math.hypot(px - x, pz - z) > (archetype === "river-valley" ? 12 : 10);
   });
-  scene.primitives.push(box("wilderness-building-pad", 0, x, baseY - FLOOR_SLAB_METERS, z, 13, FLOOR_SLAB_METERS, 12, archetype === "forest" ? "earth" : "rock", ["floor", "terrain", "building-pad", "site-program", "standable"]));
-  for (const [index, dx, dz] of [[0, -4.8, -3.8], [1, 4.8, -3.8], [2, -4.8, 3.8], [3, 4.8, 3.8]] as const) scene.primitives.push(cylinder(`wilderness-foundation-pier-${index}`, 0, x + dx, 0, z + dz, 0.7, Math.max(FLOOR_SLAB_METERS, baseY), "darkStone", ["foundation", "terrain-adapter", "site-program"]));
+  scene.primitives.push(box(
+    "wilderness-building-pad",
+    0,
+    x,
+    baseY - FLOOR_SLAB_METERS,
+    z,
+    13,
+    FLOOR_SLAB_METERS,
+    12,
+    quarantine || weatherStation || archetype === "swamp" ? "wood" : archetype === "forest" ? "earth" : "rock",
+    ["floor", "terrain", "building-pad", "site-program", "standable", ...(raisedFoundationFeet > 0 ? ["stilt-platform", "raised-foundation"] : [])],
+  ));
+  for (const [index, dx, dz] of [[0, -4.8, -3.8], [1, 4.8, -3.8], [2, -4.8, 3.8], [3, 4.8, 3.8]] as const) {
+    scene.primitives.push(cylinder(
+      `wilderness-foundation-pier-${index}`,
+      0,
+      x + dx,
+      Math.min(terrainBaseY, 0),
+      z + dz,
+      0.7,
+      Math.max(FLOOR_SLAB_METERS, baseY - Math.min(terrainBaseY, 0)),
+      quarantine || weatherStation || archetype === "swamp" ? "wood" : "darkStone",
+      ["foundation", "terrain-adapter", "site-program", ...(raisedFoundationFeet > 0 ? ["stilt-foundation", "structural-support"] : [])],
+    ));
+  }
   const entrance = { x: x - 8.5, z: z + 5.5 };
+  const functionalModules: BuildingFunctionalModuleProgram[] = quarantine ? [
+    { id: "quarantine-observation", kind: "observation", label: "Roof quarantine watch", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 16, tags: ["quarantine-watch", "restricted"] },
+    { id: "quarantine-medical-vault", kind: "archive", label: "Secret medicine vault", levelRole: "basement", minimumFootprintCells: 14, tags: ["medical-vault", "medicine-store", "secret"] },
+  ] : weatherStation ? [
+    { id: "weather-observation", kind: "observation", label: "Meteorological instrument deck", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 16, tags: ["weather-instruments", "communications-tower"] },
+    { id: "weather-generator", kind: "workshop", label: "Generator service room", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 15, tags: ["generator-shed", "power-service"] },
+    { id: "weather-reserve", kind: "archive", label: "Underground reserve store", levelRole: "basement", minimumFootprintCells: 16, tags: ["reserve-vault", "underground-reserve"] },
+  ] : [];
   instantiateBuildingModule(scene, {
     id: "wilderness-core-building",
-    kind: alchemical ? "guild" : "home",
+    kind: quarantine ? "clinic" : weatherStation ? "guild" : alchemical ? "guild" : "home",
     x,
     z,
     width: alchemical ? 11 : 9,
@@ -1248,7 +1297,227 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     frontageRoadId: "wilderness-access-trail",
     entrance,
     baseY,
+    functionalModules,
   }, context.rng.fork("wilderness-building"));
+  const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
+
+  if (archetype === "swamp") {
+    const reedRoute = scene.routes.find((route) => route.id === "swamp-reed-route");
+    const first = reedRoute?.points[0];
+    const last = reedRoute?.points.at(-1);
+    if (reedRoute && first && last) {
+      const westX = Math.max(2, x - 10.5);
+      const northZ = Math.max(2, z - 8.5);
+      const southZ = Math.min(depth - 2, z + 9.5);
+      reedRoute.points = [
+        first,
+        { x: westX, z: northZ, y: terrainSurfaceY(scene, westX, northZ, terrainBaseY) },
+        { x: westX, z: southZ, y: terrainSurfaceY(scene, westX, southZ, terrainBaseY) },
+        { x: Math.min(width - 2, x + 11), z: southZ, y: terrainSurfaceY(scene, Math.min(width - 2, x + 11), southZ, terrainBaseY) },
+        last,
+      ];
+    }
+  }
+
+  if (mangrove) {
+    for (const primitiveEntry of scene.primitives) {
+      if (primitiveEntry.tags?.includes("watercourse") || primitiveEntry.tags?.includes("pool")) {
+        primitiveEntry.tags = [...new Set([...(primitiveEntry.tags ?? []), "mangrove", "tidal-channel"])];
+      }
+    }
+    const rootRng = context.rng.fork("mangrove-station-roots");
+    const rootCount = Math.round(7 + context.request.density * 8);
+    for (let index = 0; index < rootCount; index += 1) {
+      const angle = index / rootCount * Math.PI * 2 + rootRng.float(-0.18, 0.18);
+      const radius = rootRng.float(8.5, 15);
+      const rootX = Math.max(2, Math.min(width - 2, x + Math.cos(angle) * radius));
+      const rootZ = Math.max(2, Math.min(depth - 2, z + Math.sin(angle) * radius));
+      const rootBase = terrainSurfaceY(scene, rootX, rootZ, terrainBaseY);
+      scene.primitives.push(
+        cylinder(`wilderness-mangrove-root-${index}`, 0, rootX, rootBase, rootZ, rootRng.float(0.55, 0.95), feetToMeters(rootRng.int(8, 14)), "wood", ["site-program", "mangrove", "prop-root", "root-buttress", "cover"]),
+        primitive(`wilderness-mangrove-canopy-${index}`, "sphere", 1, rootX, rootBase + feetToMeters(rootRng.int(9, 14)), rootZ, rootRng.float(2.8, 4.2), rootRng.float(1.4, 2.2), rootRng.float(2.6, 4), "moss", ["site-program", "mangrove", "canopy", "blocks-sight"]),
+      );
+    }
+  }
+
+  if (quarantine && wantsIsolationShed) {
+    const shedX = Math.max(5, Math.min(width - 5, x + 9.5));
+    // Keep the detached ward on the opposite side of the authored reed route;
+    // a quarantine shed is a destination, not an obstacle placed over an
+    // existing wetland traversal line.
+    const shedZ = Math.max(5, Math.min(depth - 5, z - 7.5));
+    const shedY = baseY;
+    scene.primitives.push(
+      box("wilderness-quarantine-shed-floor", 0, shedX, shedY, shedZ, 6.4, FLOOR_SLAB_METERS, 5.2, "wood", ["site-program", "quarantine-shed", "floor", "standable", "restricted"]),
+      box("wilderness-quarantine-shed-north", 0, shedX, shedY, shedZ - 2.6, 6.4, feetToMeters(8), 0.2, "plaster", ["site-program", "quarantine-shed", "wall", "restricted"]),
+      box("wilderness-quarantine-shed-west", 0, shedX - 3.2, shedY, shedZ, 0.2, feetToMeters(8), 5.2, "plaster", ["site-program", "quarantine-shed", "wall", "restricted"]),
+      box("wilderness-quarantine-shed-east", 0, shedX + 3.2, shedY, shedZ, 0.2, feetToMeters(8), 5.2, "plaster", ["site-program", "quarantine-shed", "wall", "restricted", "focus-cutaway"]),
+      box("wilderness-quarantine-shed-south-left", 0, shedX - 2.1, shedY, shedZ + 2.6, 2.2, feetToMeters(8), 0.2, "plaster", ["site-program", "quarantine-shed", "wall", "door-frame"]),
+      box("wilderness-quarantine-shed-south-right", 0, shedX + 2.1, shedY, shedZ + 2.6, 2.2, feetToMeters(8), 0.2, "plaster", ["site-program", "quarantine-shed", "wall", "door-frame", "focus-cutaway"]),
+      primitive("wilderness-quarantine-shed-roof", "gable", 1, shedX, shedY + feetToMeters(8), shedZ, 5.8 * CELL, feetToMeters(3.8), 7 * CELL, "roof", ["site-program", "quarantine-shed", "roof", "pitched-roof"]),
+      box("wilderness-quarantine-cot-a", 0, shedX - 1.5, shedY + FLOOR_SLAB_METERS, shedZ - 0.8, 1.1, feetToMeters(2.1), 2.5, "wood", ["site-program", "quarantine-shed", "cot", "cover"]),
+      box("wilderness-quarantine-cot-b", 0, shedX + 1.5, shedY + FLOOR_SLAB_METERS, shedZ - 0.8, 1.1, feetToMeters(2.1), 2.5, "wood", ["site-program", "quarantine-shed", "cot", "cover"]),
+      corridor("wilderness-quarantine-boardwalk", 0, x + 3.8, z + 2.8, shedX - 3.2, shedZ + 2.1, shedY + FLOOR_SLAB_METERS, 1.35, "wood", ["site-program", "quarantine-shed", "boardwalk", "bridge", "standable", "supported"]),
+    );
+    const shedRoom = createRoom("wilderness-quarantine-shed-room", "Detached quarantine ward", "service", 0, shedX, shedZ, 6.4, 5.2, shedY);
+    scene.rooms.push(shedRoom);
+    if (wildernessRoot) connectRooms(scene.rooms, wildernessRoot.id, shedRoom.id);
+    scene.routes.push(createRoute("wilderness-quarantine-shed-route", "alternate", [
+      { x: x + 3.8, z: z + 2.8, y: shedY + FLOOR_SLAB_METERS },
+      { x: shedX - 3.2, z: shedZ + 2.1, y: shedY + FLOOR_SLAB_METERS },
+      { x: shedX, z: shedZ, y: shedY + FLOOR_SLAB_METERS },
+    ], { purpose: "service", traffic: 0.22, schedule: "all" }));
+    scene.tactical.push(tacticalFeature("wilderness-quarantine-shed-choke", "chokepoint", shedX - 3.2, shedZ + 2.1, shedY, 1, "The narrow isolation boardwalk controls entry to the detached quarantine ward."));
+  }
+
+  if (quarantine) {
+    const interiorTags = ["site-program", "quarantine-interior", "building-instance:wilderness-core-building", "full-interior", "focus-interior"];
+    scene.primitives.push(
+      box("wilderness-quarantine-reception-desk", 0, x - 1.8, baseY + FLOOR_SLAB_METERS, z + 1.4, 3.2, feetToMeters(3.2), 0.9, "wood", [...interiorTags, "reception", "cover"]),
+      box("wilderness-quarantine-screen", 0, x + 0.8, baseY + FLOOR_SLAB_METERS, z - 0.4, 0.2, feetToMeters(7), 4.2, "metal", [...interiorTags, "partition", "restricted", "cover"]),
+      cylinder("wilderness-quarantine-wash-a", 0, x + 2.3, baseY + FLOOR_SLAB_METERS, z - 1.4, 0.75, feetToMeters(6), "metal", [...interiorTags, "decontamination", "wash-station"]),
+      cylinder("wilderness-quarantine-wash-b", 0, x + 2.3, baseY + FLOOR_SLAB_METERS, z + 1.1, 0.75, feetToMeters(6), "metal", [...interiorTags, "decontamination", "wash-station"]),
+      box("wilderness-quarantine-exam-cot", 0, x - 0.2, baseY + FLOOR_SLAB_METERS, z - 2.1, 1.2, feetToMeters(2.4), 2.8, "wood", [...interiorTags, "exam-cot", "cover"]),
+    );
+    scene.tactical.push(tacticalFeature("wilderness-quarantine-interior-choke", "chokepoint", x + 0.8, z, baseY, 1, "A decontamination screen divides public reception from the restricted treatment side."));
+  }
+
+  if (wantsReserveVault) {
+    const vaultY = Math.min(baseY - feetToMeters(14), FLOOR_SLAB_METERS - feetToMeters(10));
+    const vaultTags = quarantine
+      ? ["site-program", "medical-vault", "reserve-vault", "medicine-store", "underground", "restricted", "cover"]
+      : ["site-program", "reserve-vault", "underground-reserve", "storage", "underground", "restricted", "cover"];
+    scene.primitives.push(
+      box("wilderness-reserve-vault-locker-a", 3, x - 1.7, vaultY + FLOOR_SLAB_METERS, z, 0.8, feetToMeters(5.5), 3.2, "metal", vaultTags),
+      box("wilderness-reserve-vault-locker-b", 3, x + 1.7, vaultY + FLOOR_SLAB_METERS, z, 0.8, feetToMeters(5.5), 3.2, "metal", vaultTags),
+      box("wilderness-reserve-vault-cache", 3, x, vaultY + FLOOR_SLAB_METERS, z - 1.5, 2.4, feetToMeters(3), 1.1, "wood", [...vaultTags, ...(quarantine ? ["secret", "objective"] : ["supply-cache"])]),
+    );
+    if (quarantine) scene.tactical.push(tacticalFeature("wilderness-medical-vault-secret", "secret", x, z - 1.5, vaultY, 1, "A locked medicine cache is concealed behind the basement shelving."));
+  }
+
+  if (weatherStation && wantsGeneratorShed) {
+    const generatorX = Math.max(5, Math.min(width - 5, x + 9));
+    const generatorZ = Math.max(5, Math.min(depth - 5, z + 4));
+    scene.primitives.push(
+      box("wilderness-generator-shed-floor", 0, generatorX, baseY, generatorZ, 5.4, FLOOR_SLAB_METERS, 4.6, "stone", ["site-program", "generator-shed", "floor", "standable", "service"]),
+      box("wilderness-generator-shed-shell", 0, generatorX, baseY, generatorZ, 5.2, feetToMeters(7.5), 4.4, "metal", ["site-program", "generator-shed", "service-building", "building-shell"]),
+      box("wilderness-generator-unit", 0, generatorX, baseY + FLOOR_SLAB_METERS, generatorZ, 3.2, feetToMeters(4.2), 1.8, "darkStone", ["site-program", "generator-shed", "generator", "machinery", "cover"]),
+      cylinder("wilderness-generator-exhaust", 1, generatorX + 1.6, baseY + feetToMeters(6), generatorZ - 1.2, 0.38, feetToMeters(7), "metal", ["site-program", "generator-shed", "exhaust", "vertical-landmark"]),
+      corridor("wilderness-generator-service-walk", 0, x + 3.8, z + 2.5, generatorX - 2.5, generatorZ, baseY + FLOOR_SLAB_METERS, 1.25, "wood", ["site-program", "generator-shed", "boardwalk", "bridge", "standable", "supported"]),
+    );
+    const generatorRoom = createRoom("wilderness-generator-shed-room", "Detached generator shed", "service", 0, generatorX, generatorZ, 5.4, 4.6, baseY);
+    scene.rooms.push(generatorRoom);
+    if (wildernessRoot) connectRooms(scene.rooms, wildernessRoot.id, generatorRoom.id);
+    scene.routes.push(createRoute("wilderness-generator-service-route", "alternate", [
+      { x: x + 3.8, z: z + 2.5, y: baseY + FLOOR_SLAB_METERS },
+      { x: generatorX - 2.5, z: generatorZ, y: baseY + FLOOR_SLAB_METERS },
+      { x: generatorX, z: generatorZ, y: baseY + FLOOR_SLAB_METERS },
+    ], { purpose: "service", traffic: 0.2, schedule: "all" }));
+  }
+
+  if (weatherStation) {
+    const interiorTags = ["site-program", "weather-station-interior", "building-instance:wilderness-core-building", "full-interior", "focus-interior"];
+    scene.primitives.push(
+      box("wilderness-weather-map-table", 0, x - 1.6, baseY + FLOOR_SLAB_METERS, z + 0.8, 3.2, feetToMeters(3.1), 1.6, "wood", [...interiorTags, "map-table", "cover"]),
+      box("wilderness-weather-radio-rack-a", 0, x + 2.5, baseY + FLOOR_SLAB_METERS, z - 1.4, 0.8, feetToMeters(6.2), 2.2, "metal", [...interiorTags, "radio-rack", "communications", "cover"]),
+      box("wilderness-weather-radio-rack-b", 0, x + 2.5, baseY + FLOOR_SLAB_METERS, z + 1.4, 0.8, feetToMeters(6.2), 2.2, "metal", [...interiorTags, "instrument-rack", "weather-instruments", "cover"]),
+      cylinder("wilderness-weather-barometer", 0, x - 0.1, baseY + FLOOR_SLAB_METERS, z - 2.2, 0.7, feetToMeters(5.5), "metal", [...interiorTags, "weather-instruments", "barometer"]),
+    );
+  }
+
+  if (weatherStation && wantsCommunicationsTower) {
+    const towerX = Math.max(5, Math.min(width - 5, x - 8.5));
+    const towerZ = Math.max(5, Math.min(depth - 5, z - 5));
+    const towerBase = terrainSurfaceY(scene, towerX, towerZ, terrainBaseY);
+    const towerHeight = feetToMeters(32);
+    scene.primitives.push(
+      cylinder("wilderness-communications-tower-mast", 0, towerX, towerBase, towerZ, 0.52, towerHeight, "metal", ["site-program", "communications-tower", "antenna", "vertical-landmark", "climbable"]),
+      box("wilderness-communications-tower-yard", 0, towerX, towerBase, towerZ, 5.6, FLOOR_SLAB_METERS, 5.6, "rock", ["site-program", "communications-tower", "floor", "standable", "supported"]),
+      box("wilderness-communications-tower-ladder", 0, towerX, towerBase + towerHeight / 2, towerZ + 0.7, 0.45, towerHeight, 0.16, "metal", ["site-program", "communications-tower", "ladder", "vertical-route", "shaft-access", "climbable"]),
+    );
+    for (const [index, heightRatio] of [0.36, 0.62, 0.86].entries()) {
+      scene.primitives.push(box(`wilderness-communications-array-${index + 1}`, 1, towerX, towerBase + towerHeight * heightRatio, towerZ, 4.5 - index * 0.6, 0.18, 0.25, "metal", ["site-program", "communications-tower", "antenna-array", "vertical-landmark"]));
+    }
+    scene.routes.push(createRoute("wilderness-communications-tower-route", "vertical", [
+      { x: towerX, z: towerZ + 0.7, y: towerBase },
+      { x: towerX, z: towerZ + 0.7, y: towerBase + towerHeight },
+    ], { purpose: "service", traffic: 0.08, schedule: "all" }));
+    scene.tactical.push(tacticalFeature("wilderness-communications-tower-high", "highGround", towerX, towerZ, towerBase + towerHeight, 2, "The communications mast is a climbable but exposed observation landmark."));
+  }
+
+  if (archetype === "ice" && wantsIceFissure) {
+    const fissureZ = Math.max(7, Math.min(depth - 7, z + 10));
+    const fissureY = terrainBaseY - feetToMeters(9);
+    const bend = context.rng.fork("ice-fissure").float(-2.5, 2.5);
+    const gapHalf = 3.2;
+    const northDepth = Math.max(3, fissureZ - gapHalf - 1);
+    const southDepth = Math.max(3, depth - (fissureZ + gapHalf) - 1);
+    // Replace the single ice slab with two real banks. The deep fissure must
+    // remain legible even with materials disabled, so the gap and its vertical
+    // faces are geometry rather than a dark decal over a continuous floor.
+    scene.primitives = scene.primitives.filter((primitiveEntry) => primitiveEntry.id !== "ice-field");
+    scene.primitives.push(
+      box("wilderness-ice-bank-north", 0, width / 2, terrainBaseY - FLOOR_SLAB_METERS, northDepth / 2 + 1, width - 2, FLOOR_SLAB_METERS, northDepth, "ice", ["floor", "terrain", "ice", "rift-bank", "standable"]),
+      box("wilderness-ice-bank-south", 0, width / 2, terrainBaseY - FLOOR_SLAB_METERS, fissureZ + gapHalf + southDepth / 2, width - 2, FLOOR_SLAB_METERS, southDepth, "ice", ["floor", "terrain", "ice", "rift-bank", "standable"]),
+      box("wilderness-ice-cliff-north", 0, width / 2, fissureY, fissureZ - gapHalf, width - 2, terrainBaseY - fissureY, 0.45, "rock", ["site-program", "ice-fissure", "vertical-face", "cliff", "rift-bank"]),
+      box("wilderness-ice-cliff-south", 0, width / 2, fissureY, fissureZ + gapHalf, width - 2, terrainBaseY - fissureY, 0.45, "rock", ["site-program", "ice-fissure", "vertical-face", "cliff", "rift-bank"]),
+    );
+    const fissurePoints = [
+      { x: 2, z: fissureZ - 2.8 },
+      { x: width * 0.34, z: fissureZ + bend },
+      { x: width * 0.68, z: fissureZ - bend * 0.65 },
+      { x: width - 2, z: fissureZ + 2.2 },
+    ];
+    for (let index = 0; index < fissurePoints.length - 1; index += 1) {
+      const from = fissurePoints[index]!;
+      const to = fissurePoints[index + 1]!;
+      scene.primitives.push(
+        corridor(`wilderness-ice-fissure-water-${index}`, 0, from.x, from.z, to.x, to.z, fissureY, 3.5, "water", ["site-program", "ice-fissure", "wetland", "water", "hazard", "deep-water", "vertical-face"]),
+        corridor(`wilderness-ice-fissure-shadow-${index}`, 0, from.x, from.z, to.x, to.z, fissureY - feetToMeters(5), 4.3, "darkStone", ["site-program", "ice-fissure", "void", "hazard", "vertical-face"]),
+      );
+    }
+    const bridgeX = Math.max(6, Math.min(width - 6, x - 5));
+    const bridgeY = terrainBaseY + FLOOR_SLAB_METERS + 0.08;
+    scene.primitives.push(
+      corridor("wilderness-ice-fissure-bridge", 0, bridgeX, fissureZ - 3.3, bridgeX, fissureZ + 3.3, bridgeY, 1.55, "wood", ["site-program", "ice-fissure", "bridge", "boardwalk", "standable", "supported"]),
+      cylinder("wilderness-ice-fissure-bridge-support-a", 0, bridgeX - 0.55, fissureY, fissureZ - 2.6, 0.2, bridgeY - fissureY, "wood", ["site-program", "ice-fissure", "bridge", "support"]),
+      cylinder("wilderness-ice-fissure-bridge-support-b", 0, bridgeX + 0.55, fissureY, fissureZ + 2.6, 0.2, bridgeY - fissureY, "wood", ["site-program", "ice-fissure", "bridge", "support"]),
+    );
+    scene.routes.push(createRoute("wilderness-ice-fissure-crossing-route", "alternate", [
+      { x: bridgeX, z: fissureZ - 3.3, y: bridgeY },
+      { x: bridgeX, z: fissureZ + 3.3, y: bridgeY },
+    ], { purpose: "movement", traffic: 0.32, schedule: "all" }));
+    const primaryIceRoute = scene.routes.find((route) => route.id === "ice-primary-route");
+    if (primaryIceRoute) {
+      primaryIceRoute.points = [
+        { x: 1, z: Math.max(2, fissureZ - 8), y: terrainBaseY },
+        { x: bridgeX, z: fissureZ - 3.3, y: bridgeY },
+        { x: bridgeX, z: fissureZ + 3.3, y: bridgeY },
+        { x: width - 1, z: Math.min(depth - 2, fissureZ + 8), y: terrainBaseY },
+      ];
+    }
+    scene.tactical.push(tacticalFeature("wilderness-ice-fissure-hazard", "hazard", width * 0.5, fissureZ, fissureY, 4, "A deep water-filled ice fissure cuts across the site and forces movement onto a supported bridge."));
+  }
+
+  if (mangrove && wantsTidalDock) {
+    const nearestWater = scene.primitives
+      .filter((item) => item.tags?.includes("watercourse") || item.tags?.includes("pool") || item.tags?.includes("water"))
+      .sort((left, right) => Math.hypot(left.position.x / CELL - x, left.position.z / CELL - z) - Math.hypot(right.position.x / CELL - x, right.position.z / CELL - z))[0];
+    const dockX = nearestWater ? nearestWater.position.x / CELL : Math.max(4, x - 10);
+    const dockZ = nearestWater ? nearestWater.position.z / CELL : Math.min(depth - 4, z + 10);
+    const dockY = baseY + FLOOR_SLAB_METERS;
+    scene.primitives.push(
+      corridor("wilderness-tidal-dock", 0, x - 4, z + 4, dockX, dockZ, dockY, 2, "wood", ["site-program", "tidal-dock", "water-access", "boardwalk", "bridge", "standable", "supported"]),
+      box("wilderness-tidal-dock-head", 0, dockX, dockY, dockZ, 5.2, FLOOR_SLAB_METERS, 3.6, "wood", ["site-program", "tidal-dock", "water-access", "standable", "supported"]),
+      cylinder("wilderness-tidal-dock-pile-a", 0, dockX - 1.6, terrainBaseY - feetToMeters(4), dockZ, 0.22, dockY - terrainBaseY + feetToMeters(8), "wood", ["site-program", "tidal-dock", "support"]),
+      cylinder("wilderness-tidal-dock-pile-b", 0, dockX + 1.6, terrainBaseY - feetToMeters(4), dockZ, 0.22, dockY - terrainBaseY + feetToMeters(8), "wood", ["site-program", "tidal-dock", "support"]),
+    );
+    scene.routes.push(createRoute("wilderness-tidal-dock-route", "alternate", [
+      { x: x - 4, z: z + 4, y: dockY },
+      { x: dockX, z: dockZ, y: dockY },
+    ], { purpose: "movement", traffic: 0.3, schedule: "all" }));
+    scene.tactical.push(tacticalFeature("wilderness-tidal-dock-choke", "chokepoint", dockX, dockZ, dockY, 2, "The tidal dock is a narrow exposed water-access point."));
+  }
   if (archetype === "forest") {
     const hunterTrail = scene.routes.find((route) => route.id === "forest-hunter-trail");
     if (hunterTrail && hunterTrail.points.length >= 2) {
@@ -1276,7 +1545,6 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       ];
     }
   }
-  const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
   // Forest rooms are numbered forest-clearing-1..3. The old singular
   // forest-clearing-room fallback silently broke the building/biome graph,
   // so choose the nearest authored clearing instead of a generic room.
@@ -1284,6 +1552,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     .filter((room) => room.level === 0
       && room.id !== wildernessRoot?.id
       && !room.id.startsWith("core-wilderness-core-building-")
+      && !room.id.startsWith("wilderness-")
       && (archetype !== "forest" || room.id.startsWith("forest-clearing-")))
     .sort((left, right) => Math.hypot(left.center.x - x, left.center.z - z) - Math.hypot(right.center.x - x, right.center.z - z))[0]
     ?? scene.rooms.find((room) => room.level === 0 && !room.id.startsWith("core-wilderness"));
@@ -1292,8 +1561,41 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     x: Math.max(1.25, Math.min(width - 1.25, entrance.x - 7)),
     z: Math.max(1.25, Math.min(depth - 1.25, entrance.z + 5)),
   };
-  scene.primitives.push(corridor("wilderness-access-path", 0, accessStart.x, accessStart.z, entrance.x, entrance.z, baseY, 1.6, archetype === "forest" ? "earth" : "rock", ["road", "trail", "parcel-access", "site-program"]));
-  scene.routes.push(createRoute("wilderness-building-access", "primary", [{ x: accessStart.x, z: accessStart.z, y: baseY }, { x: entrance.x, z: entrance.z, y: baseY }, { x, z, y: baseY }], { purpose: "movement", traffic: 0.45, schedule: "all" }));
+  const accessTerrainY = Math.min(terrainBaseY, terrainSurfaceY(scene, accessStart.x, accessStart.z, terrainBaseY));
+  if (raisedFoundationFeet > 0) {
+    const stairEnd = {
+      xCells: accessStart.x + Math.sign(entrance.x - accessStart.x) * 2.8,
+      zCells: accessStart.z + Math.sign(entrance.z - accessStart.z) * 2,
+      yMeters: baseY,
+    };
+    const accessStair = stairConnection(
+      "wilderness-raised-access-stair",
+      0,
+      { xCells: accessStart.x, zCells: accessStart.z, yMeters: accessTerrainY },
+      stairEnd,
+      1.6,
+      "wood",
+      ["parcel-access", "site-program", "raised-foundation", "vertical-route", "supported"],
+    );
+    scene.primitives.push(
+      accessStair.primitive,
+      corridor("wilderness-access-path", 0, stairEnd.xCells, stairEnd.zCells, entrance.x, entrance.z, baseY, 1.6, "wood", ["road", "boardwalk", "bridge", "parcel-access", "site-program", "standable", "supported"]),
+    );
+    for (const [index, ratio] of [0.28, 0.56, 0.84].entries()) {
+      const supportX = stairEnd.xCells + (entrance.x - stairEnd.xCells) * ratio;
+      const supportZ = stairEnd.zCells + (entrance.z - stairEnd.zCells) * ratio;
+      scene.primitives.push(cylinder(`wilderness-access-support-${index + 1}`, 0, supportX, terrainBaseY - feetToMeters(2), supportZ, 0.18, baseY - terrainBaseY + feetToMeters(4), "wood", ["site-program", "boardwalk", "support", "structural-support"]));
+    }
+    scene.routes.push(createRoute("wilderness-building-access", "primary", [
+      { x: accessStart.x, z: accessStart.z, y: accessTerrainY },
+      { x: stairEnd.xCells, z: stairEnd.zCells, y: baseY },
+      { x: entrance.x, z: entrance.z, y: baseY },
+      { x, z, y: baseY },
+    ], { purpose: "movement", traffic: 0.45, schedule: "all" }));
+  } else {
+    scene.primitives.push(corridor("wilderness-access-path", 0, accessStart.x, accessStart.z, entrance.x, entrance.z, baseY, 1.6, archetype === "forest" ? "earth" : "rock", ["road", "trail", "parcel-access", "site-program"]));
+    scene.routes.push(createRoute("wilderness-building-access", "primary", [{ x: accessStart.x, z: accessStart.z, y: baseY }, { x: entrance.x, z: entrance.z, y: baseY }, { x, z, y: baseY }], { purpose: "movement", traffic: 0.45, schedule: "all" }));
+  }
   let siteRoadCount = 1;
   let siteRoadLength = Math.hypot(7, 5);
   if (context.request.density >= 0.5) {
