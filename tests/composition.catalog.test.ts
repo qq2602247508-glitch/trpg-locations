@@ -53,6 +53,51 @@ describe("five-layer composition catalog", () => {
     expect(hollowTree.motifIds).not.toContain("motif.mangrove-smuggler-port");
   });
 
+  it("treats water-city prompts as a dedicated waterfront grammar", () => {
+    const request = {
+      prompt: "河道水城，弯曲主河、三条支流、石桥、木桥、水上市集、船坞与沿岸不规则街巷",
+      seed: "water-city-grammar-contract",
+      size: "medium" as const,
+      density: 0.72,
+    };
+    const program = compileSceneComposition(request);
+    expect(program.primaryDomain).toBe("river");
+    expect(program.grammarId).toBe("grammar.water-city-v1");
+    expect(program.motifIds).toContain("motif.water-city-quays");
+    expect(program.requirements.map((item) => item.id)).toEqual(expect.arrayContaining([
+      "water-city-main",
+      "water-city-branches",
+      "water-city-stone-bridge",
+      "water-city-wood-bridge",
+      "water-city-market",
+      "water-city-dock",
+      "water-city-bank-lanes",
+    ]));
+    const scene = generateScene(request, "adaptive");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(tags.has("main-canal")).toBe(true);
+    expect(tags.has("branch-canal")).toBe(true);
+    expect(tags.has("stone-bridge")).toBe(true);
+    expect(tags.has("wood-bridge")).toBe(true);
+    expect(tags.has("market-dock")).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score).toBeGreaterThanOrEqual(70);
+    expect(scene.compositionProgram?.grammarId).toBe("grammar.water-city-v1");
+  });
+
+  it("keeps water-city topology deterministic yet seed-sensitive", () => {
+    const prompt = "河道水城，弯曲主河、三条支流、石桥、木桥、水上市集、船坞与沿岸不规则街巷";
+    const request = { prompt, seed: "water-city-seed-a", size: "medium" as const, density: 0.72 };
+    const replay = generateScene(request, "adaptive");
+    const same = generateScene(request, "adaptive");
+    const other = generateScene({ ...request, seed: "water-city-seed-b" }, "adaptive");
+    const signature = (scene: typeof replay) => scene.primitives
+      .filter((entry) => entry.tags?.includes("water-city") || entry.tags?.includes("main-canal") || entry.tags?.includes("branch-canal"))
+      .map((entry) => `${entry.id}:${entry.position.x.toFixed(2)}:${entry.position.z.toFixed(2)}:${entry.size.x.toFixed(2)}:${entry.size.z.toFixed(2)}`)
+      .join("|");
+    expect(signature(replay)).toBe(signature(same));
+    expect(signature(replay)).not.toBe(signature(other));
+  });
+
   it("changes mangrove parent topology across seeds, not only building props", () => {
     const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、半淹档案库和水下温室";
     const first = generateScene({ prompt, seed: "mangrove-macro-a", size: "medium", density: 0.62 }, "adaptive");

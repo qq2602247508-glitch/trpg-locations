@@ -516,6 +516,20 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
             scene.primitives.push(corridor(`terrain-${side}-bank-${index}`, 0, from.x + offset, from.z, to.x + offset, to.z, feetToMeters(cellAt(mx, mz).elevationFeet) + FLOOR_SLAB_METERS + 0.04, 1.4, "stone", ["water-city", "bank-route", "quay", "standable", "terrain-program"]));
           }
         }
+        // A water-city needs a functional waterfront node, not only blue
+        // channel cells. Keep the market dock on a legal bank beside the
+        // middle crossing so it participates in the same route/elevation
+        // contract as the canal and never becomes a floating slab.
+        const marketRow = Math.round(depth * 0.56);
+        const marketRiverX = warpedRiverX(marketRow, width, depth, phase);
+        const marketSide = marketRiverX < width * 0.5 ? 1 : -1;
+        const marketX = marketRiverX + marketSide * 7;
+        const marketCell = cellAt(Math.max(0, Math.min(width - 1, marketX)), marketRow);
+        const marketY = feetToMeters(marketCell.elevationFeet) + FLOOR_SLAB_METERS + 0.08;
+        scene.primitives.push(
+          box("terrain-water-city-market-dock", 0, marketX, marketY, marketRow, 6.5, FLOOR_SLAB_METERS, 4, "wood", ["water-city", "market-dock", "dock", "quay", "standable", "terrain-program"]),
+          corridor("terrain-water-city-market-approach", 0, marketX, marketRow + marketSide * 2.5, marketRiverX + marketSide * 3.2, marketRow, marketY, 1.2, "wood", ["water-city", "market-route", "dock", "standable", "terrain-program"]),
+        );
       }
       if (kind === "ice-crevasse") {
         const bridgeRows = [depth * 0.28, depth * 0.57, depth * 0.82];

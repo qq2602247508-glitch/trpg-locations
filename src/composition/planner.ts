@@ -10,6 +10,7 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   if (has(text, ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"])) return "crater";
   if (has(text, ["裂谷", "裂缝", "裂隙", "深渊", "rift", "crevasse", "chasm", "ravine"])) return "rift";
   if (has(text, ["火山", "熔岩", "岩浆", "volcano", "volcanic", "caldera", "lava"])) return "volcanic";
+  if (has(text, ["水城", "河道水城", "运河城", "水上市集", "船坞", "沿岸街巷", "canal city", "water city", "water market", "dock", "quay"])) return "river";
   if (has(text, ["河谷", "河流", "溪流", "瀑布", "river", "stream", "waterfall", "valley"])) return "river";
   if (has(text, ["森林", "林地", "树林", "巨树", "树冠", "forest", "woodland", "canopy"])) return "forest";
   return "generic";
@@ -69,7 +70,23 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
     return output;
   }
   if (domain === "forest") { add("forest-core", "森林", ["forest", "tree", "canopy"], "critical"); if (has(text, ["茂密", "封闭林冠", "dense", "closed canopy"])) add("dense-canopy", "封闭林冠", ["canopy", "tree-cluster"], "critical"); if (has(text, ["灌木", "林下", "undergrowth"])) add("undergrowth", "林下灌木", ["undergrowth"], "major"); if (has(text, ["空地", "clearing"])) add("clearings", "林间空地", ["clearing"], "major"); if (has(text, ["浅溪", "溪流", "stream"])) add("forest-stream", "浅溪", ["stream", "watercourse"], "major"); if (has(text, ["倒木", "fallen log"])) add("fallen-log", "倒木", ["fallen-log"], "major"); if (has(text, ["树冠战斗平台", "树冠平台", "canopy platform"])) add("canopy-platform", "树冠战斗平台", ["canopy-platform", "high-ground"], "critical"); }
-  if (domain === "river") { add("river-core", "主河道", ["river", "watercourse"], "critical"); if (has(text, ["支流", "tributary"])) add("tributary", "支流", ["tributary"], "critical"); if (has(text, ["瀑布", "落差", "waterfall", "drop"])) add("waterfall", "瀑布落差", ["waterfall", "vertical-water"], "critical"); if (has(text, ["深潭", "deep pool"])) add("deep-pool", "深潭", ["deep-pool"], "major"); }
+  if (domain === "river") {
+    const waterCity = has(text, ["水城", "河道水城", "运河城", "水上市集", "船坞", "沿岸街巷", "canal city", "water city", "water market", "dock", "quay"]);
+    if (waterCity) {
+      add("water-city-main", "弯曲主河道", ["water-city", "main-canal", "watercourse"], "critical");
+      add("water-city-branches", "支流网络", ["water-city", "branch-canal", "watercourse"], "critical");
+      if (has(text, ["石桥", "stone bridge"])) add("water-city-stone-bridge", "石桥", ["water-city", "stone-bridge", "bridge"], "critical");
+      if (has(text, ["木桥", "wood bridge"])) add("water-city-wood-bridge", "木桥", ["water-city", "wood-bridge", "bridge"], "critical");
+      if (has(text, ["水上市集", "水上市场", "water market"])) add("water-city-market", "水上市集", ["water-city", "market-dock", "quay"], "critical");
+      if (has(text, ["船坞", "码头", "dock", "quay"])) add("water-city-dock", "船坞与码头", ["water-city", "dock", "quay"], "critical");
+      if (has(text, ["沿岸街巷", "沿岸不规则街巷", "岸线街巷", "waterfront lanes", "waterfront streets"])) add("water-city-bank-lanes", "沿岸不规则街巷", ["water-city", "bank-route"], "major");
+    } else {
+      add("river-core", "主河道", ["river", "watercourse"], "critical");
+      if (has(text, ["支流", "tributary"])) add("tributary", "支流", ["tributary"], "critical");
+      if (has(text, ["瀑布", "落差", "waterfall", "drop"])) add("waterfall", "瀑布落差", ["waterfall", "vertical-water"], "critical");
+      if (has(text, ["深潭", "deep pool"])) add("deep-pool", "深潭", ["deep-pool"], "major");
+    }
+  }
   if (domain === "volcanic") { add("volcano-core", "火山口", ["caldera", "lava"], "critical"); if (has(text, ["支流", "branch"])) add("lava-branches", "熔岩支流", ["lava-branch"], "critical"); if (has(text, ["黑曜石", "obsidian"])) add("obsidian", "黑曜石脊", ["obsidian-ridge"], "major"); if (has(text, ["玄武岩", "basalt"])) add("basalt", "玄武岩战术台地", ["basalt-platform", "high-ground"], "major"); }
   if (domain === "crater") { add("crater-core", "陨石坑", ["impact-crater", "crater-rim"], "critical"); if (has(text, ["裂缝", "fracture"])) add("crater-fracture", "放射裂缝", ["radial-fracture"], "major"); }
   if (domain === "rift") { add("rift-core", "裂谷双岸", ["rift", "crevasse", "rift-bank"], "critical"); if (has(text, ["裂谷底", "底部", "rift floor", "bottom"])) add("rift-bottom", "深层裂谷底", ["rift-bottom"], "critical"); if (has(text, ["桥", "bridge"])) add("rift-crossing", "跨谷桥", ["bridge", "rift-crossing"], "critical"); if (has(text, ["下降", "梯", "descent", "ladder"])) add("rift-descent", "贴崖下降交通", ["cliff-descent", "vertical-route"], "major"); }
@@ -79,8 +96,9 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
 
 export function compileSceneComposition(request: GenerationRequest, source: SceneCompositionProgram["source"] = "local", retrievedCapabilityIds: string[] = []): SceneCompositionProgram {
   const domain = domainFor(request.prompt);
-  const grammarId = COMPOSITION_GRAMMARS.find((entry) => entry.domain === domain)?.id ?? "grammar.generic-v1";
   const text = normalized(request.prompt);
+  const isWaterCity = domain === "river" && has(text, ["水城", "河道水城", "运河城", "水上市集", "船坞", "沿岸街巷", "canal city", "water city", "water market", "dock", "quay"]);
+  const grammarId = isWaterCity ? "grammar.water-city-v1" : COMPOSITION_GRAMMARS.find((entry) => entry.domain === domain)?.id ?? "grammar.generic-v1";
   const motifIds: string[] = [];
   const domainMotif = {
     forest: "motif.closed-canopy-clearings",
@@ -90,6 +108,7 @@ export function compileSceneComposition(request: GenerationRequest, source: Scen
     rift: "motif.rift-two-banks",
   }[domain];
   if (domainMotif) motifIds.push(domainMotif);
+  if (isWaterCity) motifIds.push("motif.water-city-quays");
   if (has(text, ["木屋", "小屋", "cabin", "lodge"])) motifIds.push("motif.embedded-building");
   if (has(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) motifIds.push("motif.hollow-tree-city");
   if (has(text, ["红树林", "走私港", "港村", "mangrove", "smuggler port"])) motifIds.push("motif.mangrove-smuggler-port");
