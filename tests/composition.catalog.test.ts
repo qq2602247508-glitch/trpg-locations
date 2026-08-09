@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SPATIAL_ATOMS, auditAtomQuality, auditSemanticCoverage, catalogMaturity, compileSceneComposition } from "../src/composition";
 import { generateScene } from "../src/generators";
+import { GRID_METERS } from "../src/schema";
 
 describe("five-layer composition catalog", () => {
   it("keeps production-ready atoms behind a non-trivial quality gate", () => {
@@ -162,6 +163,10 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("lookout-tower")).toBe(true);
     expect(tags.has("medical-vault")).toBe(true);
     expect(scene.compositionProgram?.semanticCoverage?.score).toBe(100);
+    const building = scene.buildingInstances?.find((entry) => entry.id === "wilderness-core-building");
+    const postSiteCanopies = scene.primitives.filter((primitive) => primitive.tags?.includes("site-program") && primitive.tags?.includes("mangrove") && primitive.tags?.includes("canopy"));
+    expect(building).toBeDefined();
+    expect(postSiteCanopies.every((primitive) => Math.hypot(primitive.position.x / GRID_METERS - (building?.positionCells.x ?? 0), primitive.position.z / GRID_METERS - (building?.positionCells.z ?? 0)) >= 11.5)).toBe(true);
     expect(scene.diagnostics.warnings).toHaveLength(0);
   });
 
@@ -215,6 +220,8 @@ describe("five-layer composition catalog", () => {
     expect(count(dense, "thaw-pool")).toBeGreaterThan(count(sparse, "thaw-pool"));
     expect(count(dense, "ice-shelf")).toBeGreaterThan(count(sparse, "ice-shelf"));
     expect(dense.routes.length).toBeGreaterThan(sparse.routes.length);
+    expect(dense.routes.filter((route) => route.id.startsWith("ice-snow-ridge-route-")).length).toBeGreaterThan(sparse.routes.filter((route) => route.id.startsWith("ice-snow-ridge-route-")).length);
+    expect(dense.routes.filter((route) => route.id.startsWith("ice-snow-ridge-route-")).every((route) => route.points.length >= 5)).toBe(true);
     expect(signature(dense)).toBe(signature(replay));
     expect(signature(dense)).not.toBe(signature(other));
   });
@@ -231,6 +238,9 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("generator-shed")).toBe(true);
     expect(tags.has("reserve-vault")).toBe(true);
     expect(scene.diagnostics.warnings).toHaveLength(0);
+    const alternateSeed = generateScene({ prompt, seed: "round48-field-station-b", size: "medium", density: 0.72 }, "adaptive");
+    expect(alternateSeed.diagnostics.warnings).toHaveLength(0);
+    expect(alternateSeed.primitives.some((primitive) => primitive.tags?.includes("room-connector") && primitive.tags?.includes("opening"))).toBe(true);
   });
 
   it("changes mangrove parent topology across seeds, not only building props", () => {

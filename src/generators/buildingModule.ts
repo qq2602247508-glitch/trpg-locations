@@ -359,6 +359,13 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   const width = lot.siteProfile ? Math.max(4.6, primaryEnvelope?.size.x ?? lot.width * 0.72) : Math.max(5.2, lot.width * 0.9);
   const depth = lot.siteProfile ? Math.max(4.4, primaryEnvelope?.size.z ?? lot.depth * 0.68) : Math.max(5, lot.depth * 0.86);
   const primaryOffset = lot.siteProfile ? (primaryEnvelope?.offset ?? { x: 0, z: 0 }) : { x: 0, z: 0 };
+  const primaryFrontZ = primaryOffset.z + depth / 2;
+  const entryDoorLocalX = [primaryOffset.x, primaryOffset.x + width * 0.23, primaryOffset.x - width * 0.23]
+    .find((candidateX) => !envelope.parts.slice(1).some((part) => candidateX > part.offset.x - part.size.x / 2 - 0.12
+      && candidateX < part.offset.x + part.size.x / 2 + 0.12
+      && primaryFrontZ > part.offset.z - part.size.z / 2 - 0.12
+      && primaryFrontZ < part.offset.z + part.size.z / 2 + 0.12))
+    ?? primaryOffset.x;
   const wallHeight = feetToMeters(generated.floorHeightFeet[0] ?? 10);
   const upperY = baseY + wallHeight;
   // Keep the basement shell fully below the exterior grade. At exactly
@@ -375,8 +382,13 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   addRotatedBox("north-wall", primaryOffset.x, primaryOffset.z - depth / 2, width, wallHeight, 0.22, baseY, generated.material, ["wall", "building-shell", "program-room", "opening", "window-opening"]);
   addRotatedBox("west-wall", primaryOffset.x - width / 2, primaryOffset.z, 0.22, wallHeight, depth, baseY, generated.material, ["wall", "building-shell", "program-room", "opening", "window-opening"]);
   addRotatedBox("east-wall", primaryOffset.x + width / 2, primaryOffset.z, 0.22, wallHeight, depth, baseY, generated.material, ["wall", "building-shell", "program-room", "opening", "window-opening", "focus-cutaway"]);
-  addRotatedBox("south-wall-left", primaryOffset.x - width * 0.32, primaryOffset.z + depth / 2, width * 0.34, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "building-shell", "focus-cutaway"]);
-  addRotatedBox("south-wall-right", primaryOffset.x + width * 0.32, primaryOffset.z + depth / 2, width * 0.34, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "building-shell", "focus-cutaway"]);
+  const mainDoorGap = Math.min(1.35, width * 0.28);
+  const primaryWest = primaryOffset.x - width / 2;
+  const primaryEast = primaryOffset.x + width / 2;
+  const leftWallWidth = Math.max(0.3, entryDoorLocalX - mainDoorGap / 2 - primaryWest);
+  const rightWallWidth = Math.max(0.3, primaryEast - entryDoorLocalX - mainDoorGap / 2);
+  addRotatedBox("south-wall-left", primaryWest + leftWallWidth / 2, primaryFrontZ, leftWallWidth, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "opening", "building-shell", "focus-cutaway"]);
+  addRotatedBox("south-wall-right", primaryEast - rightWallWidth / 2, primaryFrontZ, rightWallWidth, wallHeight, 0.22, baseY, generated.material, ["wall", "door-frame", "opening", "building-shell", "focus-cutaway"]);
   addRotatedBox("partition-a", primaryOffset.x - width * 0.2, primaryOffset.z, 0.22, wallHeight, depth * 0.36, baseY, generated.material, ["wall", "room-partition", "door-frame"]);
   addRotatedBox("partition-b", primaryOffset.x - width * 0.2, primaryOffset.z - depth * 0.38, 0.22, wallHeight, depth * 0.18, baseY, generated.material, ["wall", "room-partition", "door-frame"]);
   const upperWidth = width * 0.72;
@@ -417,9 +429,26 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     createRoom(basementId, labels.basementName, "service", 3, lot.x, lot.z, width * 0.64, depth * 0.58, basementY),
   );
   connectRooms(scene.rooms, rootId, publicId); connectRooms(scene.rooms, publicId, serviceId); connectRooms(scene.rooms, publicId, upperId); connectRooms(scene.rooms, serviceId, basementId);
-  const frontDoorP = point(0, depth / 2);
+  const frontDoorP = point(entryDoorLocalX, primaryFrontZ);
+  const compoundSouth = Math.max(...envelope.parts.map((part) => part.offset.z + part.size.z / 2)) + 0.8;
+  const compoundWest = Math.min(...envelope.parts.map((part) => part.offset.x - part.size.x / 2)) - 0.8;
+  const compoundEast = Math.max(...envelope.parts.map((part) => part.offset.x + part.size.x / 2)) + 0.8;
+  const approachP = point(entryDoorLocalX, compoundSouth);
+  const westCornerP = point(compoundWest, compoundSouth);
+  const eastCornerP = point(compoundEast, compoundSouth);
+  const entryStart = lot.entrance ?? approachP;
+  const entryCornerP = Math.hypot(entryStart.x - westCornerP.x, entryStart.z - westCornerP.z)
+    <= Math.hypot(entryStart.x - eastCornerP.x, entryStart.z - eastCornerP.z)
+    ? westCornerP
+    : eastCornerP;
   scene.routes.push(
-    createRoute(`${lot.id}-entry-route`, "primary", [{ x: lot.entrance?.x ?? frontDoorP.x, z: lot.entrance?.z ?? frontDoorP.z, y: baseY }, { x: frontDoorP.x, z: frontDoorP.z, y: baseY }, { x: publicP.x, z: publicP.z, y: baseY }]),
+    createRoute(`${lot.id}-entry-route`, "primary", [
+      { x: entryStart.x, z: entryStart.z, y: baseY },
+      { x: entryCornerP.x, z: entryCornerP.z, y: baseY },
+      { x: approachP.x, z: approachP.z, y: baseY },
+      { x: frontDoorP.x, z: frontDoorP.z, y: baseY },
+      { x: publicP.x, z: publicP.z, y: baseY },
+    ]),
     createRoute(`${lot.id}-vertical-route`, "vertical", [{ x: stairP.x, z: stairP.z, y: baseY }, { x: upperP.x, z: upperP.z, y: upperY }]),
     createRoute(`${lot.id}-basement-route`, "vertical", [
       { x: serviceP.x, z: serviceP.z, y: baseY },
@@ -429,19 +458,116 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   );
   addRotatedBox("furnishing-public", width * 0.15, 0, Math.max(1.5, width * 0.28), feetToMeters(3), 1.2, baseY + FLOOR_SLAB_METERS, lot.kind === "clinic" ? "metal" : "wood", [labels.tags[0] ?? "furniture", "cover"]);
   addRotatedBox("furnishing-service", -width * 0.34, -depth * 0.12, Math.max(1.1, width * 0.16), feetToMeters(4), 1.1, baseY + FLOOR_SLAB_METERS, lot.kind === "factory" || lot.kind === "blacksmith" ? "metal" : "wood", [labels.tags[1] ?? "service", "cover"]);
-  for (const extension of envelope.parts.slice(1)) {
+  const extensionRooms: Array<{ id: string; x: number; z: number }> = [];
+  for (const [extensionIndex, extension] of envelope.parts.slice(1).entries()) {
     const extensionHeight = wallHeight * Math.max(0.52, extension.heightRatio);
     addRotatedBox(`envelope-${extension.id}-floor`, extension.offset.x, extension.offset.z, extension.size.x, FLOOR_SLAB_METERS, extension.size.z, baseY, generated.material === "plaster" ? "wood" : "stone", ["floor", "standable", "envelope-part"]);
-    addRotatedBox(`envelope-${extension.id}-back`, extension.offset.x, extension.offset.z - extension.size.z / 2, extension.size.x, extensionHeight, 0.2, baseY, generated.material, ["wall", "building-shell", "envelope-part", "opening"]);
-    addRotatedBox(`envelope-${extension.id}-front`, extension.offset.x, extension.offset.z + extension.size.z / 2, extension.size.x, extensionHeight, 0.2, baseY, generated.material, ["wall", "building-shell", "envelope-part", "door-frame", "focus-cutaway"]);
-    addRotatedBox(`envelope-${extension.id}-west`, extension.offset.x - extension.size.x / 2, extension.offset.z, 0.2, extensionHeight, extension.size.z, baseY, generated.material, ["wall", "building-shell", "envelope-part", "opening"]);
-    addRotatedBox(`envelope-${extension.id}-east`, extension.offset.x + extension.size.x / 2, extension.offset.z, 0.2, extensionHeight, extension.size.z, baseY, generated.material, ["wall", "building-shell", "envelope-part", "opening", "focus-cutaway"]);
+    if (!lot.siteProfile) {
+      addRotatedBox(`envelope-${extension.id}-back`, extension.offset.x, extension.offset.z - extension.size.z / 2, extension.size.x, extensionHeight, 0.2, baseY, generated.material, ["wall", "building-shell", "envelope-part", "opening"]);
+      addRotatedBox(`envelope-${extension.id}-front`, extension.offset.x, extension.offset.z + extension.size.z / 2, extension.size.x, extensionHeight, 0.2, baseY, generated.material, ["wall", "building-shell", "envelope-part", "door-frame", "focus-cutaway"]);
+      addRotatedBox(`envelope-${extension.id}-west`, extension.offset.x - extension.size.x / 2, extension.offset.z, 0.2, extensionHeight, extension.size.z, baseY, generated.material, ["wall", "building-shell", "envelope-part", "opening"]);
+      addRotatedBox(`envelope-${extension.id}-east`, extension.offset.x + extension.size.x / 2, extension.offset.z, 0.2, extensionHeight, extension.size.z, baseY, generated.material, ["wall", "building-shell", "envelope-part", "opening", "focus-cutaway"]);
+    } else {
+      const deltaX = extension.offset.x - primaryOffset.x;
+      const deltaZ = extension.offset.z - primaryOffset.z;
+      const connectionSide = Math.abs(deltaX) >= Math.abs(deltaZ)
+        ? deltaX >= 0 ? "west" : "east"
+        : deltaZ >= 0 ? "back" : "front";
+      const doorGap = Math.min(1.35, Math.max(0.9, Math.min(extension.size.x, extension.size.z) * 0.32));
+      const horizontalWall = (id: "back" | "front", z: number, cutaway: boolean) => {
+        const extra = ["wall", "building-shell", "envelope-part", ...(cutaway ? ["focus-cutaway"] : [])];
+        if (connectionSide !== id) {
+          addRotatedBox(`envelope-${extension.id}-${id}`, extension.offset.x, z, extension.size.x, extensionHeight, 0.2, baseY, generated.material, extra);
+          return;
+        }
+        const segmentWidth = Math.max(0.35, (extension.size.x - doorGap) / 2);
+        const offset = (doorGap + segmentWidth) / 2;
+        addRotatedBox(`envelope-${extension.id}-${id}-left`, extension.offset.x - offset, z, segmentWidth, extensionHeight, 0.2, baseY, generated.material, [...extra, "door-frame", "opening"]);
+        addRotatedBox(`envelope-${extension.id}-${id}-right`, extension.offset.x + offset, z, segmentWidth, extensionHeight, 0.2, baseY, generated.material, [...extra, "door-frame", "opening"]);
+      };
+      const verticalWall = (id: "west" | "east", x: number, cutaway: boolean) => {
+        const extra = ["wall", "building-shell", "envelope-part", ...(cutaway ? ["focus-cutaway"] : [])];
+        if (connectionSide !== id) {
+          addRotatedBox(`envelope-${extension.id}-${id}`, x, extension.offset.z, 0.2, extensionHeight, extension.size.z, baseY, generated.material, extra);
+          return;
+        }
+        const segmentDepth = Math.max(0.35, (extension.size.z - doorGap) / 2);
+        const offset = (doorGap + segmentDepth) / 2;
+        addRotatedBox(`envelope-${extension.id}-${id}-north`, x, extension.offset.z - offset, 0.2, extensionHeight, segmentDepth, baseY, generated.material, [...extra, "door-frame", "opening"]);
+        addRotatedBox(`envelope-${extension.id}-${id}-south`, x, extension.offset.z + offset, 0.2, extensionHeight, segmentDepth, baseY, generated.material, [...extra, "door-frame", "opening"]);
+      };
+      horizontalWall("back", extension.offset.z - extension.size.z / 2, false);
+      horizontalWall("front", extension.offset.z + extension.size.z / 2, true);
+      verticalWall("west", extension.offset.x - extension.size.x / 2, false);
+      verticalWall("east", extension.offset.x + extension.size.x / 2, true);
+    }
     const extensionRoof = point(extension.offset.x, extension.offset.z);
     if (extension.roof === "gable" || extension.roof === "hip") {
       scene.primitives.push(primitive(`${lot.id}-envelope-${extension.id}-roof`, "gable", 2, extensionRoof.x, baseY + extensionHeight, extensionRoof.z, extension.size.z * 1.06 * 1.524, Math.max(feetToMeters(2.2), extensionHeight * 0.18), extension.size.x * 1.08 * 1.524, "roof", [...tags, "roof", "envelope-part", extension.roof === "hip" ? "hip-roof" : "pitched-roof"], lot.rotation + Math.PI / 2));
     } else {
       addRotatedBox(`envelope-${extension.id}-roof`, extension.offset.x, extension.offset.z, extension.size.x * 1.04, 0.2, extension.size.z * 1.04, baseY + extensionHeight, "roof", ["roof", "flat-roof", "envelope-part", "standable"], 2);
     }
+    if (!lot.siteProfile) continue;
+    const roomProgram = interiorProgram.rooms.find((room) => room.id === `ground-service-${extensionIndex + 1}`);
+    const extensionPoint = point(extension.offset.x, extension.offset.z);
+    const extensionRoomId = `${lot.id}-${roomProgram?.id ?? `envelope-room-${extensionIndex + 1}`}`;
+    scene.rooms.push(createRoom(
+      extensionRoomId,
+      roomProgram?.name ?? `${labels.serviceName} ${extensionIndex + 1}`,
+      roomProgram?.role ?? "service",
+      0,
+      extensionPoint.x,
+      extensionPoint.z,
+      roomProgram?.sizeCells.x ?? extension.size.x * 0.82,
+      roomProgram?.sizeCells.z ?? extension.size.z * 0.78,
+      baseY,
+    ));
+    connectRooms(scene.rooms, publicId, extensionRoomId);
+    extensionRooms.push({ id: extensionRoomId, x: extensionPoint.x, z: extensionPoint.z });
+
+    const thresholdLocalX = primaryOffset.x + (extension.offset.x - primaryOffset.x) * 0.54;
+    const thresholdLocalZ = primaryOffset.z + (extension.offset.z - primaryOffset.z) * 0.54;
+    const threshold = point(thresholdLocalX, thresholdLocalZ);
+    const connectorRotation = lot.rotation + Math.atan2(extension.offset.z - primaryOffset.z, extension.offset.x - primaryOffset.x);
+    scene.primitives.push(box(
+      `${lot.id}-envelope-${extension.id}-door-threshold`,
+      0,
+      threshold.x,
+      baseY + 0.04,
+      threshold.z,
+      1.15,
+      0.12,
+      1.45,
+      "wood",
+      [...tags, "door", "opening", "room-connector", `program-room:${roomProgram?.id ?? extension.id}`],
+      connectorRotation,
+    ));
+    scene.routes.push(createRoute(`${lot.id}-envelope-${extension.id}-route`, "alternate", [
+      { x: publicP.x, z: publicP.z, y: baseY },
+      { x: threshold.x, z: threshold.z, y: baseY },
+      { x: extensionPoint.x, z: extensionPoint.z, y: baseY },
+    ], { purpose: "service", traffic: 0.34, schedule: "all" }));
+
+    const fixtureMaterial: MaterialKey = lot.siteProfile === "weather-station" || lot.siteProfile === "field-station" ? "metal" : "wood";
+    const fixtureTags = lot.siteProfile === "quarantine-station"
+      ? ["screened-bay", "medical-fixture", "cover"]
+      : lot.siteProfile === "weather-station"
+        ? ["instrument-console", "weather-instruments", "cover"]
+        : lot.siteProfile === "field-station"
+          ? ["sample-bench", "field-laboratory", "cover"]
+          : ["service-fixture", "cover"];
+    const fixtureOffset = extensionIndex % 2 === 0 ? -0.18 : 0.18;
+    addRotatedBox(
+      `envelope-${extension.id}-fixture`,
+      extension.offset.x + extension.size.x * fixtureOffset,
+      extension.offset.z,
+      Math.max(0.9, extension.size.x * 0.32),
+      feetToMeters(3.1),
+      Math.max(0.8, extension.size.z * 0.24),
+      baseY + FLOOR_SLAB_METERS,
+      fixtureMaterial,
+      [labels.tags[Math.min(extensionIndex + 1, labels.tags.length - 1)] ?? "service", ...fixtureTags],
+    );
   }
   scene.tactical.push(tacticalFeature(`${lot.id}-interior-choke`, "chokepoint", lot.x, lot.z + depth * 0.34, baseY, 1, "The independently generated entrance and internal partition form a defensible threshold."));
   const instance: BuildingInstance = {
@@ -450,7 +576,7 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     floors: 4, floorHeightFeet: [generated.floorHeightFeet[0] ?? 10, generated.floorHeightFeet[1] ?? 9, 8, 10], detailLevel: "full-interior",
     baseYMeters: baseY,
     exteriorHeightMeters: wallHeight * 1.82,
-    ...(lot.parcelId ? { parcelId: lot.parcelId } : {}), ...(lot.frontageRoadId ? { frontageRoadId: lot.frontageRoadId } : {}), ...(lot.entrance ? { entranceCells: lot.entrance } : {}),
+    ...(lot.parcelId ? { parcelId: lot.parcelId } : {}), ...(lot.frontageRoadId ? { frontageRoadId: lot.frontageRoadId } : {}), entranceCells: frontDoorP,
     buildingProgram: summarizeBuildingProgram(interiorProgram, [...labels.tags, ...functionalTags(lot)]),
     interiorProgram,
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },

@@ -799,7 +799,10 @@ export class SceneRenderer {
       if (this.focusedBuildingId) {
         if (primitiveBuildingId && primitiveBuildingId !== this.focusedBuildingId) continue;
         if (primitiveBuildingId === this.focusedBuildingId && primitive.tags?.includes("focus-cutaway")) continue;
-        if (primitiveBuildingId === this.focusedBuildingId && !focusInterior && primitive.tags?.some((tag) => tag === "envelope-part" || tag === "roof") === true) continue;
+        if (primitiveBuildingId === this.focusedBuildingId
+          && !focusInterior
+          && primitive.tags?.includes("full-interior") !== true
+          && primitive.tags?.some((tag) => tag === "envelope-part" || tag === "roof") === true) continue;
         if (!primitiveBuildingId && primitive.tags?.includes("roof-route") === true) continue;
         // The parent site's giant terrain slab used to remain visible during
         // building focus and read as a ceiling slicing through the room.
@@ -1069,7 +1072,29 @@ export class SceneRenderer {
   }
 
   private positionCamera(): void {
-    const { minX, maxX, minZ, maxZ, maxY } = this.worldBounds;
+    let { minX, maxX, minZ, maxZ, maxY } = this.worldBounds;
+    const singleBuilding = this.currentScene?.buildingInstances?.length === 1
+      ? this.currentScene.buildingInstances[0]
+      : undefined;
+    const sitePrimitives = singleBuilding && this.currentScene?.primitives.some((primitive) => primitive.tags?.includes("site-program"))
+      ? this.currentScene.primitives.filter((primitive) => primitive.tags?.includes("site-program")
+        || primitive.tags?.includes(`building-instance:${singleBuilding.id}`)
+        || primitive.tags?.includes("building-pad"))
+      : [];
+    if (sitePrimitives.length > 0 && singleBuilding) {
+      minX = Math.min(...sitePrimitives.map((primitive) => primitive.position.x - primitive.size.x / 2));
+      maxX = Math.max(...sitePrimitives.map((primitive) => primitive.position.x + primitive.size.x / 2));
+      minZ = Math.min(...sitePrimitives.map((primitive) => primitive.position.z - primitive.size.z / 2));
+      maxZ = Math.max(...sitePrimitives.map((primitive) => primitive.position.z + primitive.size.z / 2));
+      maxY = Math.max(...sitePrimitives.map((primitive) => primitive.position.y + primitive.size.y));
+      const buildingX = singleBuilding.positionCells.x * GRID_METERS;
+      const buildingZ = singleBuilding.positionCells.z * GRID_METERS;
+      const contextRadius = Math.max(singleBuilding.footprintCells.x, singleBuilding.footprintCells.z, 12) * GRID_METERS * 1.9;
+      minX = Math.max(minX, buildingX - contextRadius);
+      maxX = Math.min(maxX, buildingX + contextRadius);
+      minZ = Math.max(minZ, buildingZ - contextRadius);
+      maxZ = Math.min(maxZ, buildingZ + contextRadius);
+    }
     const width = maxX - minX;
     const depth = maxZ - minZ;
     const span = Math.max(width, depth, 5);

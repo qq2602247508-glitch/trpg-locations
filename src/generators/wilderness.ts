@@ -1019,15 +1019,48 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
     ));
   }
   const ridgeCount = 2 + Math.round(density * 5);
+  let ridgeSegments = 0;
   for (let index = 0; index < ridgeCount; index += 1) {
     const startX = meso.float(3, width * 0.42);
     const endX = meso.float(width * 0.58, width - 3);
     const baseZ = depth * (0.14 + (index + 0.5) / (ridgeCount + 1) * 0.7) + Math.sin(index * 1.7 + phase) * depth * 0.06;
     const rise = feetToMeters(meso.float(2.5, 6.5 + density * 4));
-    scene.primitives.push(
-      corridor(`ice-snow-ridge-${index}`, 0, startX, baseZ - meso.float(1, 4), endX, baseZ + meso.float(-3, 3), rise, meso.float(2.2, 4.8), "ice", ["ice", "ice-meso", "snow-ridge", "terrain", "standable", "high-ground"]),
-    );
+    const segmentCount = 4 + Math.round(density * 3) + meso.int(0, 2);
+    const ridgePhase = meso.float(-Math.PI, Math.PI);
+    const waveCount = meso.float(1.1, 1.8);
+    const waveAmplitude = meso.float(1.4, 3.6);
+    const detailAmplitude = meso.float(0.25, 0.9);
+    const points = Array.from({ length: segmentCount + 1 }, (_, segment) => {
+      const t = segment / segmentCount;
+      return {
+        x: startX + (endX - startX) * t,
+        z: baseZ
+          + Math.sin(t * Math.PI * waveCount + ridgePhase) * waveAmplitude
+          + Math.sin(t * Math.PI * 4 + phase) * detailAmplitude,
+      };
+    });
+    for (let segment = 0; segment < points.length - 1; segment += 1) {
+      const from = points[segment]!;
+      const to = points[segment + 1]!;
+      const taper = 1 - Math.abs(segment / Math.max(1, segmentCount - 1) - 0.5) * 0.45;
+      scene.primitives.push(corridor(
+        `ice-snow-ridge-${index}-segment-${segment}`,
+        0,
+        from.x,
+        from.z,
+        to.x,
+        to.z,
+        rise,
+        meso.float(2.5, 4.4 + density * 1.8) * taper,
+        "ice",
+        ["ice", "ice-meso", "snow-ridge", "snow-ridge-segment", `snow-ridge-system:${index}`, "terrain", "standable", "high-ground"],
+      ));
+      ridgeSegments += 1;
+    }
+    const crest = points[Math.floor(points.length / 2)]!;
     scene.tactical.push(tacticalFeature(`ice-ridge-high-${index}`, "highGround", (startX + endX) / 2, baseZ, rise, 2, "A wind-packed snow ridge provides elevated cover and a long sight line."));
+    scene.routes.push(createRoute(`ice-snow-ridge-route-${index}`, "alternate", points.map((point) => ({ ...point, y: rise })), { purpose: "movement", traffic: 0.18 + density * 0.22, schedule: "all" }));
+    scene.tactical.push(tacticalFeature(`ice-ridge-crest-${index}`, "cover", crest.x, crest.z, rise, 1.5, "The sinuous crest creates a continuous windbreak instead of an isolated snow bar."));
   }
   const thawPoolCount = 1 + Math.round(density * 5);
   for (let index = 0; index < thawPoolCount; index += 1) {
@@ -1084,7 +1117,7 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
   scene.routes.push(createRoute("ice-primary-route", "primary", [{ x: 1, z: depth * 0.2 }, { x: width * 0.28, z: depth * 0.4 }, { x: width * 0.72, z: depth * 0.7 }, { x: width - 1, z: depth * 0.84 }]));
   if (density >= 0.45) scene.routes.push(createRoute("ice-ridge-route", "alternate", [{ x: 2, z: depth * 0.72, y: feetToMeters(2) }, { x: width * 0.38, z: depth * 0.64, y: feetToMeters(4) }, { x: width * 0.66, z: depth * 0.35, y: feetToMeters(3) }, { x: width - 2, z: depth * 0.28, y: feetToMeters(2) }]));
   scene.tactical.push(tacticalFeature("ice-thin-surface", "hazard", width * 0.5, depth * 0.56, -0.02, 3, "Thin ice turns the lake into a moving hazard zone."), tacticalFeature("ice-entrance", "entrance", 1, depth * 0.2, 0, 2, "A whiteout trail enters from the north."));
-  scene.description = `Layered ice terrain with ${ridgeCount} wind-packed snow ridges, ${thawPoolCount} thaw pools, ${islands} raised shelves, ${crackCount} secondary crevasses, and ${density >= 0.45 ? 2 : 1} tactical routes.`;
+  scene.description = `Layered ice terrain with ${ridgeCount} continuous wind-packed ridge systems (${ridgeSegments} linked segments), ${thawPoolCount} thaw pools, ${islands} raised shelves, ${crackCount} secondary crevasses, and ${scene.routes.length} authored tactical routes.`;
 }
 
 function buildRuin(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
@@ -1343,8 +1376,20 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     if (item.tags?.some((tag) => tag === "vertical-route" || tag === "canopy-platform" || tag === "giant-tree")) return true;
     if (!item.tags?.some((tag) => tag === "natural-detail" || tag === "natural-prop" || tag === "cover" || tag === "forest" || tag === "woodland-cover" || tag === "tree" || tag === "canopy" || tag === "fallen-log")) return true;
     const px = item.position.x / CELL; const pz = item.position.z / CELL;
-    return Math.hypot(px - x, pz - z) > (archetype === "river-valley" ? 12 : 10);
+    const halfWidth = Math.max(0.4, item.size.x / CELL / 2);
+    const halfDepth = Math.max(0.4, item.size.z / CELL / 2);
+    const clearanceX = archetype === "river-valley" ? 12 : 10.5;
+    const clearanceZ = archetype === "river-valley" ? 10 : 9.5;
+    // Clear by footprint intersection. Centre-only tests left huge crowns
+    // hanging over a station even though their trunks were outside the pad.
+    return Math.abs(px - x) - halfWidth > clearanceX
+      || Math.abs(pz - z) - halfDepth > clearanceZ;
   });
+  // A child building invalidates any optional parent-terrain crest route that
+  // ran through its footprint. Keeping the route after clearing its supporting
+  // ridge produced a formally connected but physically impossible composite.
+  scene.routes = scene.routes.filter((route) => !route.id.startsWith("ice-snow-ridge-route-")
+    || route.points.every((point) => Math.hypot(point.x / CELL - x, point.z / CELL - z) > 8.5));
   scene.primitives.push(box(
     "wilderness-building-pad",
     0,
@@ -1431,9 +1476,10 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     const rootCount = Math.round(7 + context.request.density * 8);
     for (let index = 0; index < rootCount; index += 1) {
       const angle = index / rootCount * Math.PI * 2 + rootRng.float(-0.18, 0.18);
-      const radius = rootRng.float(8.5, 15);
+      const radius = rootRng.float(12.5, 18);
       const rootX = Math.max(2, Math.min(width - 2, x + Math.cos(angle) * radius));
       const rootZ = Math.max(2, Math.min(depth - 2, z + Math.sin(angle) * radius));
+      if (Math.hypot(rootX - x, rootZ - z) < 11.5) continue;
       const rootBase = terrainSurfaceY(scene, rootX, rootZ, terrainBaseY);
       scene.primitives.push(
         cylinder(`wilderness-mangrove-root-${index}`, 0, rootX, rootBase, rootZ, rootRng.float(0.55, 0.95), feetToMeters(rootRng.int(8, 14)), "wood", ["site-program", "mangrove", "prop-root", "root-buttress", "cover"]),
@@ -1449,6 +1495,8 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     // existing wetland traversal line.
     const shedZ = Math.max(5, Math.min(depth - 5, z - 7.5));
     const shedY = baseY;
+    const shedApproachX = x + 6.2;
+    const shedApproachZ = z + 5.6;
     scene.primitives.push(
       box("wilderness-quarantine-shed-floor", 0, shedX, shedY, shedZ, 6.4, FLOOR_SLAB_METERS, 5.2, "wood", ["site-program", "quarantine-shed", "floor", "standable", "restricted"]),
       box("wilderness-quarantine-shed-north", 0, shedX, shedY, shedZ - 2.6, 6.4, feetToMeters(8), 0.2, "plaster", ["site-program", "quarantine-shed", "wall", "restricted"]),
@@ -1459,13 +1507,13 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       primitive("wilderness-quarantine-shed-roof", "gable", 1, shedX, shedY + feetToMeters(8), shedZ, 5.8 * CELL, feetToMeters(3.8), 7 * CELL, "roof", ["site-program", "quarantine-shed", "roof", "pitched-roof"]),
       box("wilderness-quarantine-cot-a", 0, shedX - 1.5, shedY + FLOOR_SLAB_METERS, shedZ - 0.8, 1.1, feetToMeters(2.1), 2.5, "wood", ["site-program", "quarantine-shed", "cot", "cover"]),
       box("wilderness-quarantine-cot-b", 0, shedX + 1.5, shedY + FLOOR_SLAB_METERS, shedZ - 0.8, 1.1, feetToMeters(2.1), 2.5, "wood", ["site-program", "quarantine-shed", "cot", "cover"]),
-      corridor("wilderness-quarantine-boardwalk", 0, x + 3.8, z + 2.8, shedX - 3.2, shedZ + 2.1, shedY + FLOOR_SLAB_METERS, 1.35, "wood", ["site-program", "quarantine-shed", "boardwalk", "bridge", "standable", "supported"]),
+      corridor("wilderness-quarantine-boardwalk", 0, shedApproachX, shedApproachZ, shedX - 3.2, shedZ + 2.1, shedY + FLOOR_SLAB_METERS, 1.35, "wood", ["site-program", "quarantine-shed", "boardwalk", "bridge", "standable", "supported"]),
     );
     const shedRoom = createRoom("wilderness-quarantine-shed-room", "Detached quarantine ward", "service", 0, shedX, shedZ, 6.4, 5.2, shedY);
     scene.rooms.push(shedRoom);
     if (wildernessRoot) connectRooms(scene.rooms, wildernessRoot.id, shedRoom.id);
     scene.routes.push(createRoute("wilderness-quarantine-shed-route", "alternate", [
-      { x: x + 3.8, z: z + 2.8, y: shedY + FLOOR_SLAB_METERS },
+      { x: shedApproachX, z: shedApproachZ, y: shedY + FLOOR_SLAB_METERS },
       { x: shedX - 3.2, z: shedZ + 2.1, y: shedY + FLOOR_SLAB_METERS },
       { x: shedX, z: shedZ, y: shedY + FLOOR_SLAB_METERS },
     ], { purpose: "service", traffic: 0.22, schedule: "all" }));
@@ -1500,18 +1548,20 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   if ((weatherStation || researchStation) && wantsGeneratorShed) {
     const generatorX = Math.max(5, Math.min(width - 5, x + 9));
     const generatorZ = Math.max(5, Math.min(depth - 5, z + 4));
+    const generatorApproachX = x + 6.1;
+    const generatorApproachZ = z + 5.8;
     scene.primitives.push(
       box("wilderness-generator-shed-floor", 0, generatorX, baseY, generatorZ, 5.4, FLOOR_SLAB_METERS, 4.6, "stone", ["site-program", "generator-shed", "floor", "standable", "service"]),
       box("wilderness-generator-shed-shell", 0, generatorX, baseY, generatorZ, 5.2, feetToMeters(7.5), 4.4, "metal", ["site-program", "generator-shed", "service-building", "building-shell"]),
       box("wilderness-generator-unit", 0, generatorX, baseY + FLOOR_SLAB_METERS, generatorZ, 3.2, feetToMeters(4.2), 1.8, "darkStone", ["site-program", "generator-shed", "generator", "machinery", "cover"]),
       cylinder("wilderness-generator-exhaust", 1, generatorX + 1.6, baseY + feetToMeters(6), generatorZ - 1.2, 0.38, feetToMeters(7), "metal", ["site-program", "generator-shed", "exhaust", "vertical-landmark"]),
-      corridor("wilderness-generator-service-walk", 0, x + 3.8, z + 2.5, generatorX - 2.5, generatorZ, baseY + FLOOR_SLAB_METERS, 1.25, "wood", ["site-program", "generator-shed", "boardwalk", "bridge", "standable", "supported"]),
+      corridor("wilderness-generator-service-walk", 0, generatorApproachX, generatorApproachZ, generatorX - 2.5, generatorZ, baseY + FLOOR_SLAB_METERS, 1.25, "wood", ["site-program", "generator-shed", "boardwalk", "bridge", "standable", "supported"]),
     );
     const generatorRoom = createRoom("wilderness-generator-shed-room", "Detached generator shed", "service", 0, generatorX, generatorZ, 5.4, 4.6, baseY);
     scene.rooms.push(generatorRoom);
     if (wildernessRoot) connectRooms(scene.rooms, wildernessRoot.id, generatorRoom.id);
     scene.routes.push(createRoute("wilderness-generator-service-route", "alternate", [
-      { x: x + 3.8, z: z + 2.5, y: baseY + FLOOR_SLAB_METERS },
+      { x: generatorApproachX, z: generatorApproachZ, y: baseY + FLOOR_SLAB_METERS },
       { x: generatorX - 2.5, z: generatorZ, y: baseY + FLOOR_SLAB_METERS },
       { x: generatorX, z: generatorZ, y: baseY + FLOOR_SLAB_METERS },
     ], { purpose: "service", traffic: 0.2, schedule: "all" }));
@@ -1563,6 +1613,8 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       const primitiveZ = primitiveEntry.position.z / CELL;
       return Math.abs(primitiveZ - fissureZ) > gapHalf + 2.5;
     });
+    scene.routes = scene.routes.filter((route) => !route.id.startsWith("ice-snow-ridge-route-")
+      || route.points.every((point) => Math.abs(point.z / CELL - fissureZ) > gapHalf + 2.5));
     scene.primitives.push(
       box("wilderness-ice-bank-north", 0, width / 2, terrainBaseY - FLOOR_SLAB_METERS, northDepth / 2 + 1, width - 2, FLOOR_SLAB_METERS, northDepth, "ice", ["floor", "terrain", "ice", "rift-bank", "standable"]),
       box("wilderness-ice-bank-south", 0, width / 2, terrainBaseY - FLOOR_SLAB_METERS, fissureZ + gapHalf + southDepth / 2, width - 2, FLOOR_SLAB_METERS, southDepth, "ice", ["floor", "terrain", "ice", "rift-bank", "standable"]),
@@ -1613,14 +1665,16 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     const dockX = nearestWater ? nearestWater.position.x / CELL : Math.max(4, x - 10);
     const dockZ = nearestWater ? nearestWater.position.z / CELL : Math.min(depth - 4, z + 10);
     const dockY = baseY + FLOOR_SLAB_METERS;
+    const dockApproachX = x - 6.2;
+    const dockApproachZ = z + 5.8;
     scene.primitives.push(
-      corridor("wilderness-tidal-dock", 0, x - 4, z + 4, dockX, dockZ, dockY, 2, "wood", ["site-program", "tidal-dock", "water-access", "boardwalk", "bridge", "standable", "supported"]),
+      corridor("wilderness-tidal-dock", 0, dockApproachX, dockApproachZ, dockX, dockZ, dockY, 2, "wood", ["site-program", "tidal-dock", "water-access", "boardwalk", "bridge", "standable", "supported"]),
       box("wilderness-tidal-dock-head", 0, dockX, dockY, dockZ, 5.2, FLOOR_SLAB_METERS, 3.6, "wood", ["site-program", "tidal-dock", "water-access", "standable", "supported"]),
       cylinder("wilderness-tidal-dock-pile-a", 0, dockX - 1.6, terrainBaseY - feetToMeters(4), dockZ, 0.22, dockY - terrainBaseY + feetToMeters(8), "wood", ["site-program", "tidal-dock", "support"]),
       cylinder("wilderness-tidal-dock-pile-b", 0, dockX + 1.6, terrainBaseY - feetToMeters(4), dockZ, 0.22, dockY - terrainBaseY + feetToMeters(8), "wood", ["site-program", "tidal-dock", "support"]),
     );
     scene.routes.push(createRoute("wilderness-tidal-dock-route", "alternate", [
-      { x: x - 4, z: z + 4, y: dockY },
+      { x: dockApproachX, z: dockApproachZ, y: dockY },
       { x: dockX, z: dockZ, y: dockY },
     ], { purpose: "movement", traffic: 0.3, schedule: "all" }));
     scene.tactical.push(tacticalFeature("wilderness-tidal-dock-choke", "chokepoint", dockX, dockZ, dockY, 2, "The tidal dock is a narrow exposed water-access point."));
@@ -1697,11 +1751,10 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       { x: accessStart.x, z: accessStart.z, y: accessTerrainY },
       { x: stairEnd.xCells, z: stairEnd.zCells, y: baseY },
       { x: entrance.x, z: entrance.z, y: baseY },
-      { x, z, y: baseY },
     ], { purpose: "movement", traffic: 0.45, schedule: "all" }));
   } else {
     scene.primitives.push(corridor("wilderness-access-path", 0, accessStart.x, accessStart.z, entrance.x, entrance.z, baseY, 1.6, archetype === "forest" ? "earth" : "rock", ["road", "trail", "parcel-access", "site-program"]));
-    scene.routes.push(createRoute("wilderness-building-access", "primary", [{ x: accessStart.x, z: accessStart.z, y: baseY }, { x: entrance.x, z: entrance.z, y: baseY }, { x, z, y: baseY }], { purpose: "movement", traffic: 0.45, schedule: "all" }));
+    scene.routes.push(createRoute("wilderness-building-access", "primary", [{ x: accessStart.x, z: accessStart.z, y: baseY }, { x: entrance.x, z: entrance.z, y: baseY }], { purpose: "movement", traffic: 0.45, schedule: "all" }));
   }
   let siteRoadCount = 1;
   let siteRoadLength = Math.hypot(7, 5);

@@ -233,7 +233,7 @@ describe("scene generators", () => {
     expect(harbor.primitives.filter((primitive) => primitive.tags?.includes("road")).length).toBeGreaterThanOrEqual(8);
     expect(harbor.routes.some((route) => route.purpose === "crowd" && (route.traffic ?? 0) > 0.8)).toBe(true);
     expect(harbor.routes.some((route) => route.purpose === "service")).toBe(true);
-    expect(harbor.buildingInstances?.length).toBe(harbor.rooms.filter((room) => room.id.startsWith("settlement-building-")).length);
+    expect(harbor.buildingInstances?.every((building) => harbor.rooms.some((room) => room.id === `${building.id}-room`))).toBe(true);
     expect(harbor.buildingInstances?.every((building) => ["mass", "facade", "full-interior"].includes(building.detailLevel) && building.seed.length > 0)).toBe(true);
     expect(harbor.buildingInstances?.filter((building) => building.detailLevel === "full-interior").length).toBeGreaterThanOrEqual(3);
     expect(harbor.primitives.some((primitive) => primitive.level === 1 && primitive.tags?.includes("upper-floor"))).toBe(true);

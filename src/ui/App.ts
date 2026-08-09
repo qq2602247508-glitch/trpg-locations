@@ -272,7 +272,10 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   elements.seed.value = auditParams.get("seed")?.trim() || createSeed();
   elements.kind.value = requestedKind && Array.from(elements.kind.options).some((option) => option.value === requestedKind) ? requestedKind : "adaptive";
   if (requestedSize && Array.from(elements.size.options).some((option) => option.value === requestedSize)) elements.size.value = requestedSize;
-  if (Number.isFinite(requestedDensity)) elements.density.value = String(Math.round(Math.max(20, Math.min(100, requestedDensity))));
+  if (Number.isFinite(requestedDensity)) {
+    const normalizedDensity = requestedDensity > 0 && requestedDensity <= 1 ? requestedDensity * 100 : requestedDensity;
+    elements.density.value = String(Math.round(Math.max(20, Math.min(100, normalizedDensity))));
+  }
   updateDensityLabel(elements);
 
   renderer.onStats = (stats) => {
