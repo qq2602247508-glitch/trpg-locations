@@ -917,7 +917,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   scene.floorLabels = program.requiredFeatures.includes("hollow-tree-city")
     ? ["根部/1F", "树干下层", "树干上层", "树冠", "根系档案库"]
     : ["地面/1F", "主要上层", "屋顶", "B1"];
-  const terrain = compileSettlementTerrain(program, context.request.prompt, context.rng.fork("settlement-terrain"));
+  const terrain = compileSettlementTerrain(program, context.request.prompt, context.rng.fork("settlement-terrain"), context.request.density);
   program.terrain.kind = terrain.summary.kind;
   program.terrain.buildableRatio = terrain.summary.buildableRatio;
   program.terrain.elevationBandsFeet = terrain.summary.elevationBandsFeet;

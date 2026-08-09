@@ -387,6 +387,16 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("realizes requested impact fractures and ore piles as crater-owned geometry", () => {
+    const prompt = "陨石坑中的山地小村庄，中央撞击坑、放射状裂缝、矿石堆、木屋、观测台和进入坑底的危险下坡路";
+    const scene = generateScene({ ...request("round68-crater-village", "medium", 0.74), prompt }, "adaptive");
+    expect(scene.terrainProgram?.kind).toBe("impact-crater");
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("radial-fracture")).length).toBeGreaterThanOrEqual(20);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("ore-pile")).length).toBeGreaterThanOrEqual(5);
+    expect(scene.terrainReservations?.filter((zone) => zone.id.startsWith("impact-radial-fracture-reservation-")).length).toBeGreaterThanOrEqual(20);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("realizes a settlement on two separated ice-crevasse banks", () => {
     const scene = generateScene({ ...request("r15-ice-crevasse-settlement", "medium", 0.82), prompt: "建在冰川巨大裂隙两侧的矮人聚落，有冰桥、岩石隧道、升降货梯、熔炉大厅、贴崖住宅、地下热泉和裂隙底部的废弃矿道" }, "adaptive");
     expect(scene.terrainProgram?.kind).toBe("ice-crevasse");

@@ -80,7 +80,30 @@ function distanceToSegment(x: number, z: number, ax: number, az: number, bx: num
   return Math.hypot(x - (ax + dx * t), z - (az + dz * t));
 }
 
-export function compileSettlementTerrain(program: SiteProgram, prompt: string, rng: SeededRandom): SettlementTerrain {
+function reserveLinearTerrain(
+  scene: GeneratedScene,
+  id: string,
+  kind: "void" | "water" | "lava" | "unstable",
+  fromX: number,
+  fromZ: number,
+  toX: number,
+  toZ: number,
+  widthCells: number,
+  clearanceCells: number,
+  reason: string,
+): void {
+  (scene.terrainReservations ??= []).push({
+    id,
+    kind,
+    centerCells: { x: (fromX + toX) / 2, z: (fromZ + toZ) / 2 },
+    sizeCells: { x: widthCells, z: Math.max(1, Math.hypot(toX - fromX, toZ - fromZ)) },
+    rotationY: Math.atan2(toX - fromX, toZ - fromZ),
+    clearanceCells,
+    reason,
+  });
+}
+
+export function compileSettlementTerrain(program: SiteProgram, prompt: string, rng: SeededRandom, density = 0.5): SettlementTerrain {
   const width = Math.max(12, Math.round(program.bounds.x));
   const depth = Math.max(12, Math.round(program.bounds.z));
   const kind = terrainKind(program, prompt);
@@ -95,7 +118,15 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
   const wantsCraterBridge = includesAny(normalizedPrompt, ["跨坑", "吊桥", "悬索桥", "suspension bridge", "rope bridge"]);
   const wantsCraterShrine = includesAny(normalizedPrompt, ["神龛", "神殿", "祭坛", "shrine", "altar", "temple"]);
   const wantsCraterMine = includesAny(normalizedPrompt, ["矿工入口", "矿井", "矿洞", "mine entrance", "mine"]);
+  const wantsRadialFractures = includesAny(normalizedPrompt, ["放射状裂缝", "放射裂缝", "辐射裂缝", "radial fracture", "radial fractures", "fracture field"]);
+  const wantsOrePiles = includesAny(normalizedPrompt, ["矿石堆", "矿物堆", "矿石", "ore pile", "ore piles", "mineral pile"]);
   const wantsCraterCollapse = includesAny(normalizedPrompt, ["坍塌", "塌陷", "崩塌", "collapse", "collapsed"]);
+  const fractureCount = wantsRadialFractures ? 5 + Math.round(density * 3) : 0;
+  const fractureAngles = Array.from({ length: fractureCount }, (_, fracture) => breachAngle + (Math.PI * 2 * fracture) / Math.max(1, fractureCount) + rng.fork(`fracture-${fracture}`).float(-0.16, 0.16));
+  const radialFractureAt = (angle: number, radial: number): boolean => wantsRadialFractures
+    && radial > 0.24
+    && radial < 1.38
+    && fractureAngles.some((candidate) => Math.abs(Math.atan2(Math.sin(angle - candidate), Math.cos(angle - candidate))) < 0.018 + density * 0.018);
   const collapseAngle = breachAngle + Math.PI * 1.31;
   const crevasseCenterX = width * 0.5;
   const crevasseHalfGap = 3.8 + (program.seed.length % 5) * 0.45;
@@ -179,6 +210,11 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         surface = "void";
         buildable = false;
         standable = false;
+        hazard = true;
+      }
+      if (kind === "impact-crater" && radialFractureAt(angle, radial) && surface !== "void") {
+        elevationFeet -= radial < 0.58 ? 10 : radial < 0.92 ? 15 : 10;
+        buildable = false;
         hazard = true;
       }
       if (radial > 0.7 && radial < 1.12 && !breach) buildable = Math.abs(radial - 0.83) < 0.07 || Math.abs(radial - 1.04) < 0.055;
@@ -482,7 +518,13 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         const cell = cellAt(x, z);
         if (cell.surface === "void") continue;
         const height = feetToMeters(cell.elevationFeet - bottomFeet);
-        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `surface:${cell.surface}`, `elevation:${cell.elevationFeet}`, ...(cell.surface === "lava" ? ["lava", "lava-flow"] : []), ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(kind === "ice-crevasse" ? ["ice-crevasse", "rift-bank"] : []), ...(kind === "ice-crevasse" && cell.elevationFeet <= -10 ? ["rift-bottom"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
+        const craterDx = x + 0.5 - craterCx;
+        const craterDz = z + 0.5 - craterCz;
+        const craterAngle = Math.atan2(craterDz, craterDx);
+        const craterWarp = 1 + Math.sin(craterAngle * 3 + phase) * 0.1 + Math.sin(craterAngle * 7 - phase) * 0.045;
+        const craterRadial = Math.hypot(craterDx, craterDz) / (craterRadius * craterWarp);
+        const radialFractureCell = kind === "impact-crater" && radialFractureAt(craterAngle, craterRadial);
+        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `surface:${cell.surface}`, `elevation:${cell.elevationFeet}`, ...(cell.surface === "lava" ? ["lava", "lava-flow"] : []), ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(radialFractureCell ? ["impact-crater", "radial-fracture", "fracture-bottom"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(kind === "ice-crevasse" ? ["ice-crevasse", "rift-bank"] : []), ...(kind === "ice-crevasse" && cell.elevationFeet <= -10 ? ["rift-bottom"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
         if (cell.surface === "lava") {
           scene.primitives.push(box(`terrain-lava-surface-${x}-${z}`, 0, x + 0.5, feetToMeters(cell.elevationFeet) + 0.08, z + 0.5, 0.94, 0.12, 0.94, "warmLight", ["lava", "lava-flow", "lava-surface", "hazard", "terrain-program"]));
         }
@@ -598,6 +640,47 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           const mid = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 };
           if (cellAt(mid.x, mid.z).surface === "void") continue;
           scene.primitives.push(corridor(`${kind}-ring-road-${index + 1}`, 0, from.x, from.z, to.x, to.z, feetToMeters(cellAt(mid.x, mid.z).elevationFeet) + FLOOR_SLAB_METERS + 0.05, 1.45, "rock", [kind, "crater-ring-road", "primary-route", "standable", "terrain-program", "surface-following"]));
+        }
+        if (kind === "impact-crater" && wantsRadialFractures) {
+          for (const [fracture, angle] of fractureAngles.entries()) {
+            const innerRadius = craterRadius * rng.float(0.18, 0.34);
+            const outerRadius = craterRadius * rng.float(1.08, 1.38);
+            const segments = 4 + Math.round(density * 2);
+            for (let segment = 0; segment < segments; segment += 1) {
+              const t0 = segment / segments;
+              const t1 = (segment + 1) / segments;
+              const wobble0 = Math.sin(fracture * 1.7 + segment * 0.83) * craterRadius * 0.035;
+              const wobble1 = Math.sin(fracture * 1.7 + (segment + 1) * 0.83) * craterRadius * 0.035;
+              const from = {
+                x: craterCx + Math.cos(angle) * (innerRadius + (outerRadius - innerRadius) * t0) - Math.sin(angle) * wobble0,
+                z: craterCz + Math.sin(angle) * (innerRadius + (outerRadius - innerRadius) * t0) + Math.cos(angle) * wobble0,
+              };
+              const to = {
+                x: craterCx + Math.cos(angle) * (innerRadius + (outerRadius - innerRadius) * t1) - Math.sin(angle) * wobble1,
+                z: craterCz + Math.sin(angle) * (innerRadius + (outerRadius - innerRadius) * t1) + Math.cos(angle) * wobble1,
+              };
+              const mid = { x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 };
+              if (cellAt(mid.x, mid.z).surface === "void") continue;
+              const y = feetToMeters(cellAt(mid.x, mid.z).elevationFeet) + 0.015;
+              scene.primitives.push(
+                box(`impact-radial-fracture-${fracture}-${segment}`, 0, mid.x, y - feetToMeters(0.9), mid.z, 0.28, feetToMeters(1.8), Math.max(0.8, Math.hypot(to.x - from.x, to.z - from.z)), "darkStone", ["impact-crater", "radial-fracture", "vertical-face", "hazard", "non-walkable-facade", "terrain-program"], Math.atan2(to.z - from.z, to.x - from.x)),
+              );
+              reserveLinearTerrain(scene, `impact-radial-fracture-reservation-${fracture}-${segment}`, "unstable", from.x, from.z, to.x, to.z, 0.6, 0.35, "Radial impact fracture owns this unstable slot and blocks ordinary foundations.");
+            }
+            scene.tactical.push(tacticalFeature(`impact-radial-fracture-${fracture}-hazard`, "hazard", craterCx + Math.cos(angle) * craterRadius * 0.72, craterCz + Math.sin(angle) * craterRadius * 0.72, feetToMeters(2), 1, "A deep radial impact fracture splits the crater rim and creates a dangerous crossing."));
+          }
+        }
+        if (kind === "impact-crater" && wantsOrePiles) {
+          const oreCount = 4 + Math.round(density * 4);
+          for (let ore = 0; ore < oreCount; ore += 1) {
+            const angle = breachAngle + ore * 2.19;
+            const radius = craterRadius * (0.38 + (ore % 3) * 0.12);
+            const x = craterCx + Math.cos(angle) * radius;
+            const z = craterCz + Math.sin(angle) * radius;
+            scene.primitives.push(
+              primitive(`impact-ore-pile-${ore + 1}`, "cone", 0, x, feetToMeters(cellAt(x, z).elevationFeet) + feetToMeters(1.2), z, 0.75 + (ore % 3) * 0.2, feetToMeters(2.5 + (ore % 4)), 0.7 + (ore % 2) * 0.18, "metal", ["impact-crater", "ore-pile", "meteor-fragment", "cover", "terrain-program"]),
+            );
+          }
         }
         if (kind === "impact-crater" && wantsCraterBridge) {
           const bridgeAngle = breachAngle + Math.PI * 0.42;
