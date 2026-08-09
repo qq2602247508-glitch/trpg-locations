@@ -563,7 +563,9 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
   addFunctionalModuleGeometry(scene, lot, generated);
   addWaterfrontExterior(scene, lot, generated, y, totalHeight);
 
-  scene.rooms.push(createRoom(`${lot.id}-room`, `${lot.kind} at ${lot.district}`, lot.kind === "warehouse" ? "service" : lot.kind === "tower" ? "combat" : "public", 0, lot.x, lot.z, lot.width, lot.depth));
+  if (!scene.rooms.some((room) => room.id === `${lot.id}-room`)) {
+    scene.rooms.push(createRoom(`${lot.id}-room`, `${lot.kind} at ${lot.district}`, lot.kind === "warehouse" ? "service" : lot.kind === "tower" ? "combat" : "public", 0, lot.x, lot.z, lot.width, lot.depth));
+  }
   for (const [index, module] of (lot.functionalModules ?? []).entries()) {
     const roomProgram = interiorProgram.rooms.find((room) => room.id === `function-${module.kind}-${index + 1}`);
     if (!roomProgram) continue;

@@ -124,6 +124,30 @@ describe("five-layer composition catalog", () => {
     expect(dense.routes.filter((route) => route.id.startsWith("forest-canopy-bridge-route")).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("realizes forest cabin requirements as authored geometry", () => {
+    const prompt = "原始森林里的猎人小屋，有柴棚、陷阱线、溪边木桥和树冠观察台";
+    const scene = generateScene({ prompt, seed: "forest-cabin-requirements", size: "medium", density: 0.62 }, "adaptive");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(scene.buildingInstances?.some((building) => building.archetype === "home")).toBe(true);
+    expect(tags.has("trap-line")).toBe(true);
+    expect(tags.has("footbridge")).toBe(true);
+    expect(tags.has("canopy-observatory")).toBe(true);
+    expect(scene.rooms.some((room) => room.id.startsWith("forest-clearing-"))).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-forest-footbridge-route")).toBe(true);
+  });
+
+  it("keeps a wetland ranger-station compound connected", () => {
+    const prompt = "沼泽边缘的废弃林务站，有木桥、瞭望塔、陷阱沟、倒木防线和地下储藏室";
+    const scene = generateScene({ prompt, seed: "wetland-ranger-station", size: "medium", density: 0.62 }, "adaptive");
+    expect(scene.diagnostics.valid).toBe(true);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "home")).toBe(true);
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(tags.has("lookout-tower")).toBe(true);
+    expect(tags.has("trench")).toBe(true);
+    expect(tags.has("fallen-log-defense")).toBe(true);
+  });
+
   it("changes mangrove parent topology across seeds, not only building props", () => {
     const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、半淹档案库和水下温室";
     const first = generateScene({ prompt, seed: "mangrove-macro-a", size: "medium", density: 0.62 }, "adaptive");

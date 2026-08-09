@@ -1161,12 +1161,43 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   scene.floorHeightFeet = [Math.ceil((rendered.yOf(3) + feetToMeters(54)) / 0.3048)];
 }
 
+function terrainSurfaceY(scene: GeneratedScene, xCells: number, zCells: number, fallback: number): number {
+  const worldX = xCells * CELL;
+  const worldZ = zCells * CELL;
+  const surface = scene.primitives
+    .filter((item) => item.tags?.includes("floor") && item.tags?.includes("terrain"))
+    .sort((left, right) => Math.hypot(worldX - left.position.x, worldZ - left.position.z) - Math.hypot(worldX - right.position.x, worldZ - right.position.z))[0];
+  return surface ? surface.position.y + surface.size.y + 0.04 : fallback;
+}
+
+function streamAtForForest(scene: GeneratedScene, xCells: number, depth: number): number {
+  const streamPieces = scene.primitives
+    .filter((item) => item.tags?.includes("forest") && item.tags?.includes("stream"))
+    .map((item) => ({ x: item.position.x / CELL, z: item.position.z / CELL }))
+    .sort((left, right) => Math.abs(left.x - xCells) - Math.abs(right.x - xCells));
+  return streamPieces[0]?.z ?? depth * 0.61;
+}
+
+function ancientPlatformsNear(scene: GeneratedScene, xCells: number, zCells: number): Array<{ x: number; z: number; platformY: number }> {
+  return scene.primitives
+    .filter((item) => item.tags?.includes("canopy-platform"))
+    .map((item) => ({ x: item.position.x / CELL, z: item.position.z / CELL, platformY: item.position.y + item.size.y }))
+    .sort((left, right) => Math.hypot(left.x - xCells, left.z - zCells) - Math.hypot(right.x - xCells, right.z - zCells));
+}
+
 function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorContext, width: number, depth: number, archetype: WildernessArchetype): void {
   const text = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
-  const wantsBuilding = ["木屋", "小屋", "猎人屋", "炼金师小屋", "林间屋", "cabin", "lodge", "hut", "cottage", "outpost", "驿站"].some((term) => text.includes(term));
+  const wantsBuilding = ["木屋", "小屋", "猎人屋", "炼金师小屋", "林间屋", "林务站", "林务所", "巡护站", "护林站", "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station", "驿站"].some((term) => text.includes(term));
   if (!wantsBuilding || (archetype !== "forest" && archetype !== "river-valley" && archetype !== "mountain" && archetype !== "swamp")) return;
   const alchemical = ["炼金", "alchemy", "alchemist"].some((term) => text.includes(term));
   const hunter = ["猎人", "hunter"].some((term) => text.includes(term));
+  const wantsTrapLine = ["陷阱线", "陷阱", "绊索", "trap line", "trapline", "snare"].some((term) => text.includes(term));
+  const wantsFootbridge = ["木桥", "溪边木桥", "footbridge", "foot bridge"].some((term) => text.includes(term));
+  const wantsCanopyObservatory = ["树冠观察台", "树冠平台", "瞭望台", "观察台", "canopy observatory", "lookout"].some((term) => text.includes(term));
+  const wantsLookoutTower = ["瞭望塔", "巡逻塔", "观察塔", "lookout tower", "watchtower"].some((term) => text.includes(term));
+  const wantsTrench = ["陷阱沟", "壕沟", "沟渠", "trench", "ditch"].some((term) => text.includes(term));
+  const wantsLogDefense = ["倒木防线", "倒木", "木桩防线", "fallen-log defense", "log barricade"].some((term) => text.includes(term));
+  const streamWanted = ["溪", "溪流", "小溪", "stream", "creek"].some((term) => text.includes(term));
   const riverAnchor = archetype === "river-valley"
     ? scene.primitives
       .filter((item) => item.tags?.includes("watercourse") && !item.tags?.includes("tributary"))
@@ -1246,10 +1277,23 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     }
   }
   const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
-  const siteAnchor = scene.rooms.find((room) => room.id === "forest-clearing-room") ?? scene.rooms.find((room) => room.level === 0 && !room.id.startsWith("core-wilderness"));
+  // Forest rooms are numbered forest-clearing-1..3. The old singular
+  // forest-clearing-room fallback silently broke the building/biome graph,
+  // so choose the nearest authored clearing instead of a generic room.
+  const siteAnchor = scene.rooms
+    .filter((room) => room.level === 0
+      && room.id !== wildernessRoot?.id
+      && !room.id.startsWith("core-wilderness-core-building-")
+      && (archetype !== "forest" || room.id.startsWith("forest-clearing-")))
+    .sort((left, right) => Math.hypot(left.center.x - x, left.center.z - z) - Math.hypot(right.center.x - x, right.center.z - z))[0]
+    ?? scene.rooms.find((room) => room.level === 0 && !room.id.startsWith("core-wilderness"));
   if (wildernessRoot && siteAnchor) connectRooms(scene.rooms, siteAnchor.id, wildernessRoot.id);
-  scene.primitives.push(corridor("wilderness-access-path", 0, entrance.x - 7, entrance.z + 5, entrance.x, entrance.z, baseY, 1.6, archetype === "forest" ? "earth" : "rock", ["road", "trail", "parcel-access", "site-program"]));
-  scene.routes.push(createRoute("wilderness-building-access", "primary", [{ x: entrance.x - 7, z: entrance.z + 5, y: baseY }, { x: entrance.x, z: entrance.z, y: baseY }, { x, z, y: baseY }], { purpose: "movement", traffic: 0.45, schedule: "all" }));
+  const accessStart = {
+    x: Math.max(1.25, Math.min(width - 1.25, entrance.x - 7)),
+    z: Math.max(1.25, Math.min(depth - 1.25, entrance.z + 5)),
+  };
+  scene.primitives.push(corridor("wilderness-access-path", 0, accessStart.x, accessStart.z, entrance.x, entrance.z, baseY, 1.6, archetype === "forest" ? "earth" : "rock", ["road", "trail", "parcel-access", "site-program"]));
+  scene.routes.push(createRoute("wilderness-building-access", "primary", [{ x: accessStart.x, z: accessStart.z, y: baseY }, { x: entrance.x, z: entrance.z, y: baseY }, { x, z, y: baseY }], { purpose: "movement", traffic: 0.45, schedule: "all" }));
   let siteRoadCount = 1;
   let siteRoadLength = Math.hypot(7, 5);
   if (context.request.density >= 0.5) {
@@ -1317,6 +1361,94 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       tacticalFeature("wilderness-river-dock-choke", "chokepoint", x, dockEndZ, dockY, 2, "The narrow cabin dock is a supported river access point and exposed tactical bottleneck."),
     );
   }
+  if (archetype === "forest" && (wantsFootbridge || streamWanted)) {
+    // A footbridge crosses the actual stream corridor and lands on terrain
+    // surfaces; it is not a floating decorative slab.
+    const crossingX = Math.max(6, Math.min(width - 6, x + 6.5));
+    const crossingZ = streamAtForForest(scene, crossingX, depth);
+    const bankNorth = { xCells: crossingX, zCells: crossingZ - 2.1, yMeters: terrainSurfaceY(scene, crossingX, crossingZ - 2.1, baseY) };
+    const bankSouth = { xCells: crossingX, zCells: crossingZ + 2.1, yMeters: terrainSurfaceY(scene, crossingX, crossingZ + 2.1, baseY) };
+    const bridgeTags = ["forest", "footbridge", "stream-crossing", "standable", "surface-grid", "supported"];
+    const delta = bankNorth.yMeters - bankSouth.yMeters;
+    if (Math.abs(delta) < 0.14) {
+      scene.primitives.push(
+        corridor("wilderness-forest-footbridge", 0, bankNorth.xCells, bankNorth.zCells, bankSouth.xCells, bankSouth.zCells, (bankNorth.yMeters + bankSouth.yMeters) / 2, 1.7, "wood", bridgeTags),
+        cylinder("wilderness-forest-footbridge-pier-n", 0, bankNorth.xCells - 0.7, Math.min(bankNorth.yMeters, bankSouth.yMeters) - feetToMeters(2.5), bankNorth.zCells, 0.18, feetToMeters(5), "wood", ["forest", "footbridge", "support"]),
+        cylinder("wilderness-forest-footbridge-pier-s", 0, bankSouth.xCells + 0.7, Math.min(bankNorth.yMeters, bankSouth.yMeters) - feetToMeters(2.5), bankSouth.zCells, 0.18, feetToMeters(5), "wood", ["forest", "footbridge", "support"]),
+      );
+      scene.routes.push(createRoute("wilderness-forest-footbridge-route", "alternate", [
+        { x: bankNorth.xCells, z: bankNorth.zCells, y: bankNorth.yMeters },
+        { x: bankSouth.xCells, z: bankSouth.zCells, y: bankSouth.yMeters },
+      ], { purpose: "movement", traffic: 0.32, schedule: "all" }));
+    } else {
+      const high = delta > 0 ? bankNorth : bankSouth;
+      const low = delta > 0 ? bankSouth : bankNorth;
+      const bridge = stairConnection("wilderness-forest-footbridge", 0, low, high, 1.7, "wood", [...bridgeTags, "vertical-route"]);
+      scene.primitives.push(bridge.primitive);
+      scene.routes.push(stairRoute("wilderness-forest-footbridge-route", bridge));
+    }
+    scene.tactical.push(tacticalFeature("wilderness-forest-footbridge-choke", "chokepoint", crossingX, crossingZ, Math.min(bankNorth.yMeters, bankSouth.yMeters), 1, "A narrow timber bridge crosses the stream and exposes the approach."));
+  }
+  if (archetype === "forest" && wantsTrapLine) {
+    const trapZ = z + inlandDirection * 7.5;
+    for (let index = 0; index < 5; index += 1) {
+      const trapX = x - 7 + index * 3.5;
+      scene.primitives.push(
+        cylinder(`wilderness-trap-post-${index}`, 0, trapX, baseY, trapZ, 0.12, feetToMeters(3.5), "wood", ["forest", "trap-line", "snare", "cover"]),
+      );
+      if (index > 0) {
+        scene.primitives.push(
+          corridor(`wilderness-trap-wire-${index}`, 0, trapX - 3.5, trapZ, trapX, trapZ, baseY + feetToMeters(1.3), 0.12, "metal", ["forest", "trap-line", "snare", "hazard"]),
+        );
+      }
+    }
+    scene.tactical.push(tacticalFeature("wilderness-trap-line", "hazard", x, trapZ, baseY + feetToMeters(1.2), 2, "A visible line of low snares and trigger posts creates a hazardous approach."));
+  }
+  if (archetype === "forest" && wantsCanopyObservatory) {
+    const platform = ancientPlatformsNear(scene, x, z)[0];
+    if (platform) {
+      scene.primitives.push(
+        box("wilderness-canopy-observatory", 0, platform.x, platform.platformY + FLOOR_SLAB_METERS, platform.z, 5.4, FLOOR_SLAB_METERS, 4.8, "wood", ["forest", "canopy-observatory", "observation", "high-ground", "standable", "surface-grid"]),
+        box("wilderness-canopy-observatory-roof", 0, platform.x, platform.platformY + feetToMeters(9.5), platform.z, 5.9, 0.18, 5.3, "wood", ["forest", "canopy-observatory", "roof", "cover"]),
+      );
+      for (const [index, side] of [-1, 1].entries()) {
+        scene.primitives.push(box(`wilderness-canopy-observatory-rail-${index}`, 0, platform.x + side * 2.35, platform.platformY + feetToMeters(3.2), platform.z, 0.16, feetToMeters(2.8), 4.8, "wood", ["forest", "canopy-observatory", "railing", "cover"]));
+      }
+      scene.tactical.push(tacticalFeature("wilderness-canopy-observatory-highground", "highGround", platform.x, platform.z, platform.platformY, 2, "A roofed observation post overlooks the clearing from the tree canopy."));
+    }
+  }
+  if (wantsLookoutTower) {
+    const towerX = Math.max(5, Math.min(width - 5, x + 7.5));
+    const towerZ = Math.max(5, Math.min(depth - 5, z - 6.5));
+    const towerBase = terrainSurfaceY(scene, towerX, towerZ, baseY);
+    const towerHeight = feetToMeters(archetype === "swamp" ? 18 : 24);
+    scene.primitives.push(
+      cylinder("wilderness-site-lookout-tower", 0, towerX, towerBase + towerHeight / 2, towerZ, 1.35, towerHeight, "wood", ["site-program", "lookout-tower", "vertical-landmark", "cover"]),
+      box("wilderness-site-lookout-platform", 1, towerX, towerBase + towerHeight, towerZ, 4.8, FLOOR_SLAB_METERS, 4.8, "wood", ["site-program", "lookout-tower", "platform", "high-ground", "standable", "surface-grid"]),
+      box("wilderness-site-lookout-ladder", 0, towerX, towerBase + towerHeight / 2, towerZ + 1.2, 0.55, towerHeight, 0.18, "wood", ["site-program", "lookout-tower", "ladder", "climbable", "vertical-route", "shaft-access"]),
+    );
+    scene.routes.push(createRoute("wilderness-site-lookout-route", "vertical", [
+      { x: towerX, z: towerZ + 1.2, y: towerBase },
+      { x: towerX, z: towerZ + 1.2, y: towerBase + towerHeight },
+    ], { purpose: "movement", traffic: 0.2, schedule: "all" }));
+    scene.tactical.push(tacticalFeature("wilderness-site-lookout-highground", "highGround", towerX, towerZ, towerBase + towerHeight, 2, "A dedicated lookout tower creates a visible elevated firing position."));
+  }
+  if (wantsTrench) {
+    const trenchX = x - 5.5;
+    const trenchZ = z + 7.5;
+    scene.primitives.push(
+      box("wilderness-site-trench", 0, trenchX, baseY - feetToMeters(1.3), trenchZ, 9.5, feetToMeters(2.6), 1.4, "darkStone", ["site-program", "trench", "hazard", "vertical-face"]),
+    );
+    scene.tactical.push(tacticalFeature("wilderness-site-trench-hazard", "hazard", trenchX, trenchZ, baseY - feetToMeters(1.3), 2, "A narrow defensive ditch breaks the approach to the station."));
+  }
+  if (wantsLogDefense) {
+    const defenseZ = z + inlandDirection * 8.5;
+    for (let index = 0; index < 4; index += 1) {
+      const logX = x - 6 + index * 4;
+      scene.primitives.push(box(`wilderness-site-log-defense-${index}`, 0, logX, baseY + feetToMeters(1.1), defenseZ, 3.6, feetToMeters(2.2), 0.7, "wood", ["site-program", "fallen-log-defense", "barricade", "cover", "climbable"]));
+    }
+    scene.tactical.push(tacticalFeature("wilderness-site-log-defense", "cover", x, defenseZ, baseY, 2, "A staggered fallen-log barricade creates cover and a broken approach line."));
+  }
   if (archetype === "river-valley") {
     const inlandFenceZ = z + inlandDirection * 5;
     scene.primitives.push(
@@ -1342,25 +1474,92 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   scene.floorLabels = ["地形/1F", "阁楼", "屋顶", "B1"];
 }
 
-function buildSwamp(scene: GeneratedScene, width: number, depth: number, rng: GeneratorContext["rng"]): void {
-  scene.primitives.push(box("swamp-ground", 0, width / 2, -0.12, depth / 2, width - 2, FLOOR_SLAB_METERS, depth - 2, "moss", ["floor", "terrain", "swamp"]));
-  const pools = 5;
-  for (let index = 0; index < pools; index += 1) {
-    const x = rng.float(5, width - 5);
-    const z = rng.float(5, depth - 5);
-    const poolW = rng.int(4, 9);
-    const poolD = rng.int(3, 7);
-    scene.primitives.push(water(`swamp-pool-${index}`, 0, x, -0.24, z, poolW, 0.18, poolD, ["swamp", "water", "hazard"]));
-    scene.tactical.push(tacticalFeature(`swamp-pool-hazard-${index}`, "hazard", x, z, -0.24, 2, "Deep stagnant water slows movement and conceals a drop."));
+function buildSwamp(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const cols = Math.max(30, Math.floor(width));
+  const rows = Math.max(26, Math.floor(depth));
+  const macro = rng.fork("wetland-macro");
+  const phase = macro.float(-Math.PI, Math.PI);
+  const channelAt = (x: number) => rows * 0.5 + Math.sin(x * 0.13 + phase) * rows * (0.07 + density * 0.035);
+  const pools = Array.from({ length: 3 + Math.round(density * 4) }, () => ({
+    x: macro.float(cols * 0.16, cols * 0.84),
+    z: macro.float(rows * 0.14, rows * 0.86),
+    rx: macro.float(2.4, 4.8 + density * 2.2),
+    rz: macro.float(2.1, 4.2 + density * 1.8),
+  }));
+  const isWaterCell = (x: number, z: number) => Math.abs(z - channelAt(x)) < 1.2 + density * 0.65
+    || pools.some((pool, index) => ((x - pool.x) / pool.rx) ** 2 + ((z - pool.z) / pool.rz) ** 2 < 0.82 + Math.sin(x * 0.46 + z * 0.23 + index) * 0.14);
+  const heights: Array<number | undefined> = [];
+  for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+    if (edge === 0 || isWaterCell(x, z)) { heights.push(undefined); continue; }
+    const hummock = Math.sin(x * 0.19 + phase) * 0.7 + Math.cos(z * 0.17 - phase) * 0.65 + Math.sin((x + z) * 0.07) * 0.35;
+    heights.push(hummock > 1.05 ? 2 : hummock > 0.18 ? 1 : 0);
   }
-  const boardwalkZ = depth * 0.48;
-  scene.primitives.push(corridor("swamp-boardwalk", 0, 2, boardwalkZ, width - 2, boardwalkZ, FLOOR_SLAB_METERS + 0.2, 2, "wood", ["bridge", "boardwalk", "swamp"]));
-  scene.rooms.push(createRoom("swamp-edge", "Dry reed edge", "natural", 0, width / 2, 4, width - 4, 6), createRoom("swamp-boardwalk-room", "Raised boardwalk", "circulation", 0, width / 2, boardwalkZ, width - 4, 2), createRoom("swamp-deep", "Deep marsh", "combat", 0, width / 2, depth - 5, width - 4, 7));
+  const rendered = renderMorphologyField(scene, {
+    prefix: "swamp-morphology",
+    cols,
+    rows,
+    heights,
+    stepFeet: 3,
+    materialFor: (level) => level > 0 ? "moss" : "earth",
+    tagsFor: (level) => ["swamp", "wetland", "dry-island", "standable", level > 0 ? "hummock" : "mud-flat"],
+  });
+  const waterY = -0.08;
+  const segments = 18;
+  for (let index = 0; index < segments; index += 1) {
+    const x1 = 1 + (cols - 2) * index / segments;
+    const x2 = 1 + (cols - 2) * (index + 1) / segments;
+    const z1 = channelAt(x1);
+    const z2 = channelAt(x2);
+    scene.primitives.push(water(`swamp-channel-${index}`, 0, (x1 + x2) / 2, waterY, (z1 + z2) / 2, 2.6 + density * 1.3, 0.22, Math.hypot(x2 - x1, z2 - z1) + 0.6, ["swamp", "wetland", "watercourse", "deep-water", "hazard"], Math.atan2(x2 - x1, z2 - z1)));
+  }
+  for (const [index, pool] of pools.entries()) {
+    scene.primitives.push(water(`swamp-pool-${index}`, 0, pool.x, waterY - 0.04, pool.z, pool.rx * 1.8, 0.2, pool.rz * 1.8, ["swamp", "wetland", "pool", "hazard"]));
+    scene.tactical.push(tacticalFeature(`swamp-pool-hazard-${index}`, "hazard", pool.x, pool.z, waterY, Math.max(2, Math.ceil(pool.rx * 0.5)), "A deep wetland pool divides dry ground and conceals difficult footing."));
+  }
+  const boardwalkZ = rows * 0.48;
+  const boardwalkY = rendered.yOf(1) + feetToMeters(1.8);
+  scene.primitives.push(corridor("swamp-boardwalk", 0, 1.5, boardwalkZ, cols - 1.5, boardwalkZ, boardwalkY, 2, "wood", ["bridge", "boardwalk", "swamp", "wetland", "standable", "surface-grid", "supported"]));
+  for (let index = 0; index < 9; index += 1) {
+    const supportX = 2 + (cols - 4) * index / 8;
+    scene.primitives.push(cylinder(`swamp-boardwalk-support-${index}`, 0, supportX, waterY - feetToMeters(1.5), boardwalkZ, 0.18, boardwalkY - waterY + feetToMeters(3), "wood", ["swamp", "boardwalk", "support"]));
+  }
+  const dryCells = scene.primitives
+    .filter((item) => item.tags?.includes("swamp") && item.tags?.includes("dry-island") && item.tags?.includes("floor"))
+    .map((item) => ({ x: item.position.x / CELL, z: item.position.z / CELL, y: item.position.y + item.size.y }));
+  const snapDry = (targetX: number, targetZ: number) => dryCells
+    .slice()
+    .sort((left, right) => Math.hypot(left.x - targetX, left.z - targetZ) - Math.hypot(right.x - targetX, right.z - targetZ))[0]
+    ?? { x: targetX, z: targetZ, y: rendered.yOf(0) };
+  const dryAnchors = [
+    snapDry(cols * 0.18, rows * 0.22),
+    snapDry(cols * 0.52, rows * 0.36),
+    snapDry(cols * 0.77, rows * 0.72),
+  ];
+  scene.rooms.push(
+    createRoom("swamp-edge", "Dry reed edge", "natural", 0, dryAnchors[0]!.x, dryAnchors[0]!.z, 8, 7, dryAnchors[0]!.y),
+    createRoom("swamp-boardwalk-room", "Raised boardwalk", "circulation", 0, cols / 2, boardwalkZ, cols - 4, 2, boardwalkY),
+    createRoom("swamp-deep", "Deep marsh and hummocks", "combat", 0, dryAnchors[2]!.x, dryAnchors[2]!.z, 10, 8, dryAnchors[2]!.y),
+  );
   connectRooms(scene.rooms, "swamp-edge", "swamp-boardwalk-room");
   connectRooms(scene.rooms, "swamp-boardwalk-room", "swamp-deep");
-  scene.routes.push(createRoute("swamp-boardwalk-route", "primary", [{ x: 1, z: boardwalkZ }, { x: width / 2, z: boardwalkZ }, { x: width - 1, z: boardwalkZ }]), createRoute("swamp-reed-route", "alternate", [{ x: 3, z: 4 }, { x: width * 0.28, z: depth * 0.35 }, { x: width * 0.72, z: depth * 0.7 }, { x: width - 3, z: depth - 4 }]));
-  addCover(scene, rng, "swamp", width * 0.25, depth * 0.72, 0, 5, "moss");
-  scene.tactical.push(tacticalFeature("swamp-entrance", "entrance", 1, boardwalkZ, 0, 2, "A half-sunken path reaches the raised boardwalk."), tacticalFeature("swamp-boardwalk-choke", "chokepoint", width / 2, boardwalkZ, 0.2, 2, "The narrow boardwalk forces movement above the pools."));
+  scene.routes.push(
+    createRoute("swamp-boardwalk-route", "primary", [{ x: 1.5, z: boardwalkZ, y: boardwalkY }, { x: cols / 2, z: boardwalkZ, y: boardwalkY }, { x: cols - 1.5, z: boardwalkZ, y: boardwalkY }]),
+    createRoute("swamp-reed-route", "alternate", dryAnchors),
+  );
+  const reedCount = Math.round(16 + density * 52);
+  for (let index = 0; index < reedCount; index += 1) {
+    const x = rng.float(2, cols - 2);
+    const z = rng.float(2, rows - 2);
+    if (Math.abs(z - channelAt(x)) > 4.2 && !isWaterCell(x, z)) continue;
+    scene.primitives.push(cylinder(`swamp-reed-${index}`, 0, x, waterY, z, 0.08, feetToMeters(rng.float(2.8, 5.8)), "moss", ["swamp", "wetland", "reed", "natural-detail", "difficult-terrain"]));
+  }
+  addCover(scene, rng, "swamp", width * 0.25, depth * 0.72, rendered.yOf(0), 5, "moss");
+  scene.tactical.push(
+    tacticalFeature("swamp-entrance", "entrance", 1.5, boardwalkZ, boardwalkY, 2, "A supported timber boardwalk enters above the wetland channel."),
+    tacticalFeature("swamp-boardwalk-choke", "chokepoint", cols / 2, boardwalkZ, boardwalkY, 2, "The narrow raised boardwalk forces movement above open water."),
+  );
+  scene.description = `Wetland basin with ${rendered.walkable} dry-ground cells, ${rendered.cliffs} hummock faces, ${pools.length} irregular pools, a continuous channel, and a supported raised boardwalk.`;
 }
 
 /** Adds a second layer of authored natural structure instead of leaving large
@@ -1736,7 +1935,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, context.rng.fork("ice"));
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));
   else if (archetype === "forest") buildForest(scene, profile.width, profile.depth, profile.density, context.rng.fork("forest"), context.request.prompt);
-  else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, context.rng.fork("swamp"));
+  else if (archetype === "swamp") buildSwamp(scene, profile.width, profile.depth, profile.density, context.rng.fork("swamp"));
   else if (archetype === "underdark") buildUnderdark(scene, profile.width, profile.depth, profile.density, context.rng.fork("underdark"));
   else buildUndergroundLake(scene, profile.width, profile.depth, context.rng.fork("lake"));
   const morphology = analyzeTerrainMorphology(context.request.prompt, context.semanticHints);

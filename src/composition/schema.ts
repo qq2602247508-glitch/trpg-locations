@@ -121,7 +121,7 @@ export interface LayeredSeeds {
 }
 
 export interface DomainDensityProfile {
-  domain: "forest" | "river" | "volcanic" | "crater" | "rift" | "generic";
+  domain: "forest" | "swamp" | "river" | "volcanic" | "crater" | "rift" | "generic";
   normalized: number;
   structuralComplexity: number;
   routeComplexity: number;

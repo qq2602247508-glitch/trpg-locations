@@ -56,7 +56,7 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   // spatial domain (for example "modern city hospital").
   // An explicit dungeon noun owns the topology even when the prompt also names
   // a room function such as laboratory, temple, prison, or archive.
-  const hasWildernessBuilding = has(text, ["木屋", "小屋", "猎人屋", "cabin", "lodge", "hut", "cottage", "outpost"])
+  const hasWildernessBuilding = has(text, ["木屋", "小屋", "猎人屋", "林务站", "林务所", "巡护站", "护林站", "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station"])
     && has(text, ["森林", "树林", "林间", "巨树", "树根", "山地", "河谷", "沼泽", "海岸", "forest", "woodland", "tree", "mountain", "valley", "swamp", "coast"]);
   if (hasWildernessBuilding) return { domain: "natural", primaryKind: "wilderness" };
   const hasCompoundSettlement = has(text, [
