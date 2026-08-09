@@ -305,8 +305,14 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   });
   elements.buildingFocusButton.addEventListener("click", () => {
     if (!activeScene || !elements.buildingFocus.value) return;
+    const requestedFloor = elements.floor.value;
     renderer.setBuildingFocus(elements.buildingFocus.value);
-    elements.floor.value = "0";
+    // Re-focusing is also the camera-fit action for a selected upper or
+    // basement layer. Preserve an explicit numeric floor instead of silently
+    // returning to 1F and making B1 inspection impossible.
+    const focusedFloor = /^\d+$/.test(requestedFloor) ? requestedFloor : "0";
+    elements.floor.value = focusedFloor;
+    renderer.setFloorView(Number(focusedFloor));
     setToggle(elements.topCameraToggle, false);
     setToggle(elements.cameraToggle, false);
     setStatus(elements, "建筑内部聚焦", "ok");

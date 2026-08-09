@@ -258,11 +258,15 @@ function addFunctionalModuleGeometry(
   scene: GeneratedScene,
   lot: BuildingLot,
   generated: ReturnType<typeof profile>,
+  authoredUnderground?: { y: number; halfWidthCells: number; depthCells: number },
 ): void {
   const modules = lot.functionalModules ?? [];
   if (modules.length === 0) return;
   const baseY = lot.baseY ?? FLOOR_SLAB_METERS;
-  const undergroundY = Math.min(baseY - feetToMeters(13), FLOOR_SLAB_METERS - feetToMeters(10));
+  // Full-interior buildings already author a basement datum. Reuse it so a
+  // functional archive/greenhouse cannot create a second, vertically offset
+  // underground floor and a duplicate stair inside the same room.
+  const undergroundY = authoredUnderground?.y ?? Math.min(baseY - feetToMeters(13), FLOOR_SLAB_METERS - feetToMeters(10));
   const groundHeight = feetToMeters(generated.floorHeightFeet[0] ?? 10);
   const totalHeight = feetToMeters(generated.floorHeightFeet.reduce((sum, height) => sum + height, 0));
   const point = (x: number, z: number) => localPoint(lot, x, z);
@@ -328,18 +332,54 @@ function addFunctionalModuleGeometry(
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-high`, "highGround", tower.x, tower.z, baseY + feetToMeters(8), 1.6, "The distillation maintenance deck is reachable high ground."));
     } else if (module.kind === "archive") {
       const archiveY = undergroundY;
-      const center = addBox(module, "floor", 3, localX * 0.45, archiveY, localZ, Math.max(3.5, lot.width * 0.42), FLOOR_SLAB_METERS, Math.max(3.2, lot.depth * 0.36), "stone", ["floor", "standable", "archive-floor", "underground"]);
+      const archiveLocalX = localX * 0.45;
+      const archiveWidth = Math.max(3.5, lot.width * 0.42);
+      const archiveDepth = Math.max(3.2, lot.depth * 0.36);
+      const center = addBox(module, "floor", 3, archiveLocalX, archiveY, localZ, archiveWidth, FLOOR_SLAB_METERS, archiveDepth, "stone", ["floor", "standable", "archive-floor", "underground"]);
       for (let shelf = -1; shelf <= 1; shelf += 1) {
-        addBox(module, `shelf-${shelf + 2}`, 3, localX * 0.45 + shelf * 1.05, archiveY + FLOOR_SLAB_METERS, localZ, 0.55, feetToMeters(6.2), Math.max(2.2, lot.depth * 0.27), "wood", ["archive-shelf", "cover", "restricted"]);
+        addBox(module, `shelf-${shelf + 2}`, 3, archiveLocalX + shelf * 1.05, archiveY + FLOOR_SLAB_METERS, localZ, 0.55, feetToMeters(6.2), Math.max(2.2, lot.depth * 0.27), "wood", ["archive-shelf", "cover", "restricted"]);
       }
-      if (module.requiresWater) addBox(module, "floodwater", 3, localX * 0.45, archiveY + feetToMeters(1.1), localZ, Math.max(3, lot.width * 0.34), 0.14, Math.max(2.8, lot.depth * 0.3), "water", ["water", "flooded", "hazard"]);
-      const archiveAccess = point(localX * 0.45 + lot.width * 0.2, localZ + lot.depth * 0.16);
+      if (module.requiresWater) addBox(module, "floodwater", 3, archiveLocalX, archiveY + feetToMeters(1.1), localZ, Math.max(3, lot.width * 0.34), 0.14, Math.max(2.8, lot.depth * 0.3), "water", ["water", "flooded", "hazard"]);
+      // A single full-rise stair is longer than most archive rooms and used
+      // to split the entire cellar. Fold the same vertical connection into
+      // two opposed flights along one wall, joined by a real landing.
+      const flightRun = Math.min(3.1, Math.max(2.3, archiveDepth * 0.72));
+      const flightRise = (baseY - archiveY) / 2;
+      const flightOffsetX = Math.min(0.62, archiveWidth * 0.18);
+      const lowerFlightLocalX = archiveLocalX + flightOffsetX;
+      const upperFlightLocalX = archiveLocalX - flightOffsetX;
+      const lowerFlight = point(lowerFlightLocalX, localZ);
+      const upperFlight = point(upperFlightLocalX, localZ);
+      const landing = point(archiveLocalX, localZ + flightRun / 2);
+      const archiveAccess = point(upperFlightLocalX, localZ - flightRun / 2);
+      const archiveEntry = point(lowerFlightLocalX, localZ - flightRun / 2);
+      const shaftNorth = point(upperFlightLocalX, localZ - flightRun / 2 - 0.7);
+      const shaftSouth = point(upperFlightLocalX, localZ - flightRun / 2 + 0.7);
+      const shaftWest = point(upperFlightLocalX - 0.7, localZ - flightRun / 2);
+      const shaftEast = point(upperFlightLocalX + 0.7, localZ - flightRun / 2);
+      const archiveThresholdLocalX = authoredUnderground
+        ? Math.sign(archiveLocalX || 1) * authoredUnderground.halfWidthCells
+        : archiveLocalX;
+      const archiveThresholdLocalZ = authoredUnderground
+        ? Math.max(-authoredUnderground.depthCells * 0.38, Math.min(authoredUnderground.depthCells * 0.38, localZ))
+        : localZ;
+      const archiveThreshold = point(archiveThresholdLocalX, archiveThresholdLocalZ);
       scene.primitives.push(
         box(`${lot.id}-${module.kind}-surface-hatch`, 0, archiveAccess.x, baseY + FLOOR_SLAB_METERS, archiveAccess.z, 1.5, 0.16, 1.5, "metal", [...common, `function:${module.kind}`, "archive-hatch", "vertical-opening", "entrance"], lot.rotation),
-        stairs(`${lot.id}-${module.kind}-access-stair`, 3, archiveAccess.x, archiveY, archiveAccess.z, 1.05, baseY - archiveY, Math.max(3.8, lot.depth * 0.34), "stone", [...common, `function:${module.kind}`, "archive-access", "vertical-opening", "standable", "underground"], lot.rotation),
+        box(`${lot.id}-${module.kind}-shaft-collar-north`, 3, shaftNorth.x, baseY - 0.34, shaftNorth.z, 1.6, 0.34, 0.18, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),
+        box(`${lot.id}-${module.kind}-shaft-collar-south`, 3, shaftSouth.x, baseY - 0.34, shaftSouth.z, 1.6, 0.34, 0.18, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),
+        box(`${lot.id}-${module.kind}-shaft-collar-west`, 3, shaftWest.x, baseY - 0.34, shaftWest.z, 0.18, 0.34, 1.6, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),
+        box(`${lot.id}-${module.kind}-shaft-collar-east`, 3, shaftEast.x, baseY - 0.34, shaftEast.z, 0.18, 0.34, 1.6, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),
+        stairs(`${lot.id}-${module.kind}-access-lower-flight`, 3, lowerFlight.x, archiveY, lowerFlight.z, 1.05, flightRise, flightRun, "stone", [...common, `function:${module.kind}`, "archive-access", "stair-flight", "vertical-opening", "standable", "underground"], lot.rotation),
+        box(`${lot.id}-${module.kind}-access-landing`, 3, landing.x, archiveY + flightRise, landing.z, Math.max(1.8, flightOffsetX * 2 + 1.05), FLOOR_SLAB_METERS, 1.05, "stone", [...common, `function:${module.kind}`, "archive-access", "stair-landing", "standable", "underground"], lot.rotation),
+        stairs(`${lot.id}-${module.kind}-access-upper-flight`, 3, upperFlight.x, archiveY + flightRise, upperFlight.z, 1.05, flightRise, flightRun, "stone", [...common, `function:${module.kind}`, "archive-access", "stair-flight", "vertical-opening", "standable", "underground"], lot.rotation + Math.PI),
+        box(`${lot.id}-${module.kind}-basement-threshold`, 3, archiveThreshold.x, archiveY, archiveThreshold.z, 0.24, feetToMeters(7), 1.35, "darkStone", [...common, `function:${module.kind}`, "archive-access", "door-frame", "opening", "underground"], lot.rotation),
       );
       scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "vertical", [
         { x: archiveAccess.x, z: archiveAccess.z, y: baseY },
+        { x: landing.x, z: landing.z, y: archiveY + flightRise },
+        { x: archiveEntry.x, z: archiveEntry.z, y: archiveY },
+        { x: archiveThreshold.x, z: archiveThreshold.z, y: archiveY },
         { x: center.x, z: center.z, y: archiveY },
       ], { purpose: "service", traffic: 0.28, schedule: "all" }));
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-choke`, "chokepoint", center.x, center.z, archiveY, 1.1, "Dense archive stacks form narrow investigative and combat aisles."));
@@ -518,7 +558,8 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   const stairP = point(width * 0.28, depth * 0.08);
   scene.primitives.push(stairs(`${lot.id}-upper-stair`, 0, stairP.x, baseY, stairP.z, 1.2, wallHeight, 4.2, "wood", [...tags, "building-stair", "vertical-opening"], lot.rotation));
   const cellarP = point(-width * 0.3, depth * 0.08);
-  scene.primitives.push(stairs(`${lot.id}-cellar-stair`, 3, cellarP.x, basementY, cellarP.z, 1.2, baseY - basementY, 4.2, "stone", [...tags, "building-stair", "vertical-opening", "underground"], lot.rotation));
+  const hasDedicatedBasementAccess = lot.functionalModules?.some((module) => module.kind === "archive" && module.levelRole === "basement") === true;
+  if (!hasDedicatedBasementAccess) scene.primitives.push(stairs(`${lot.id}-cellar-stair`, 3, cellarP.x, basementY, cellarP.z, 1.2, baseY - basementY, 4.2, "stone", [...tags, "building-stair", "vertical-opening", "underground"], lot.rotation));
   const publicP = point(width * 0.13, 0);
   const serviceP = point(-width * 0.36, 0);
   const upperP = point(0.08, -0.05);
@@ -553,11 +594,11 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       { x: publicP.x, z: publicP.z, y: baseY },
     ]),
     createRoute(`${lot.id}-vertical-route`, "vertical", [{ x: stairP.x, z: stairP.z, y: baseY }, { x: upperP.x, z: upperP.z, y: upperY }]),
-    createRoute(`${lot.id}-basement-route`, "vertical", [
+    ...(!hasDedicatedBasementAccess ? [createRoute(`${lot.id}-basement-route`, "vertical", [
       { x: serviceP.x, z: serviceP.z, y: baseY },
       { x: cellarP.x, z: cellarP.z, y: baseY },
       { x: cellarP.x, z: cellarP.z, y: basementY },
-    ]),
+    ])] : []),
   );
   if (lot.kind === "home") {
     addRotatedBox("home-hearth", width * 0.23, -depth * 0.36, 1.45, feetToMeters(4.2), 1.08, baseY + FLOOR_SLAB_METERS, "darkStone", ["home-fixture", "hearth", "cover"]);
@@ -746,7 +787,7 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     interiorProgram,
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },
   };
-  addFunctionalModuleGeometry(scene, lot, generated);
+  addFunctionalModuleGeometry(scene, lot, generated, { y: basementY, halfWidthCells: width * 0.32, depthCells: depth * 0.58 });
   const totalHeight = generated.floorHeightFeet.reduce((sum, height) => sum + feetToMeters(height), 0);
   addSiteClimateFacadeGeometry(scene, lot, baseY, totalHeight, envelope);
   addWaterfrontExterior(scene, lot, generated, baseY, totalHeight);

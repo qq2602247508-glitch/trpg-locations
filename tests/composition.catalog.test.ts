@@ -356,6 +356,29 @@ describe("five-layer composition catalog", () => {
     expect(scene.description).toContain("deep main-crevasse segments");
   });
 
+  it("keeps an unfamiliar glacier research compound on a reserved-safe bank", () => {
+    const prompt = "巨大冰川裂缝研究站，主实验楼建在安全冰岸，通信塔、发电机棚、地下样本库，两座自然冰桥连接东岸观测点";
+    const scene = generateScene({ prompt, seed: "glacier-compound-reservation", size: "large", density: 0.82 }, "adaptive");
+    expect(scene.archetype).toBe("ice");
+    expect(scene.terrainReservations?.length).toBeGreaterThan(8);
+    expect(scene.buildingInstances?.some((building) => building.id === "wilderness-core-building" && building.archetype === "guild")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.id === "wilderness-ice-bank-north")).toBe(false);
+    const zones = scene.terrainReservations ?? [];
+    const protectedPieces = scene.primitives.filter((primitive) => ["building-pad", "generator-shed", "communications-tower"].some((tag) => primitive.tags?.includes(tag)) && !primitive.tags?.includes("vertical-route"));
+    const overlapsZone = (primitive: typeof scene.primitives[number], zone: typeof zones[number]) => {
+      const px = primitive.position.x / GRID_METERS;
+      const pz = primitive.position.z / GRID_METERS;
+      const halfX = primitive.size.x / GRID_METERS / 2;
+      const halfZ = primitive.size.z / GRID_METERS / 2;
+      return Math.abs(px - zone.centerCells.x) < halfX + zone.sizeCells.x / 2 + zone.clearanceCells
+        && Math.abs(pz - zone.centerCells.z) < halfZ + zone.sizeCells.z / 2 + zone.clearanceCells;
+    };
+    expect(protectedPieces.length).toBeGreaterThan(5);
+    expect(protectedPieces.every((primitive) => zones.every((zone) => !overlapsZone(primitive, zone)))).toBe(true);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("crevasse-bridge"))).toHaveLength(2);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
+
   it("generalizes unfamiliar research stations without falling back to a home envelope", () => {
     const prompt = "高山冻土湿地上的无线电研究站，有样本实验室、通信塔、发电机棚、架高栈道和地下样本库";
     const scene = generateScene({ prompt, seed: "unknown-field-station", size: "medium", density: 0.7 }, "adaptive");
@@ -370,6 +393,19 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("dirty-sample-bench")).toBe(true);
     expect(tags.has("clean-sample-bench")).toBe(true);
     expect(tags.has("clean-buffer")).toBe(true);
+    const basementStairs = scene.primitives.filter((primitive) => primitive.shape === "stairs"
+      && primitive.level === 3
+      && primitive.tags?.includes("building-instance:wilderness-core-building"));
+    expect(basementStairs).toHaveLength(2);
+    expect(basementStairs.every((primitive) => primitive.tags?.includes("archive-access") && primitive.tags?.includes("stair-flight"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.id === "wilderness-core-building-cellar-stair")).toBe(false);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("shaft-collar") && primitive.tags?.includes("top-portal"))).toBe(true);
+    const basementFloorDatums = new Set(scene.primitives
+      .filter((primitive) => primitive.level === 3
+        && primitive.tags?.includes("building-instance:wilderness-core-building")
+        && primitive.tags?.includes("floor"))
+      .map((primitive) => primitive.position.y.toFixed(4)));
+    expect(basementFloorDatums.size).toBe(1);
     expect(scene.viewProgram).toMatchObject({ version: 1, mode: "site", focusCells: building?.positionCells });
     expect(scene.viewProgram?.includeTags).toContain("site-program");
     expect(scene.diagnostics.warnings).toHaveLength(0);

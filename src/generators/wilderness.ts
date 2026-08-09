@@ -1127,6 +1127,15 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
         box(`ice-main-crevasse-wall-west-${row}`, 0, fissureX - halfGap, crevasseBottomY, plateZ, 0.38, plateRise + FLOOR_SLAB_METERS - crevasseBottomY, basePlateDepth + 0.28, "ice", ["ice", "ice-meso", "main-crevasse", "crevasse-wall", "vertical-face", "crevasse-west-bank"]),
         box(`ice-main-crevasse-wall-east-${row}`, 0, fissureX + halfGap, crevasseBottomY, plateZ, 0.38, plateRise + FLOOR_SLAB_METERS - crevasseBottomY, basePlateDepth + 0.28, "ice", ["ice", "ice-meso", "main-crevasse", "crevasse-wall", "vertical-face", "crevasse-east-bank"]),
       );
+      scene.terrainReservations ??= [];
+      scene.terrainReservations.push({
+        id: `ice-main-crevasse-reservation-${row}`,
+        kind: "void",
+        centerCells: { x: fissureX, z: plateZ },
+        sizeCells: { x: halfGap * 2, z: basePlateDepth + 0.32 },
+        clearanceCells: 0.75,
+        reason: "The glacier-spanning crevasse owns this volume; only authored crossing atoms may span it.",
+      });
       crevasseSegments += 1;
     }
     if (row % 3 === 1) {
@@ -1776,7 +1785,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const wantsTidalDock = ["潮汐码头", "潮汐栈桥", "码头", "tidal dock", "tidal pier"].some((term) => text.includes(term));
   const wantsCommunicationsTower = facilityCapabilities.communications;
   const wantsGeneratorShed = facilityCapabilities.generator;
-  const wantsIceFissure = ["冰水裂沟", "冰裂沟", "冰隙", "ice-water fissure", "ice fissure", "crevasse"].some((term) => text.includes(term));
+  const wantsIceFissure = ["冰水裂沟", "冰裂沟", "冰隙", "冰川裂缝", "冰川裂隙", "巨大裂缝", "ice-water fissure", "ice fissure", "crevasse"].some((term) => text.includes(term));
   const wantsReserveVault = facilityCapabilities.undergroundStore;
   if (coldWetland) {
     for (const primitiveEntry of scene.primitives) {
@@ -1793,10 +1802,14 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const riverX = riverAnchor?.position.x ? riverAnchor.position.x / CELL : width * 0.28;
   const riverZ = riverAnchor?.position.z ? riverAnchor.position.z / CELL : depth * 0.5;
   const shoreDirection = riverZ < depth * 0.5 ? 1 : -1;
-  const x = archetype === "forest" ? width * 0.52 : Math.max(12, Math.min(width - 12, riverX));
-  const z = archetype === "river-valley"
+  const requestedX = archetype === "forest" ? width * 0.52 : Math.max(12, Math.min(width - 12, riverX));
+  const requestedZ = archetype === "river-valley"
     ? Math.max(8, Math.min(depth - 8, riverZ + shoreDirection * 7.5))
     : archetype === "forest" ? depth * 0.5 : depth * 0.28;
+  const safePlacement = findReservedSafePlacement(scene, requestedX, requestedZ, 13, 12);
+  if (!safePlacement) return;
+  const x = safePlacement.x;
+  const z = safePlacement.z;
   const supportSurface = scene.primitives
     .filter((item) => item.tags?.includes("floor") && item.tags?.includes("terrain"))
     .map((item) => ({ item, distance: Math.hypot(item.position.x / CELL - x, item.position.z / CELL - z) }))
@@ -1856,7 +1869,11 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       ["foundation", "terrain-adapter", "site-program", ...(raisedFoundationFeet > 0 ? ["stilt-foundation", "structural-support"] : [])],
     ));
   }
-  const entrance = { x: x - 8.5, z: z + 5.5 };
+  const nearestReservation = scene.terrainReservations
+    ?.slice()
+    .sort((left, right) => Math.hypot(left.centerCells.x - x, left.centerCells.z - z) - Math.hypot(right.centerCells.x - x, right.centerCells.z - z))[0];
+  const entranceDirection = nearestReservation && nearestReservation.centerCells.x > x ? -1 : 1;
+  const entrance = { x: x + entranceDirection * 8.5, z: z + 5.5 };
   const functionalModules: BuildingFunctionalModuleProgram[] = quarantine ? [
     { id: "quarantine-observation", kind: "observation", label: "Roof quarantine watch", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 16, tags: ["quarantine-watch", "restricted"] },
     { id: "quarantine-medical-vault", kind: "archive", label: "Secret medicine vault", levelRole: "basement", minimumFootprintCells: 14, tags: ["medical-vault", "medicine-store", "secret"] },
@@ -2017,25 +2034,30 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   }
 
   if ((weatherStation || researchStation) && wantsGeneratorShed) {
-    const generatorX = Math.max(5, Math.min(width - 5, x + 9));
-    const generatorZ = Math.max(5, Math.min(depth - 5, z + 4));
-    const generatorApproachX = x + 6.1;
-    const generatorApproachZ = z + 5.8;
-    scene.primitives.push(
-      box("wilderness-generator-shed-floor", 0, generatorX, baseY, generatorZ, 5.4, FLOOR_SLAB_METERS, 4.6, "stone", ["site-program", "generator-shed", "floor", "standable", "service"]),
-      box("wilderness-generator-shed-shell", 0, generatorX, baseY, generatorZ, 5.2, feetToMeters(7.5), 4.4, "metal", ["site-program", "generator-shed", "service-building", "building-shell"]),
-      box("wilderness-generator-unit", 0, generatorX, baseY + FLOOR_SLAB_METERS, generatorZ, 3.2, feetToMeters(4.2), 1.8, "darkStone", ["site-program", "generator-shed", "generator", "machinery", "cover"]),
-      cylinder("wilderness-generator-exhaust", 1, generatorX + 1.6, baseY + feetToMeters(6), generatorZ - 1.2, 0.38, feetToMeters(7), "metal", ["site-program", "generator-shed", "exhaust", "vertical-landmark"]),
-      corridor("wilderness-generator-service-walk", 0, generatorApproachX, generatorApproachZ, generatorX - 2.5, generatorZ, baseY + FLOOR_SLAB_METERS, 1.25, "wood", ["site-program", "generator-shed", "boardwalk", "bridge", "standable", "supported"]),
-    );
-    const generatorRoom = createRoom("wilderness-generator-shed-room", "Detached generator shed", "service", 0, generatorX, generatorZ, 5.4, 4.6, baseY);
-    scene.rooms.push(generatorRoom);
-    if (wildernessRoot) connectRooms(scene.rooms, wildernessRoot.id, generatorRoom.id);
-    scene.routes.push(createRoute("wilderness-generator-service-route", "alternate", [
-      { x: generatorApproachX, z: generatorApproachZ, y: baseY + FLOOR_SLAB_METERS },
-      { x: generatorX - 2.5, z: generatorZ, y: baseY + FLOOR_SLAB_METERS },
-      { x: generatorX, z: generatorZ, y: baseY + FLOOR_SLAB_METERS },
-    ], { purpose: "service", traffic: 0.2, schedule: "all" }));
+    const generatorRequestedX = Math.max(5, Math.min(width - 5, x + entranceDirection * 9));
+    const generatorRequestedZ = Math.max(5, Math.min(depth - 5, z + 4));
+    const generatorPlacement = findReservedSafePlacement(scene, generatorRequestedX, generatorRequestedZ, 5.4, 4.6);
+    if (generatorPlacement) {
+      const generatorX = generatorPlacement.x;
+      const generatorZ = generatorPlacement.z;
+      const generatorApproachX = x + entranceDirection * 6.1;
+      const generatorApproachZ = z + 5.8;
+      scene.primitives.push(
+        box("wilderness-generator-shed-floor", 0, generatorX, baseY, generatorZ, 5.4, FLOOR_SLAB_METERS, 4.6, "stone", ["site-program", "generator-shed", "floor", "standable", "service"]),
+        box("wilderness-generator-shed-shell", 0, generatorX, baseY, generatorZ, 5.2, feetToMeters(7.5), 4.4, "metal", ["site-program", "generator-shed", "service-building", "building-shell"]),
+        box("wilderness-generator-unit", 0, generatorX, baseY + FLOOR_SLAB_METERS, generatorZ, 3.2, feetToMeters(4.2), 1.8, "darkStone", ["site-program", "generator-shed", "generator", "machinery", "cover"]),
+        cylinder("wilderness-generator-exhaust", 1, generatorX + entranceDirection * 1.6, baseY + feetToMeters(6), generatorZ - 1.2, 0.38, feetToMeters(7), "metal", ["site-program", "generator-shed", "exhaust", "vertical-landmark"]),
+        corridor("wilderness-generator-service-walk", 0, generatorApproachX, generatorApproachZ, generatorX - entranceDirection * 2.5, generatorZ, baseY + FLOOR_SLAB_METERS, 1.25, "wood", ["site-program", "generator-shed", "boardwalk", "bridge", "standable", "supported"]),
+      );
+      const generatorRoom = createRoom("wilderness-generator-shed-room", "Detached generator shed", "service", 0, generatorX, generatorZ, 5.4, 4.6, baseY);
+      scene.rooms.push(generatorRoom);
+      if (wildernessRoot) connectRooms(scene.rooms, wildernessRoot.id, generatorRoom.id);
+      scene.routes.push(createRoute("wilderness-generator-service-route", "alternate", [
+        { x: generatorApproachX, z: generatorApproachZ, y: baseY + FLOOR_SLAB_METERS },
+        { x: generatorX - entranceDirection * 2.5, z: generatorZ, y: baseY + FLOOR_SLAB_METERS },
+        { x: generatorX, z: generatorZ, y: baseY + FLOOR_SLAB_METERS },
+      ], { purpose: "service", traffic: 0.2, schedule: "all" }));
+    }
   }
 
   if (weatherStation) {
@@ -2049,26 +2071,31 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   }
 
   if ((weatherStation || researchStation) && wantsCommunicationsTower) {
-    const towerX = Math.max(5, Math.min(width - 5, x - 8.5));
-    const towerZ = Math.max(5, Math.min(depth - 5, z - 5));
-    const towerBase = terrainSurfaceY(scene, towerX, towerZ, terrainBaseY);
-    const towerHeight = feetToMeters(32);
-    scene.primitives.push(
-      cylinder("wilderness-communications-tower-mast", 0, towerX, towerBase, towerZ, 0.52, towerHeight, "metal", ["site-program", "communications-tower", "antenna", "vertical-landmark", "climbable"]),
-      box("wilderness-communications-tower-yard", 0, towerX, towerBase, towerZ, 5.6, FLOOR_SLAB_METERS, 5.6, "rock", ["site-program", "communications-tower", "floor", "standable", "supported"]),
-      box("wilderness-communications-tower-ladder", 0, towerX, towerBase + towerHeight / 2, towerZ + 0.7, 0.45, towerHeight, 0.16, "metal", ["site-program", "communications-tower", "ladder", "vertical-route", "shaft-access", "climbable"]),
-    );
-    for (const [index, heightRatio] of [0.36, 0.62, 0.86].entries()) {
-      scene.primitives.push(box(`wilderness-communications-array-${index + 1}`, 1, towerX, towerBase + towerHeight * heightRatio, towerZ, 4.5 - index * 0.6, 0.18, 0.25, "metal", ["site-program", "communications-tower", "antenna-array", "vertical-landmark"]));
+    const towerRequestedX = Math.max(5, Math.min(width - 5, x - entranceDirection * 8.5));
+    const towerRequestedZ = Math.max(5, Math.min(depth - 5, z - 5));
+    const towerPlacement = findReservedSafePlacement(scene, towerRequestedX, towerRequestedZ, 5.6, 5.6);
+    if (towerPlacement) {
+      const towerX = towerPlacement.x;
+      const towerZ = towerPlacement.z;
+      const towerBase = terrainSurfaceY(scene, towerX, towerZ, terrainBaseY);
+      const towerHeight = feetToMeters(32);
+      scene.primitives.push(
+        cylinder("wilderness-communications-tower-mast", 0, towerX, towerBase, towerZ, 0.52, towerHeight, "metal", ["site-program", "communications-tower", "antenna", "vertical-landmark", "climbable"]),
+        box("wilderness-communications-tower-yard", 0, towerX, towerBase, towerZ, 5.6, FLOOR_SLAB_METERS, 5.6, "rock", ["site-program", "communications-tower", "floor", "standable", "supported"]),
+        box("wilderness-communications-tower-ladder", 0, towerX, towerBase + towerHeight / 2, towerZ + 0.7, 0.45, towerHeight, 0.16, "metal", ["site-program", "communications-tower", "ladder", "vertical-route", "shaft-access", "climbable"]),
+      );
+      for (const [index, heightRatio] of [0.36, 0.62, 0.86].entries()) {
+        scene.primitives.push(box(`wilderness-communications-array-${index + 1}`, 1, towerX, towerBase + towerHeight * heightRatio, towerZ, 4.5 - index * 0.6, 0.18, 0.25, "metal", ["site-program", "communications-tower", "antenna-array", "vertical-landmark"]));
+      }
+      scene.routes.push(createRoute("wilderness-communications-tower-route", "vertical", [
+        { x: towerX, z: towerZ + 0.7, y: towerBase },
+        { x: towerX, z: towerZ + 0.7, y: towerBase + towerHeight },
+      ], { purpose: "service", traffic: 0.08, schedule: "all" }));
+      scene.tactical.push(tacticalFeature("wilderness-communications-tower-high", "highGround", towerX, towerZ, towerBase + towerHeight, 2, "The communications mast is a climbable but exposed observation landmark."));
     }
-    scene.routes.push(createRoute("wilderness-communications-tower-route", "vertical", [
-      { x: towerX, z: towerZ + 0.7, y: towerBase },
-      { x: towerX, z: towerZ + 0.7, y: towerBase + towerHeight },
-    ], { purpose: "service", traffic: 0.08, schedule: "all" }));
-    scene.tactical.push(tacticalFeature("wilderness-communications-tower-high", "highGround", towerX, towerZ, towerBase + towerHeight, 2, "The communications mast is a climbable but exposed observation landmark."));
   }
 
-  if (archetype === "ice" && wantsIceFissure) {
+  if (archetype === "ice" && wantsIceFissure && !scene.terrainReservations?.some((zone) => zone.kind === "void")) {
     const fissureZ = Math.max(7, Math.min(depth - 7, z + 10));
     const fissureY = terrainBaseY - feetToMeters(9);
     const bend = context.rng.fork("ice-fissure").float(-2.5, 2.5);
@@ -2500,6 +2527,8 @@ function buildSwamp(scene: GeneratedScene, width: number, depth: number, density
 }
 
 function overlapsReservedTerrainVoid(scene: GeneratedScene, xCells: number, zCells: number, paddingCells = 1): boolean {
+  if (scene.terrainReservations?.some((zone) => Math.abs(xCells - zone.centerCells.x) <= zone.sizeCells.x / 2 + zone.clearanceCells + paddingCells
+    && Math.abs(zCells - zone.centerCells.z) <= zone.sizeCells.z / 2 + zone.clearanceCells + paddingCells)) return true;
   return scene.primitives.some((primitiveEntry) => {
     if (!primitiveEntry.tags?.includes("crevasse-bottom")) return false;
     const centerX = primitiveEntry.position.x / CELL;
@@ -2508,6 +2537,37 @@ function overlapsReservedTerrainVoid(scene: GeneratedScene, xCells: number, zCel
     const halfDepth = primitiveEntry.size.z / CELL / 2 + paddingCells;
     return Math.abs(xCells - centerX) <= halfWidth && Math.abs(zCells - centerZ) <= halfDepth;
   });
+}
+
+function terrainSupportsPoint(scene: GeneratedScene, xCells: number, zCells: number): boolean {
+  return scene.primitives.some((primitiveEntry) => {
+    if (!primitiveEntry.tags?.includes("floor") || !primitiveEntry.tags?.includes("terrain") || primitiveEntry.tags?.includes("hazard")) return false;
+    const centerX = primitiveEntry.position.x / CELL;
+    const centerZ = primitiveEntry.position.z / CELL;
+    return Math.abs(xCells - centerX) <= primitiveEntry.size.x / CELL / 2 - 0.15
+      && Math.abs(zCells - centerZ) <= primitiveEntry.size.z / CELL / 2 - 0.15;
+  });
+}
+
+function findReservedSafePlacement(scene: GeneratedScene, requestedX: number, requestedZ: number, widthCells: number, depthCells: number): { x: number; z: number } | undefined {
+  if (!scene.terrainReservations?.length) return { x: requestedX, z: requestedZ };
+  const halfX = widthCells / 2; const halfZ = depthCells / 2;
+  const withinBounds = (x: number, z: number) => x >= halfX + 1 && x <= scene.boundsCells.x - halfX - 1 && z >= halfZ + 1 && z <= scene.boundsCells.z - halfZ - 1;
+  const supported = (x: number, z: number) => [
+    [x, z],
+    [x - halfX, z - halfZ], [x + halfX, z - halfZ],
+    [x - halfX, z + halfZ], [x + halfX, z + halfZ],
+  ].every(([px, pz]) => terrainSupportsPoint(scene, px!, pz!));
+  const valid = (x: number, z: number) => withinBounds(x, z)
+    && !overlapsReservedTerrainVoid(scene, x, z, Math.max(halfX, halfZ) + 0.75)
+    && supported(x, z);
+  if (valid(requestedX, requestedZ)) return { x: requestedX, z: requestedZ };
+  const candidates: Array<{ x: number; z: number; score: number }> = [];
+  for (let z = halfZ + 1; z <= scene.boundsCells.z - halfZ - 1; z += 2) for (let x = halfX + 1; x <= scene.boundsCells.x - halfX - 1; x += 2) {
+    if (!valid(x, z)) continue;
+    candidates.push({ x, z, score: Math.hypot(x - requestedX, z - requestedZ) });
+  }
+  return candidates.sort((left, right) => left.score - right.score)[0];
 }
 
 /** Adds a second layer of authored natural structure instead of leaving large
@@ -2712,14 +2772,21 @@ function addSemanticAnchorLandmarks(scene: GeneratedScene, hints: SemanticGenera
   if (!hints || hints.anchors.length === 0) return;
   for (const [anchorIndex, anchor] of hints.anchors.slice(0, 5).entries()) {
     const hash = semanticHash(anchor);
-    const x = width * (0.18 + ((hash % 57) / 100));
-    const z = depth * (0.18 + (((hash >>> 7) % 57) / 100));
+    const requestedX = width * (0.18 + ((hash % 57) / 100));
+    const requestedZ = depth * (0.18 + (((hash >>> 7) % 57) / 100));
+    const anchorPlacement = findReservedSafePlacement(scene, requestedX, requestedZ, 6, 6);
+    if (!anchorPlacement) continue;
+    const { x, z } = anchorPlacement;
     const count = 2 + (hash % 3);
     const material: MaterialKey = hints.theme === "mystic" ? "warmLight" : hints.environment === "ruin" ? "stone" : hints.environment === "underground" ? "darkStone" : "rock";
     for (let index = 0; index < count; index += 1) {
       const angle = (Math.PI * 2 * index) / count + rng.float(-0.35, 0.35);
-      const px = x + Math.cos(angle) * rng.float(1.5, 4);
-      const pz = z + Math.sin(angle) * rng.float(1.5, 4);
+      const requestedPx = x + Math.cos(angle) * rng.float(1.5, 4);
+      const requestedPz = z + Math.sin(angle) * rng.float(1.5, 4);
+      const landmarkPlacement = findReservedSafePlacement(scene, requestedPx, requestedPz, 2.5, 2.5);
+      if (!landmarkPlacement) continue;
+      const px = landmarkPlacement.x;
+      const pz = landmarkPlacement.z;
       const height = feetToMeters(5 + ((hash >>> (index + 3)) % 16));
       const shape = (["cylinder", "cone", "sphere"] as const)[(hash + index) % 3] ?? "cylinder";
       scene.primitives.push(primitive(`semantic-anchor-${anchorIndex}-${index}`, shape, 0, px, FLOOR_SLAB_METERS, pz, feetToMeters(rng.float(2.5, 5)), height, feetToMeters(rng.float(2.5, 5)), material, ["semantic-anchor", `concept:${anchor.slice(0, 24)}`, "landmark", index === 0 ? "cover" : "detail"]));

@@ -152,6 +152,18 @@ export interface ViewProgram {
   reason: string;
 }
 
+/** A parent-terrain volume that later composition passes must not occupy.
+ * Coordinates and sizes are expressed in the same 5-ft cell space used by
+ * rooms, routes and building placement. */
+export interface TerrainReservationZone {
+  id: string;
+  kind: "void" | "water" | "lava" | "unstable" | "clearance";
+  centerCells: Vec2;
+  sizeCells: Vec2;
+  clearanceCells: number;
+  reason: string;
+}
+
 export interface GeneratedScene {
   version: 1;
   kind: SceneKind;
@@ -184,6 +196,8 @@ export interface GeneratedScene {
   siteProgram?: SiteProgramSummary;
   /** Parent terrain contract compiled before settlement roads and buildings. */
   terrainProgram?: TerrainProgramSummary;
+  /** Explicit no-build/no-prop volumes owned by the parent terrain grammar. */
+  terrainReservations?: TerrainReservationZone[];
   /** How buildings and circulation were adapted onto that parent terrain. */
   settlementAdaptation?: SettlementAdaptationProgramSummary;
   buildingProgram?: BuildingProgramSummary;

@@ -1316,29 +1316,38 @@ export class SceneRenderer {
   }
 
   private createStairsGeometry(): THREE.BufferGeometry {
-    const steps = 5;
-    const shape = new THREE.Shape();
-    shape.moveTo(-0.5, -0.5);
-    shape.lineTo(0.5, -0.5);
-    shape.lineTo(0.5, 0.5);
-    for (let index = steps - 1; index >= 0; index -= 1) {
-      const x = -0.5 + (index / steps) * 1;
-      const y = -0.5 + ((index + 1) / steps) * 1;
-      shape.lineTo(x, y);
-      shape.lineTo(x, y - 1 / steps);
+    // Author open treads instead of one solid saw-tooth extrusion. The old
+    // solid profile exposed a rise-high side face; in cutaways and basement
+    // views that face read as a giant wall and hid the room the stair served.
+    // These twelve closed tread boxes keep the same unit contract (X width,
+    // Y rise, Z run) while preserving sight lines beneath and beside a stair.
+    const steps = 12;
+    const treadThickness = 0.045;
+    const vertices: number[] = [];
+    const indices: number[] = [];
+    const addFace = (a: number[], b: number[], c: number[], d: number[]) => {
+      const offset = vertices.length / 3;
+      vertices.push(...a, ...b, ...c, ...d);
+      indices.push(offset, offset + 1, offset + 2, offset, offset + 2, offset + 3);
+    };
+    const addTread = (centerY: number, centerZ: number) => {
+      const x0 = -0.5; const x1 = 0.5;
+      const y0 = centerY - treadThickness / 2; const y1 = centerY + treadThickness / 2;
+      const z0 = centerZ - 0.5 / steps; const z1 = centerZ + 0.5 / steps;
+      addFace([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]);
+      addFace([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]);
+      addFace([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]);
+      addFace([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]);
+      addFace([x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]);
+      addFace([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]);
+    };
+    for (let index = 0; index < steps; index += 1) {
+      addTread(-0.5 + (index + 1) / steps, -0.5 + (index + 0.5) / steps);
     }
-    shape.closePath();
-    const geometry = new THREE.ExtrudeGeometry(shape, {
-      depth: 1,
-      steps: 1,
-      bevelEnabled: false,
-    });
-    geometry.translate(0, 0, -0.5);
-    // The scene contract stores stair width on X and stair run on Z. The
-    // profile above is authored in XY and extruded through Z, so rotate it
-    // once: extrusion becomes local X (width) and the rising profile becomes
-    // local Z (run). Authored rotationY can then steer the run like corridors.
-    geometry.rotateY(-Math.PI / 2);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
     return geometry;
   }
 
