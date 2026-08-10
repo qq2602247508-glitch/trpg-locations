@@ -344,6 +344,35 @@ describe("scene generators", () => {
     expect(hasTag(canalCity, "main-canal")).toBe(true);
   });
 
+  it("keeps explicit city landmarks as independent building instances", () => {
+    const prompt = "D&D 深水城港区，沿海崖和旧城坡地展开，有弯曲石板主街、鱼市码头、法师塔、神殿、酒馆、贫民巷、城墙门楼和跨运河石桥";
+    const scene = generateScene({ ...request("round70-deepwater-landmarks", "medium", 0.62), prompt }, "adaptive");
+    expect(scene.siteProgram?.siteType).toBe("harbor-district");
+    expect(scene.buildingInstances?.some((building) => building.archetype === "tower")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "shrine")).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "tavern")).toBe(true);
+    expect(scene.buildingInstances?.every((building) => Boolean(building.buildingProgram))).toBe(true);
+    const wizardTower = scene.buildingInstances?.find((building) => building.archetype === "tower");
+    expect(wizardTower?.buildingProgram?.requiredFeatures).toContain("alchemy-laboratory");
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("spell-library"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("telescope"))).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(80);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
+  it("composes an unfamiliar mushroom farming village from reusable mine and building atoms", () => {
+    const prompt = "建在旧矿井口的蘑菇农夫村庄，有木屋、菌类温室、矿车轨道、地下水井和石桥";
+    const scene = generateScene({ ...request("round70-mine-mushroom-village", "medium", 0.62), prompt }, "adaptive");
+    expect(scene.siteProgram?.siteType).toBe("village");
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("mine-entrance"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("mine-cart-track"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("underground-well"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("fungal") && primitive.tags?.includes("greenhouse"))).toBe(true);
+    expect(scene.buildingInstances?.some((building) => building.archetype === "home")).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(90);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("plans premodern settlements through an auditable organic morphology program", () => {
     const scene = generateScene({ ...request("r13-organic-waterdeep", "large", 0.76), prompt: "深水城旧港区，前现代弯曲街巷、码头、鱼市、酒馆、神殿与仓库" }, "adaptive");
     expect(scene.sceneProgram?.domain).toBe("settlement");

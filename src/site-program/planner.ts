@@ -53,7 +53,7 @@ function requestedBuildingKinds(text: string): SettlementBuildingKind[] {
   add("tavern", ["酒馆", "旅店", "旅馆", "酒店", "酒吧", "tavern", "inn", "hotel", "bar"]);
   add("guild", ["公会", "学院", "学校", "大学", "警察驻所", "警察局", "警局", "办公室", "guild", "academy", "school", "college", "university", "police station", "police post", "office"]);
   add("shrine", ["神殿", "神庙", "教堂", "礼拜堂", "shrine", "temple", "church", "chapel"]);
-  add("tower", ["岗楼", "巡逻岗", "河上巡逻岗", "瞭望塔", "巡逻塔", "观测塔", "观星穹顶", "灯塔", "无线电塔", "钟塔", "控制塔", "watchtower", "guard tower", "patrol tower", "observation tower", "observatory dome", "lighthouse", "radio tower", "bell tower", "control tower"]);
+  add("tower", ["法师塔", "魔法塔", "巫师塔", "炼金塔", "高塔", "岗楼", "巡逻岗", "河上巡逻岗", "瞭望塔", "巡逻塔", "观测塔", "观星穹顶", "灯塔", "无线电塔", "钟塔", "控制塔", "wizard tower", "mage tower", "alchemy tower", "watchtower", "guard tower", "patrol tower", "observation tower", "observatory dome", "lighthouse", "radio tower", "bell tower", "control tower"]);
   add("mill", ["磨坊", "水磨坊", "潮汐磨坊", "木制水轮", "水轮", "mill", "waterwheel", "tidal mill"]);
   add("blacksmith", ["铁匠", "武器工坊", "blacksmith", "weapon workshop"]);
   add("clinic", ["诊所", "医院", "野战医院", "clinic", "hospital"]);
@@ -148,6 +148,8 @@ function requestedSiteFeatures(text: string): string[] {
   add("mountain-monastery", ["山地修道院", "山顶修道院", "mountain monastery"]);
   add("radio-observatory", ["无线电观测", "气象站", "无线电塔", "radio observatory", "weather station"]);
   add("river-crossing", ["河上", "石桥", "河谷", "浅滩", "河桥", "river bridge", "river crossing", "ford"]);
+  add("mine-remnant", ["旧矿井口", "废弃矿井", "矿车轨道", "矿井入口", "abandoned mine", "old mine", "mine entrance", "mine-cart track", "mine cart track"]);
+  add("underground-well", ["地下水井", "矿井水井", "地下取水井", "underground well", "subterranean well"]);
   add("gate-district", ["城门街区", "城门到市场", "gate district", "city gate"]);
   const explicitWaterCity = contains(text, ["河道水城", "水上城市", "水上市集", "水镇", "潮汐水镇", "主运河", "支流", "运河", "泄洪渠", "潮汐沟渠", "水闸", "水轮", "water city", "canal", "tidal channel", "sluice", "waterwheel"]);
   if (explicitWaterCity) features.push("water-city");
@@ -156,7 +158,7 @@ function requestedSiteFeatures(text: string): string[] {
   add("vertical-slum", ["垂直贫民", "巨型桥墩", "桥墩棚屋", "多层棚屋", "vertical slum", "bridge pier settlement"]);
   add("colony-port", ["火星殖民", "气闸", "居住模块", "温室", "mars colony", "airlock"]);
   add("coastal-town", ["海滨小镇", "1920年代海滨", "coastal town", "seaside town"]);
-  add("coastal-cliff", ["海崖港镇", "分层海崖", "悬崖港镇", "海岸悬崖", "黑沙海岸", "鲸骨灯塔村", "灯塔村", "sea-cliff port", "cliff port", "coastal cliff", "black sand coast", "lighthouse village"]);
+  add("coastal-cliff", ["海崖", "沿海崖", "海崖港镇", "分层海崖", "悬崖港镇", "海岸悬崖", "黑沙海岸", "鲸骨灯塔村", "灯塔村", "sea cliff", "sea-cliff port", "cliff port", "coastal cliff", "black sand coast", "lighthouse village"]);
   add("whalebone-landmark", ["鲸骨", "鲸骨灯塔", "鲸骨村", "whalebone", "whalebone lighthouse"]);
   add("storm-cableway", ["风暴缆车", "风暴索道", "悬崖缆车", "storm cableway", "cliff cableway", "cable lift"]);
   add("sea-cave", ["海蚀洞", "地下海蚀洞", "海蚀洞穴", "潮汐洞穴", "潮汐洞穴群", "sea cave", "sea-eroded cave", "tidal cavern"]);
@@ -565,6 +567,8 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
   const targetMultiplier = waterCity ? 1.12 : 1;
   const target = Math.max(5, Math.round(base * sizeFactor(input.request.size) * (0.5 + input.request.density * 0.9) * targetMultiplier));
   const parcels: ParcelProgram[] = [];
+  let requestedKindCursor = 0;
+  let requestedModuleCursor = 0;
   const perBlock = Math.max(1, Math.ceil(target / Math.max(1, blocks.length)));
   for (const block of blocks) {
     if (parcels.length >= target) break;
@@ -590,8 +594,27 @@ function makeParcels(input: SitePlanningInput, siteType: SiteType, blocks: reado
         : district.role === "industrial" ? 9.2 - input.request.density * 3.8 : 7 - input.request.density * 2.5;
     const count = Math.min(perBlock, Math.max(1, Math.floor(frontageSpan / targetFrontage)));
     for (let slot = 0; slot < count && parcels.length < target; slot += 1) {
-      const requestedModule = requestedModules[parcels.length];
-      const kind = required[parcels.length] ?? (requestedModule ? preferredCarrier(requestedModule) : buildingKindFor(district.role, parcels.length, text));
+      const requestedKind = required[requestedKindCursor];
+      const nextRequestedModule = requestedModules[requestedModuleCursor];
+      let requestedModule: BuildingFunctionalModuleProgram | undefined;
+      let kind: SettlementBuildingKind;
+      if (requestedKind) {
+        kind = requestedKind;
+        requestedKindCursor += 1;
+        // A function only shares this parcel when its carrier grammar matches.
+        // Otherwise keep it queued for a later purpose-built building instead
+        // of attaching (for example) a fungal greenhouse to the first cabin.
+        if (nextRequestedModule && preferredCarrier(nextRequestedModule) === kind) {
+          requestedModule = nextRequestedModule;
+          requestedModuleCursor += 1;
+        }
+      } else if (nextRequestedModule) {
+        requestedModule = nextRequestedModule;
+        requestedModuleCursor += 1;
+        kind = preferredCarrier(nextRequestedModule);
+      } else {
+        kind = buildingKindFor(district.role, parcels.length, text);
+      }
       const wide = kind === "warehouse" || kind === "factory" || kind === "barn" || kind === "manor";
       const slotSpan = frontageSpan / count;
       const parcelFrontage = Math.max(4.8, Math.min(slotSpan - 0.6, waterCity ? (wide ? 13.5 : 10.2) : (wide ? 10.5 : 7.2)));

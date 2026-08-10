@@ -172,6 +172,15 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
   if (has(text, ["海蚀洞", "sea cave", "sea-eroded cave"])) add("sea-cave", "地下海蚀洞", ["sea-cave", "underground"], "critical");
   if (has(text, ["吊脚木屋", "吊脚屋", "stilt house", "stilt cabin"])) add("stilt-houses", "吊脚木屋", ["stilt-foundation", "home"], "major");
   if (has(text, ["潮池", "潮汐池", "tide pool", "tidal pool"])) add("tide-pools", "海岸潮池", ["tide-pool", "water"], "major");
+  if (has(text, ["旧矿井口", "废弃矿井", "矿车轨道", "矿井入口", "abandoned mine", "old mine", "mine entrance", "mine-cart track", "mine cart track"])) {
+    add("mine-remnant", "旧矿井口与矿车轨道", ["mine-entrance", "mine-cart-track"], "critical");
+  }
+  if (has(text, ["地下水井", "矿井水井", "地下取水井", "underground well", "subterranean well"])) {
+    add("underground-well", "地下水井", ["underground-well", "vertical-route"], "critical");
+  }
+  if (has(text, ["菌类温室", "菌菇温室", "蘑菇温室", "fungal greenhouse", "mushroom greenhouse"])) {
+    add("fungal-greenhouse", "菌类温室", ["greenhouse", "fungal"], "critical");
+  }
   if (!settlementParent && shouldComposeWildernessFacility(text)) add("embedded-building", "场地建筑", ["building", "interior", "foundation"], "critical");
   return output;
 }

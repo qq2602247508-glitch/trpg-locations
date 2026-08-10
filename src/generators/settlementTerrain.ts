@@ -55,10 +55,13 @@ function terrainKind(program: SiteProgram, prompt: string): TerrainProgramSummar
   }
   if (program.requiredFeatures.includes("tower-city") || includesAny(text, ["巨型塔楼结构", "巨塔城市", "tower city", "megastructure city"])) return "megastructure";
   if (program.requiredFeatures.includes("vertical-slum") || includesAny(text, ["桥墩之间", "垂直贫民", "bridge-pier settlement"])) return "bridge-megastructure";
+  // Explicit canal hydrology owns the parent terrain even when the old harbor
+  // also sits on a sea cliff. The cliff remains a bank/elevation constraint;
+  // it must not erase the requested main channel, branches, and crossings.
+  if (program.requiredFeatures.includes("water-city")) return "river";
   if (program.requiredFeatures.includes("coastal-cliff") || includesAny(text, ["海崖港镇", "分层海崖", "海岸悬崖", "黑沙海岸", "鲸骨灯塔村", "灯塔村", "sea-cliff port", "cliff port", "coastal cliff", "black sand coast", "lighthouse village"])) return "coastal-cliff";
   if (program.requiredFeatures.includes("bone-swamp-settlement") || includesAny(text, ["石化龙骨", "肋骨栈道", "dragonbone swamp", "fossil ribs"])) return "swamp-bone";
   if (program.requiredFeatures.includes("airship-wreck-settlement") || includesAny(text, ["坠毁飞艇", "飞艇残骸", "crashed airship", "airship wreck"])) return "wreck-field";
-  if (program.requiredFeatures.includes("water-city")) return "river";
   return program.terrain.kind;
 }
 
@@ -115,6 +118,8 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
   const breachAngles = [breachAngle, breachAngle + Math.PI * 0.72, breachAngle - Math.PI * 0.69];
   const normalizedPrompt = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const saltMarsh = includesAny(normalizedPrompt, ["盐沼", "盐泽", "潮汐湿地", "salt marsh", "tidal marsh"]);
+  const coastalCanal = kind === "river" && program.requiredFeatures.includes("coastal-cliff");
+  const cliffBankSide = phase >= 0 ? -1 : 1;
   const wantsCraterBridge = includesAny(normalizedPrompt, ["跨坑", "吊桥", "悬索桥", "suspension bridge", "rope bridge"]);
   const wantsCraterShrine = includesAny(normalizedPrompt, ["神龛", "神殿", "祭坛", "shrine", "altar", "temple"]);
   const wantsCraterMine = includesAny(normalizedPrompt, ["矿工入口", "矿井", "矿洞", "mine entrance", "mine"]);
@@ -161,7 +166,12 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
       const distance = Math.min(mainDistance, branchDistance);
       const activeHalfWidth = branchDistance < mainDistance ? 1.45 : halfWidth;
       const downhill = Math.max(0, 15 - Math.floor((z / Math.max(1, depth - 1)) * 3) * 5);
-      elevationFeet = downhill + (distance > activeHalfWidth + 3.2 ? 5 : 0);
+      const bankSide = Math.sign((x + 0.5) - center) || 1;
+      const isCliffBank = coastalCanal
+        && bankSide === cliffBankSide
+        && distance > activeHalfWidth + 0.9
+        && distance < activeHalfWidth + 6.8;
+      elevationFeet = downhill + (distance > activeHalfWidth + 3.2 ? 5 : 0) + (isCliffBank ? 15 : 0);
       if (distance <= activeHalfWidth) {
         elevationFeet = downhill - 10;
         surface = "water";
@@ -174,6 +184,8 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         buildable = false;
       } else if (distance <= activeHalfWidth + 3.2) {
         elevationFeet = downhill;
+        surface = "rock";
+      } else if (isCliffBank && distance < activeHalfWidth + 2.1) {
         surface = "rock";
       }
     } else if (kind === "impact-crater" || kind === "caldera") {
@@ -524,7 +536,11 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         const craterWarp = 1 + Math.sin(craterAngle * 3 + phase) * 0.1 + Math.sin(craterAngle * 7 - phase) * 0.045;
         const craterRadial = Math.hypot(craterDx, craterDz) / (craterRadius * craterWarp);
         const radialFractureCell = kind === "impact-crater" && radialFractureAt(craterAngle, craterRadial);
-        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `surface:${cell.surface}`, `elevation:${cell.elevationFeet}`, ...(cell.surface === "lava" ? ["lava", "lava-flow"] : []), ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(radialFractureCell ? ["impact-crater", "radial-fracture", "fracture-bottom"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(kind === "ice-crevasse" ? ["ice-crevasse", "rift-bank"] : []), ...(kind === "ice-crevasse" && cell.elevationFeet <= -10 ? ["rift-bottom"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
+        const riverCliffBank = coastalCanal
+          && cell.surface !== "water"
+          && cell.elevationFeet >= 15
+          && Math.abs(x + 0.5 - warpedRiverX(z + 0.5, width, depth, phase)) < 9;
+        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, riverCliffBank ? "rock" : materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `surface:${cell.surface}`, `elevation:${cell.elevationFeet}`, ...(riverCliffBank ? ["coastal-cliff", "cliff-bank", "vertical-face"] : []), ...(cell.surface === "lava" ? ["lava", "lava-flow"] : []), ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(radialFractureCell ? ["impact-crater", "radial-fracture", "fracture-bottom"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(kind === "ice-crevasse" ? ["ice-crevasse", "rift-bank"] : []), ...(kind === "ice-crevasse" && cell.elevationFeet <= -10 ? ["rift-bottom"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
         if (cell.surface === "lava") {
           scene.primitives.push(box(`terrain-lava-surface-${x}-${z}`, 0, x + 0.5, feetToMeters(cell.elevationFeet) + 0.08, z + 0.5, 0.94, 0.12, 0.94, "warmLight", ["lava", "lava-flow", "lava-surface", "hazard", "terrain-program"]));
         }

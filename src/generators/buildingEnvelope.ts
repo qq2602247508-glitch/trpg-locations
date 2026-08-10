@@ -3,7 +3,7 @@ import type { SettlementBuildingKind, Vec2 } from "../schema";
 
 export type EnvelopePartShape = "box" | "cylinder";
 export type EnvelopeRoofKind = "gable" | "flat" | "spire" | "hip";
-export type SiteBuildingProfile = "weather-station" | "quarantine-station" | "ranger-station" | "border-outpost" | "field-station";
+export type SiteBuildingProfile = "weather-station" | "quarantine-station" | "ranger-station" | "border-outpost" | "field-station" | "wizard-tower";
 
 export interface BuildingEnvelopePart {
   id: string;
@@ -43,7 +43,22 @@ export function planBuildingEnvelope(
   const asymmetry = rng.float(-0.055, 0.055);
   let variant = "compound";
   let parts: BuildingEnvelopePart[];
-  if (siteProfile === "field-station") {
+  if (siteProfile === "wizard-tower") {
+    variant = variation === 0 ? "arcane-shaft-and-alchemy-wing" : variation === 1 ? "arcane-twin-turret" : "arcane-observatory-stack";
+    parts = variation === 0 ? [
+      part("arcane-shaft", "tower", { x: -width * 0.06, z: -depth * 0.08 }, { x: Math.min(width, depth) * 0.68, z: Math.min(width, depth) * 0.68 }, 1, "spire", "cylinder"),
+      part("alchemy-wing", "service", { x: width * 0.28, z: depth * 0.2 }, { x: width * 0.34, z: depth * 0.38 }, 0.46, "gable"),
+      part("observatory-turret", "tower", { x: -width * 0.28, z: depth * 0.24 }, { x: width * 0.24, z: width * 0.24 }, 0.78, "spire", "cylinder"),
+    ] : variation === 1 ? [
+      part("main-spell-tower", "tower", { x: -width * 0.12, z: -depth * 0.08 }, { x: Math.min(width, depth) * 0.62, z: Math.min(width, depth) * 0.62 }, 1, "spire", "cylinder"),
+      part("library-turret", "tower", { x: width * 0.26, z: depth * 0.12 }, { x: width * 0.3, z: width * 0.3 }, 0.72, "spire", "cylinder"),
+      part("entrance-link", "service", { x: width * 0.08, z: depth * 0.34 }, { x: width * 0.46, z: depth * 0.24 }, 0.38, "gable"),
+    ] : [
+      part("observatory-shaft", "tower", { x: 0, z: -depth * 0.12 }, { x: Math.min(width, depth) * 0.7, z: Math.min(width, depth) * 0.7 }, 1, "flat", "cylinder"),
+      part("ritual-annex", "wing", { x: -width * 0.29, z: depth * 0.24 }, { x: width * 0.32, z: depth * 0.34 }, 0.48, "spire"),
+      part("laboratory-annex", "service", { x: width * 0.29, z: depth * 0.22 }, { x: width * 0.32, z: depth * 0.38 }, 0.46, "gable"),
+    ];
+  } else if (siteProfile === "field-station") {
     variant = variation === 0 ? "field-lab-and-sample-wing" : variation === 1 ? "field-offset-research-bays" : "field-observation-compound";
     parts = variation === 0 ? [
       part("field-laboratory", "primary", { x: -width * 0.12, z: -depth * 0.08 }, { x: width * 0.62, z: depth * 0.58 }, 0.7, "gable"),

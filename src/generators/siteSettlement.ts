@@ -456,6 +456,55 @@ function addMiningValley(scene: GeneratedScene, width: number, depth: number): v
   );
 }
 
+function addMineRemnantAtoms(scene: GeneratedScene, width: number, depth: number, features: readonly string[]): void {
+  const portalX = width * 0.86;
+  const portalZ = depth * 0.13;
+  const trackEnd = { x: width * 0.55, z: depth * 0.43 };
+  scene.primitives.push(
+    box("mine-remnant-portal-left", 0, portalX - 1.65, 0, portalZ, 0.72, feetToMeters(9), 2.6, "darkStone", ["mine-remnant", "mine-entrance", "portal", "opening", "site-program"]),
+    box("mine-remnant-portal-right", 0, portalX + 1.65, 0, portalZ, 0.72, feetToMeters(9), 2.6, "darkStone", ["mine-remnant", "mine-entrance", "portal", "opening", "site-program"]),
+    box("mine-remnant-portal-lintel", 0, portalX, feetToMeters(7), portalZ, 4.05, feetToMeters(2.2), 2.6, "darkStone", ["mine-remnant", "mine-entrance", "portal", "opening", "site-program"]),
+    corridor("mine-remnant-track-left", 0, portalX - 0.55, portalZ + 0.8, trackEnd.x - 0.55, trackEnd.z, FLOOR_SLAB_METERS + 0.08, 0.18, "metal", ["mine-remnant", "mine-cart-track", "rail", "site-program"]),
+    corridor("mine-remnant-track-right", 0, portalX + 0.55, portalZ + 0.8, trackEnd.x + 0.55, trackEnd.z, FLOOR_SLAB_METERS + 0.08, 0.18, "metal", ["mine-remnant", "mine-cart-track", "rail", "site-program"]),
+  );
+  const trackLength = Math.hypot(trackEnd.x - portalX, trackEnd.z - (portalZ + 0.8));
+  const sleeperCount = Math.max(5, Math.floor(trackLength / 1.5));
+  for (let index = 0; index <= sleeperCount; index += 1) {
+    const t = index / sleeperCount;
+    const x = portalX + (trackEnd.x - portalX) * t;
+    const z = portalZ + 0.8 + (trackEnd.z - portalZ - 0.8) * t;
+    scene.primitives.push(box(`mine-remnant-sleeper-${index + 1}`, 0, x, FLOOR_SLAB_METERS + 0.04, z, 1.7, 0.12, 0.28, "wood", ["mine-remnant", "mine-cart-track", "rail-sleeper", "site-program"], Math.atan2(trackEnd.x - portalX, trackEnd.z - portalZ)));
+  }
+  scene.routes.push(createRoute("mine-remnant-cart-route", "alternate", [
+    { x: portalX, z: portalZ, y: FLOOR_SLAB_METERS },
+    { x: width * 0.72, z: depth * 0.27, y: FLOOR_SLAB_METERS },
+    { x: trackEnd.x, z: trackEnd.z, y: FLOOR_SLAB_METERS },
+  ], { purpose: "service", traffic: 0.46, schedule: "all" }));
+  scene.tactical.push(tacticalFeature("mine-remnant-portal-choke", "chokepoint", portalX, portalZ, 0, 1.5, "The old mine mouth and paired rails form a readable service approach and ambush threshold."));
+
+  if (!features.includes("underground-well")) return;
+  const wellX = width * 0.33;
+  const wellZ = depth * 0.62;
+  const shaftY = -feetToMeters(12);
+  const ring = 1.9;
+  scene.primitives.push(
+    box("underground-well-ring-north", 0, wellX, FLOOR_SLAB_METERS, wellZ - ring / 2, ring + 0.5, feetToMeters(2.5), 0.35, "stone", ["underground-well", "well-rim", "cover", "site-program"]),
+    box("underground-well-ring-south", 0, wellX, FLOOR_SLAB_METERS, wellZ + ring / 2, ring + 0.5, feetToMeters(2.5), 0.35, "stone", ["underground-well", "well-rim", "cover", "site-program"]),
+    box("underground-well-ring-west", 0, wellX - ring / 2, FLOOR_SLAB_METERS, wellZ, 0.35, feetToMeters(2.5), ring, "stone", ["underground-well", "well-rim", "cover", "site-program"]),
+    box("underground-well-ring-east", 0, wellX + ring / 2, FLOOR_SLAB_METERS, wellZ, 0.35, feetToMeters(2.5), ring, "stone", ["underground-well", "well-rim", "cover", "site-program"]),
+    box("underground-well-shaft-bottom", 3, wellX, shaftY, wellZ, 1.5, FLOOR_SLAB_METERS, 1.5, "darkStone", ["underground-well", "shaft-bottom", "underground", "standable", "site-program"]),
+    stairs("underground-well-ladder", 3, wellX + 0.62, shaftY, wellZ, 0.72, feetToMeters(12), 1.4, "wood", ["underground-well", "vertical-route", "ladder", "standable", "site-program"]),
+    cylinder("underground-well-winch-post-a", 0, wellX - 1.2, FLOOR_SLAB_METERS, wellZ, 0.18, feetToMeters(7), "wood", ["underground-well", "winch", "support", "site-program"]),
+    cylinder("underground-well-winch-post-b", 0, wellX + 1.2, FLOOR_SLAB_METERS, wellZ, 0.18, feetToMeters(7), "wood", ["underground-well", "winch", "support", "site-program"]),
+    corridor("underground-well-winch-beam", 0, wellX - 1.2, wellZ, wellX + 1.2, wellZ, feetToMeters(7), 0.2, "wood", ["underground-well", "winch", "support", "site-program"]),
+  );
+  scene.routes.push(createRoute("underground-well-route", "vertical", [
+    { x: wellX + 0.62, z: wellZ, y: FLOOR_SLAB_METERS },
+    { x: wellX + 0.62, z: wellZ, y: shaftY },
+  ], { purpose: "service", traffic: 0.18, schedule: "all" }));
+  scene.tactical.push(tacticalFeature("underground-well-hazard", "hazard", wellX, wellZ, shaftY, 1.2, "The accessible well shaft creates a vertical escape route and a dangerous open drop."));
+}
+
 function addTerrainBoundMaintenanceBridge(scene: GeneratedScene, crossing: TerrainCrossingCandidate): void {
   const dx = crossing.to.x - crossing.from.x;
   const dz = crossing.to.z - crossing.from.z;
@@ -925,6 +974,8 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   scene.terrainProgram = terrain.summary;
   const landDepth = program.siteType === "harbor-district" ? program.bounds.z - 8 : program.bounds.z;
   const promptText = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const wantsWizardTower = ["法师塔", "魔法塔", "巫师塔", "炼金塔", "wizard tower", "mage tower", "alchemy tower"].some((term) => promptText.includes(term));
+  let wizardTowerAssigned = false;
   const explicitlyFloating = ["浮空", "浮岛", "悬空", "floating", "levitating"].some((term) => promptText.includes(term));
   const isFloating = explicitlyFloating && ((context.sceneProgram?.morphology.includes("floating-islands") ?? false) || program.requiredFeatures.includes("salt-crystal-monastery"));
   const isHollowTree = program.requiredFeatures.includes("hollow-tree-city");
@@ -966,6 +1017,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   // grammar and make the port look like a normal modern harbor.
   if (program.siteType === "harbor-district" && terrain.summary.kind !== "coastal-cliff" && !isMangrovePort) addHarbor(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
   if (program.siteType === "village" && !semanticTerrain) addVillageLandmarks(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
+  if (program.requiredFeatures.includes("mine-remnant")) addMineRemnantAtoms(scene, program.bounds.x, program.bounds.z, program.requiredFeatures);
   if (!isFloating && !semanticTerrain && (program.siteType === "city-district" || program.siteType === "town")) addUrbanDefences(scene, program.bounds.x, program.bounds.z);
   if (program.siteType === "mining-settlement" && !semanticTerrain) {
     addMiningValley(scene, program.bounds.x, program.bounds.z);
@@ -1036,6 +1088,8 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     const siteElevation = isFlooded ? feetToMeters(5) : placement.elevationFeet === undefined ? elevationAt(placement.x, placement.z) : feetToMeters(placement.elevationFeet);
     const raisedStiltHome = program.requiredFeatures.includes("stilt-houses") && parcel.buildingKind === "home";
     const buildingBaseY = siteElevation + FLOOR_SLAB_METERS + (raisedStiltHome ? feetToMeters(5) : 0);
+    const siteProfile = parcel.buildingKind === "tower" && wantsWizardTower && !wizardTowerAssigned ? "wizard-tower" as const : undefined;
+    if (siteProfile === "wizard-tower") wizardTowerAssigned = true;
     instantiateBuildingModule(scene, {
       id: `settlement-building-${parcel.id.replace("parcel-", "")}`,
       kind: parcel.buildingKind,
@@ -1053,6 +1107,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       baseY: buildingBaseY,
       state: parcel.state,
       functionalModules: parcel.functionalModules,
+      siteProfile,
     }, context.rng.fork(parcel.buildingSeed));
     if (raisedStiltHome) {
       for (const [pierIndex, dx, dz] of [[0, -0.32, -0.32], [1, 0.32, -0.32], [2, -0.32, 0.32], [3, 0.32, 0.32]] as const) {

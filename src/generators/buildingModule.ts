@@ -54,7 +54,8 @@ function localPoint(lot: BuildingLot, localX: number, localZ: number): { x: numb
 }
 
 function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], siteProfile?: SiteBuildingProfile): { floors: number; floorHeightFeet: number[]; material: MaterialKey } {
-  const floors = siteProfile === "field-station" ? rng.int(1, 2)
+  const floors = siteProfile === "wizard-tower" ? rng.int(4, 5)
+    : siteProfile === "field-station" ? rng.int(1, 2)
     : siteProfile === "weather-station" ? rng.int(1, 2)
     : siteProfile === "quarantine-station" ? rng.int(1, 2)
       : siteProfile === "ranger-station" ? rng.int(1, 2)
@@ -65,7 +66,8 @@ function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], sit
         : kind === "home" ? rng.int(1, 3)
           : kind === "factory" || kind === "barn" ? rng.int(1, 2)
             : rng.int(2, 3);
-  const range: readonly [number, number] = siteProfile ? [9, 12]
+  const range: readonly [number, number] = siteProfile === "wizard-tower" ? [11, 14]
+    : siteProfile ? [9, 12]
     : kind === "warehouse" ? [14, 18]
     : kind === "shrine" ? [14, 20]
       : kind === "tower" ? [10, 13]
@@ -73,7 +75,8 @@ function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], sit
           : kind === "manor" ? [11, 14]
             : [9, 11];
   const floorHeightFeet = Array.from({ length: floors }, () => rng.int(range[0], range[1]));
-  const material: MaterialKey = siteProfile === "field-station" ? "darkStone"
+  const material: MaterialKey = siteProfile === "wizard-tower" ? "darkStone"
+    : siteProfile === "field-station" ? "darkStone"
     : siteProfile === "weather-station" ? "metal"
     : siteProfile === "quarantine-station" ? "wood"
       : siteProfile === "ranger-station" ? "wood"
@@ -86,6 +89,7 @@ function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], sit
 }
 
 function fullInteriorLabels(kind: SettlementBuildingKind, siteProfile?: SiteBuildingProfile): { publicName: string; serviceName: string; upperName: string; basementName: string; tags: string[] } {
+  if (siteProfile === "wizard-tower") return { publicName: "Arcane receiving and ritual chamber", serviceName: "Alchemy laboratory", upperName: "Spell library and observatory", basementName: "Sealed reagent vault", tags: ["ritual-chamber", "alchemy-laboratory", "spell-library", "reagent-vault"] };
   if (siteProfile === "weather-station") return { publicName: "Weather operations room", serviceName: "Instrument and radio bay", upperName: "Observation loft", basementName: "Emergency reserve vault", tags: ["weather-operations", "instrument-bay", "observation", "reserve-vault"] };
   if (siteProfile === "quarantine-station") return { publicName: "Screened quarantine reception", serviceName: "Treatment and decontamination wing", upperName: "Quarantine watch loft", basementName: "Secured medicine vault", tags: ["quarantine-reception", "decontamination", "quarantine-watch", "medical-vault"] };
   if (siteProfile === "field-station") return { publicName: "Field laboratory and briefing bay", serviceName: "Sample processing wing", upperName: "Observation and radio loft", basementName: "Specimen archive vault", tags: ["field-laboratory", "sample-processing", "observation", "specimen-archive"] };
@@ -406,12 +410,27 @@ function addFunctionalModuleGeometry(
       const submerged = module.levelRole === "basement";
       const greenhouseY = submerged ? undergroundY : baseY;
       const level = submerged ? 3 : 0;
-      const greenhouseX = submerged ? localX * 0.42 : localX;
+      // Exterior greenhouses are annexes, not overlays on the parent room.
+      // Keep the inner edge just outside the authored building footprint so
+      // the main entry/stair routes cannot pass through a glasshouse frame.
+      const greenhouseX = submerged
+        ? localX * 0.42
+        : side * (lot.width * 0.5 + width * 0.5 + 0.35);
       const center = addBox(module, "floor", level, greenhouseX, greenhouseY, localZ, width, FLOOR_SLAB_METERS, depth, "stone", ["floor", "standable", "greenhouse-floor", ...(submerged ? ["underground"] : [])]);
       addBox(module, "north-frame", level, greenhouseX, greenhouseY, localZ - depth / 2, width, feetToMeters(7), 0.16, "wood", ["greenhouse-frame", "wall"]);
-      addBox(module, "west-frame", level, greenhouseX - width / 2, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
       addBox(module, "south-frame", level, greenhouseX, greenhouseY, localZ + depth / 2, width, feetToMeters(7), 0.16, "wood", ["greenhouse-frame", "wall"]);
-      addBox(module, "east-frame", level, greenhouseX + width / 2, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
+      if (submerged) {
+        addBox(module, "west-frame", level, greenhouseX - width / 2, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
+        addBox(module, "east-frame", level, greenhouseX + width / 2, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
+      } else {
+        const innerX = greenhouseX - side * width / 2;
+        const outerX = greenhouseX + side * width / 2;
+        const doorGap = Math.min(1.35, depth * 0.34);
+        const frameDepth = Math.max(0.55, (depth - doorGap) / 2);
+        addBox(module, "outer-frame", level, outerX, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
+        addBox(module, "inner-frame-north", level, innerX, greenhouseY, localZ - (doorGap + frameDepth) / 2, 0.16, feetToMeters(7), frameDepth, "wood", ["greenhouse-frame", "wall", "door-frame", "opening"]);
+        addBox(module, "inner-frame-south", level, innerX, greenhouseY, localZ + (doorGap + frameDepth) / 2, 0.16, feetToMeters(7), frameDepth, "wood", ["greenhouse-frame", "wall", "door-frame", "opening"]);
+      }
       for (const [postIndex, postX, postZ] of [
         [1, greenhouseX - width / 2, localZ - depth / 2],
         [2, greenhouseX + width / 2, localZ - depth / 2],
@@ -435,6 +454,14 @@ function addFunctionalModuleGeometry(
           { x: access.x, z: access.z, y: baseY },
           { x: center.x, z: center.z, y: greenhouseY },
         ], { purpose: "service", traffic: 0.24, schedule: "all" }));
+      } else {
+        const greenhouseDoor = point(greenhouseX - side * width / 2, localZ);
+        const buildingThreshold = point(side * lot.width * 0.45, localZ);
+        scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "alternate", [
+          { x: buildingThreshold.x, z: buildingThreshold.z, y: baseY },
+          { x: greenhouseDoor.x, z: greenhouseDoor.z, y: greenhouseY },
+          { x: center.x, z: center.z, y: greenhouseY },
+        ], { purpose: "service", traffic: 0.3, schedule: "all" }));
       }
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-cover`, "cover", center.x, center.z, greenhouseY, 1.6, "Raised cultivation beds divide the greenhouse into cover lanes."));
     } else if (module.kind === "submerged-room") {
@@ -673,6 +700,27 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     }
     addRotatedBox("guild-map-table", -width * 0.08, depth * 0.18, Math.max(1.8, width * 0.28), feetToMeters(2.8), 1.2, baseY + FLOOR_SLAB_METERS, "wood", ["guild-fixture", "map-table", "cover"]);
     addRotatedBox("guild-scribe-desk", width * 0.08, -depth * 0.22, Math.max(1.3, width * 0.2), feetToMeters(2.6), 0.72, baseY + FLOOR_SLAB_METERS, "wood", ["guild-fixture", "scribe-desk", "archive", "cover"]);
+  } else if (lot.kind === "tower" && lot.siteProfile === "wizard-tower") {
+    addRotatedBox("wizard-alchemy-bench", -width * 0.22, depth * 0.16, Math.max(1.5, width * 0.3), feetToMeters(3.2), 0.86, baseY + FLOOR_SLAB_METERS, "wood", ["wizard-tower", "alchemy-laboratory", "workbench", "cover"]);
+    addRotatedBox("wizard-reagent-rack", width * 0.31, depth * 0.1, 0.24, feetToMeters(6.2), Math.max(1.2, depth * 0.3), baseY + FLOOR_SLAB_METERS, "wood", ["wizard-tower", "reagent-rack", "cover"]);
+    for (const [index, xOffset] of [-0.26, 0, 0.26].entries()) {
+      const vessel = point(width * xOffset, -depth * 0.16);
+      scene.primitives.push(cylinder(`${lot.id}-wizard-vessel-${index + 1}`, 0, vessel.x, baseY + FLOOR_SLAB_METERS, vessel.z, 0.52 + index * 0.08, feetToMeters(2.4 + index * 0.5), index === 1 ? "warmLight" : "hazard", [...tags, "wizard-tower", "alchemical-vessel", "laboratory-fixture", "cover"]));
+    }
+    for (const [index, zOffset] of [-0.25, 0.25].entries()) {
+      addRotatedBox(`wizard-library-shelf-${index + 1}`, upperWidth * 0.34, upperDepth * zOffset, 0.22, feetToMeters(6), Math.max(1.15, upperDepth * 0.34), upperY + FLOOR_SLAB_METERS, "wood", ["wizard-tower", "spell-library", "bookshelf", "cover"], 1);
+    }
+    const ritualP = point(-upperWidth * 0.14, upperDepth * 0.08);
+    scene.primitives.push(cylinder(`${lot.id}-wizard-ritual-circle`, 1, ritualP.x, upperY + FLOOR_SLAB_METERS + 0.03, ritualP.z, Math.max(1.6, upperWidth * 0.34), 0.08, "warmLight", [...tags, "wizard-tower", "ritual-circle", "hazard", "landmark"]));
+    const observatoryP = point(0, -upperDepth * 0.18);
+    scene.primitives.push(
+      cylinder(`${lot.id}-wizard-telescope-pier`, 2, observatoryP.x, upperY + wallHeight * 0.82, observatoryP.z, 0.62, feetToMeters(4.2), "metal", [...tags, "wizard-tower", "observatory", "telescope", "vertical-landmark"]),
+      box(`${lot.id}-wizard-telescope-tube`, 2, observatoryP.x + 0.55, upperY + wallHeight * 0.82 + feetToMeters(3.4), observatoryP.z, 1.8, 0.28, 0.28, "metal", [...tags, "wizard-tower", "observatory", "telescope"], lot.rotation + 0.42),
+    );
+    scene.tactical.push(
+      tacticalFeature(`${lot.id}-wizard-ritual-hazard`, "hazard", ritualP.x, ritualP.z, upperY, 1.4, "The active ritual circle controls the centre of the spell library."),
+      tacticalFeature(`${lot.id}-wizard-observatory-high`, "highGround", observatoryP.x, observatoryP.z, upperY + wallHeight * 0.82, 1.5, "The roof observatory is a recognizable arcane high point."),
+    );
   } else if (lot.kind === "tower") {
     addRotatedBox("tower-watch-console", 0, -depth * 0.2, Math.max(1.2, width * 0.34), feetToMeters(3.2), 0.7, upperY + FLOOR_SLAB_METERS, "wood", ["tower-fixture", "watch-console", "high-ground", "cover"], 1);
     addRotatedBox("tower-supply-rack", -width * 0.3, depth * 0.18, 0.22, feetToMeters(5.4), Math.max(0.9, depth * 0.22), baseY + FLOOR_SLAB_METERS, "wood", ["tower-fixture", "supply-rack", "cover"]);
