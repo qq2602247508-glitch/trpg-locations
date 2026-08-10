@@ -42,6 +42,23 @@ describe("local capability retrieval", () => {
     expect(result.capabilityIds.every((id) => registered.has(id))).toBe(true);
   });
 
+  it("retrieves Chinese functional-space aliases without a model", () => {
+    const result = retrieveCapabilitiesLexically("高山峡谷中的翼港整备所，有宽阔翼舱、挥发储压舱、驻员休息舱和高空导风台", 10);
+    expect(result.capabilityIds).toEqual(expect.arrayContaining([
+      "structure.hangar-space",
+      "structure.fuel-space",
+      "structure.quarters-space",
+      "structure.observation-platform",
+    ]));
+    const relief = retrieveCapabilitiesLexically("冻土峡湾里的巡礼救护站，有伤员病房、祈祷小堂、地下粮药库和屋顶信号台", 10);
+    expect(relief.capabilityIds).toEqual(expect.arrayContaining([
+      "structure.medical-space",
+      "structure.chapel-space",
+      "structure.storage-space",
+      "structure.observation-platform",
+    ]));
+  });
+
   it("never returns an invented capability when BGE ranks the bounded catalog", async () => {
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const input = (JSON.parse(String(init?.body)) as { input: string[] }).input;
@@ -51,5 +68,27 @@ describe("local capability retrieval", () => {
     const registered = new Set(SPATIAL_ATOMS.map((atom) => atom.id));
     expect(result.capabilityIds.length).toBeGreaterThan(0);
     expect(result.capabilityIds.every((id) => registered.has(id))).toBe(true);
+  });
+
+  it("keeps retrieval cache entries separate across requested limits", async () => {
+    const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const input = (JSON.parse(String(init?.body)) as { input: string[] }).input;
+      return new Response(JSON.stringify({
+        embeddings: input.map(() => [1, 0, 0]),
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    const narrow = await retrieveCapabilitiesWithBge("完全陌生的复合设施", {
+      fetcher,
+      model: "limit-cache-mock",
+      limit: 2,
+    });
+    const broad = await retrieveCapabilitiesWithBge("完全陌生的复合设施", {
+      fetcher,
+      model: "limit-cache-mock",
+      limit: 8,
+    });
+    expect(narrow.capabilityIds).toHaveLength(2);
+    expect(broad.capabilityIds).toHaveLength(8);
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });

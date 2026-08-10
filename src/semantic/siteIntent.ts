@@ -30,6 +30,33 @@ export interface EmbeddedFacilityIntent {
   abandoned: boolean;
 }
 
+const FACILITY_SPACE_CAPABILITIES: Readonly<Record<string, EmbeddedFacilitySpace>> = {
+  "structure.observation-platform": "observation",
+  "structure.laboratory-space": "laboratory",
+  "structure.archive-space": "archive",
+  "structure.storage-space": "storage",
+  "structure.hangar-space": "hangar",
+  "structure.fuel-space": "fuel",
+  "structure.quarters-space": "quarters",
+  "structure.chapel-space": "chapel",
+  "structure.medical-space": "medical",
+  "structure.workshop-space": "workshop",
+  "structure.greenhouse-space": "greenhouse",
+  "structure.distillation-space": "distillation",
+  "structure.submerged-space": "submerged-room",
+};
+
+/**
+ * BGE/Ollama may suggest bounded semantic capabilities, but never geometry.
+ * This adapter turns only catalogued, schema-safe capability IDs into the same
+ * deterministic functional-space vocabulary used by the lexical planner.
+ */
+export function embeddedFacilitySpacesFromCapabilities(capabilityIds: readonly string[]): EmbeddedFacilitySpace[] {
+  return [...new Set(capabilityIds
+    .map((capabilityId) => FACILITY_SPACE_CAPABILITIES[capabilityId])
+    .filter((space): space is EmbeddedFacilitySpace => space !== undefined))];
+}
+
 const NATURAL_PARENT_TERMS = [
   "森林", "树林", "林间", "巨树", "树根", "山地", "高山", "山顶", "山脊", "风化岩脊", "峰顶", "山坡", "岩坡", "裸岩", "峭壁", "山谷", "河谷", "峡谷", "高原", "荒原", "草原", "沙漠",
   "沼泽", "湿地", "泥炭", "泥沼", "红树林", "海岸", "海崖", "岛屿", "冻土", "冰原", "冰盖", "冰帽", "雪原", "极地", "冰川", "火山", "熔岩",

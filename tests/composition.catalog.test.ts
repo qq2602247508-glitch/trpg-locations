@@ -71,6 +71,29 @@ describe("five-layer composition catalog", () => {
     expect(SPATIAL_ATOMS.find((atom) => atom.id === "state.overgrowth")?.status).toBe("prototype");
   });
 
+  it("quality-gates the reusable functional-space atoms", () => {
+    const ids = [
+      "structure.storage-space",
+      "structure.hangar-space",
+      "structure.fuel-space",
+      "structure.quarters-space",
+      "structure.chapel-space",
+      "structure.medical-space",
+      "structure.observation-platform",
+      "structure.workshop-space",
+    ];
+    for (const id of ids) {
+      const entry = SPATIAL_ATOMS.find((atom) => atom.id === id);
+      expect(entry, id).toBeDefined();
+      expect(entry?.status, id).toBe("validated");
+      expect(entry?.geometryBuilder.startsWith("planned:"), id).toBe(false);
+      expect(auditAtomQuality(entry!).ready, id).toBe(true);
+      expect(entry?.validation.length, id).toBeGreaterThanOrEqual(3);
+      expect(entry?.visualFixtures.length, id).toBeGreaterThanOrEqual(4);
+      expect(entry?.failureConditions.length, id).toBeGreaterThanOrEqual(3);
+    }
+  });
+
   it("maps forest density into ecology rather than only decoration", () => {
     const prompt = "茂密森林，林下灌木、倒木、三片空地和树冠平台";
     const sparse = generateScene({ prompt, seed: "forest-density-contract", size: "medium", density: 0.2 }, "adaptive");
@@ -982,6 +1005,36 @@ describe("five-layer composition catalog", () => {
       expect(point.z).toBeGreaterThanOrEqual(0);
       expect(point.z).toBeLessThanOrEqual(maximumZ);
     }
+    expect(scene.diagnostics.warnings, scene.diagnostics.warnings.join("\n")).toHaveLength(0);
+  });
+
+  it("lets BGE compose an unfamiliar facility from bounded functional-space atoms", () => {
+    const request = {
+      prompt: "高山峡谷中的翼港整备所，有宽阔翼舱、挥发储压舱、驻员休息舱和高空导风台",
+      seed: "retrieved-functional-space-kit",
+      size: "medium" as const,
+      density: 0.64,
+    };
+    const composition = compileSceneComposition(request, "bge", [
+      "structure.embedded-building",
+      "structure.hangar-space",
+      "structure.fuel-space",
+      "structure.quarters-space",
+      "structure.observation-platform",
+    ]);
+    const scene = generateScene(request, "adaptive", undefined, undefined, composition);
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    const building = scene.buildingInstances?.find((entry) => entry.id === "wilderness-core-building");
+
+    expect(scene.archetype).toBe("mountain");
+    expect(scene.sceneProgram?.domain).toBe("natural");
+    expect(building?.archetype).toBe("factory");
+    expect(building?.buildingProgram?.requiredFeatures).toEqual(expect.arrayContaining(["hangar", "fuel", "quarters", "observation"]));
+    expect(tags.has("hangar-floor")).toBe(true);
+    expect(tags.has("fuel-tank")).toBe(true);
+    expect(tags.has("bunk")).toBe(true);
+    expect(tags.has("signal-platform")).toBe(true);
+    expect(scene.compositionProgram?.source).toBe("bge");
     expect(scene.diagnostics.warnings, scene.diagnostics.warnings.join("\n")).toHaveLength(0);
   });
 

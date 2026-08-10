@@ -24,6 +24,55 @@ function hasExplicitWaterCity(text: string): boolean {
   ]);
 }
 
+/**
+ * BGE is allowed to retrieve child capabilities, but macro terrain cards need
+ * explicit textual evidence.  Without this boundary an embedding can confuse
+ * “翼港整备所” with a floating-island card and silently replace the authored
+ * mountain/canyon parent.  The deterministic planner remains the owner of
+ * parent morphology.
+ */
+const MACRO_CAPABILITY_CUES: Record<string, readonly string[]> = {
+  "terrain.crater-rim": ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"],
+  "terrain.caldera": ["火山", "火山口", "破火山口", "熔岩", "岩浆", "caldera", "volcano", "volcanic", "lava"],
+  "terrain.ravine": ["裂谷", "裂缝", "裂隙", "深渊", "峡谷", "ravine", "rift", "chasm", "fissure", "canyon"],
+  "terrain.crevasse": ["冰川", "冰隙", "冰裂", "冰裂沟", "crevasse", "glacier", "fissure"],
+  "terrain.floating-island": ["浮空岛", "浮空岩岛", "浮岛", "空岛", "悬空岛", "漂浮岩岛", "floating island", "sky island", "levitating island"],
+  "terrain.salt-crystal-island": ["盐晶浮岛", "盐晶岛", "floating monastery", "salt crystal island"],
+  "terrain.cave-chamber": ["洞穴", "洞窟", "岩窟", "溶洞", "海蚀洞", "cave", "cavern", "grotto", "sea cave"],
+  "terrain.marsh-basin": ["沼泽", "湿地", "泥沼", "marsh", "swamp", "bog", "wetland"],
+  "water.meandering-channel": ["河流", "河谷", "溪流", "河川", "河湾", "river", "stream", "riverbank"],
+  "water.tributary": ["支流", "分流", "tributary", "branch channel"],
+  "water.waterfall": ["瀑布", "落差", "waterfall", "cascade"],
+  "water.cavern-tide-pool": ["潮汐洞穴", "潮池", "潮汐池", "tidal cavern", "tidal pool", "tide pool"],
+  "ecology.mangrove-canopy": ["红树林", "mangrove"],
+  "ecology.tree-cluster": ["森林", "林地", "树林", "树群", "树冠", "forest", "woodland", "canopy"],
+  "ecology.undergrowth": ["森林", "林下", "灌木", "蕨类", "undergrowth", "forest floor"],
+  "ecology.fallen-log": ["森林", "倒木", "fallen log", "woodland"],
+  "ecology.ancient-tree": ["巨树", "古树", "树冠平台", "ancient tree", "giant tree"],
+  "ecology.fungal-grove": ["蘑菇", "菌类", "菌林", "fungus", "fungal", "mushroom"],
+};
+
+function filterRetrievedCapabilities(prompt: string, ids: readonly string[]): string[] {
+  const text = normalized(prompt);
+  const hasExplicitParent = has(text, [
+    "森林", "林地", "树林", "巨树", "树冠", "forest", "woodland", "canopy", "ancient tree", "giant tree",
+    "山", "高山", "山地", "山脊", "峡谷", "高原", "峰顶", "mountain", "ridge", "canyon", "plateau", "summit",
+    "冰原", "冰盖", "冰川", "冻土", "雪原", "ice field", "ice sheet", "glacier", "tundra", "permafrost",
+    "河流", "河谷", "溪流", "河川", "瀑布", "river", "stream", "riverbank", "waterfall",
+    "沼泽", "湿地", "泥沼", "marsh", "swamp", "bog", "wetland",
+    "洞穴", "洞窟", "岩窟", "溶洞", "海蚀洞", "cave", "cavern", "grotto", "sea cave",
+    "火山", "火山口", "熔岩", "岩浆", "volcano", "volcanic", "caldera", "lava",
+    "裂谷", "裂缝", "裂隙", "深渊", "rift", "ravine", "chasm", "fissure",
+    "浮空岛", "浮空岩岛", "浮岛", "空岛", "悬空岛", "漂浮岩岛", "floating island", "sky island",
+    "陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater",
+  ]);
+  if (!hasExplicitParent) return [...ids];
+  return ids.filter((id) => {
+    const cues = MACRO_CAPABILITY_CUES[id];
+    return !cues || cues.some((cue) => text.includes(cue));
+  });
+}
+
 function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   const text = normalized(prompt);
   if (has(text, ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"])) return "crater";
@@ -217,10 +266,11 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
 export function compileSceneComposition(request: GenerationRequest, source: SceneCompositionProgram["source"] = "local", retrievedCapabilityIds: string[] = []): SceneCompositionProgram {
   const lexicalDomain = domainFor(request.prompt);
   const text = normalized(request.prompt);
+  const compatibleRetrievedCapabilityIds = filterRetrievedCapabilities(request.prompt, retrievedCapabilityIds);
   const settlementParent = hasSettlementParent(text);
   const subordinateCaveFeature = settlementParent
     && has(text, ["地下海蚀洞", "地下洞穴", "秘密洞穴", "洞穴入口", "underground sea cave", "underground cave", "secret cave", "cave entrance"]);
-  const retrievedDomain = resolveCapabilityDomain(retrievedCapabilityIds);
+  const retrievedDomain = resolveCapabilityDomain(compatibleRetrievedCapabilityIds);
   // A named natural parent with an embedded facility already has deterministic
   // macro ownership in the scene planner. Retrieval may enrich the child, but
   // must not replace a mountain ridge with an unrelated river grammar merely
@@ -263,7 +313,7 @@ export function compileSceneComposition(request: GenerationRequest, source: Scen
   }
   const selectedMotifIds = [...new Set(motifIds)];
   const moduleIds = new Set(selectedMotifIds.flatMap((id) => DESIGNER_MOTIFS.find((entry) => entry.id === id)?.moduleIds ?? []));
-  const capabilityIds = [...new Set([...FUNCTIONAL_MODULES.filter((entry) => moduleIds.has(entry.id)).flatMap((entry) => entry.capabilityIds), ...retrievedCapabilityIds])].filter((id) => CAPABILITY_CARDS.some((entry) => entry.id === id));
+  const capabilityIds = [...new Set([...FUNCTIONAL_MODULES.filter((entry) => moduleIds.has(entry.id)).flatMap((entry) => entry.capabilityIds), ...compatibleRetrievedCapabilityIds])].filter((id) => CAPABILITY_CARDS.some((entry) => entry.id === id));
   const root = request.seed;
   return { version: 1, source, primaryDomain: domain, grammarId, motifIds: selectedMotifIds, capabilityIds, seeds: { root, macro: `${root}/macro`, meso: `${root}/meso`, tactical: `${root}/tactical`, building: `${root}/building`, ecology: `${root}/ecology`, micro: `${root}/micro`, style: `${root}/style` }, density: densityProfile(domain, request.density), style: styleFor(request.prompt, domain), requirements: semanticRequirements(request.prompt, domain) };
 }

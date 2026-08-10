@@ -3,6 +3,7 @@ import { planSceneProgramLocally, planSceneProgramWithOllama, type SceneProgram 
 import type { GenerationRequest, SceneKind } from "../schema";
 import { compileSceneComposition, type SceneCompositionProgram } from "../composition";
 import { retrieveCapabilitiesWithBge } from "../semantic/bge";
+import { shouldComposeWildernessFacility } from "../semantic/siteIntent";
 
 interface GenerationWorkerRequest {
   id: number;
@@ -57,8 +58,11 @@ async function planComposition(request: GenerationRequest): Promise<SceneComposi
   // benefit from capability retrieval, but their parent ownership is already
   // fixed by compileSceneComposition: BGE may enrich child atoms without
   // replacing the settlement grammar.
-  const retrieval = local.primaryDomain === "generic" || local.primaryDomain === "settlement"
-    ? await retrieveCapabilitiesWithBge(request.prompt)
+  const wildernessFacility = shouldComposeWildernessFacility(request.prompt);
+  const retrieval = local.primaryDomain === "generic"
+    || local.primaryDomain === "settlement"
+    || wildernessFacility
+    ? await retrieveCapabilitiesWithBge(request.prompt, { limit: wildernessFacility ? 10 : 6 })
     : undefined;
   const program = retrieval && retrieval.capabilityIds.length > 0 ? compileSceneComposition(request, retrieval.source === "bge" ? "bge" : "local", retrieval.capabilityIds) : local;
   compositionCache.set(key, program); if (compositionCache.size > 32) compositionCache.delete(compositionCache.keys().next().value ?? key);

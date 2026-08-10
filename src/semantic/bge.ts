@@ -64,8 +64,9 @@ function parseEmbeddings(value: unknown, expected: number): number[][] | undefin
  * geometry and failure always falls back to deterministic lexical retrieval.
  */
 export async function retrieveCapabilitiesWithBge(prompt: string, options: BgeRetrievalOptions = {}): Promise<CapabilityRetrieval> {
-  const fallback = retrieveCapabilitiesLexically(prompt, options.limit ?? 6);
-  const key = `${options.model ?? DEFAULT_BGE_MODEL}|${normalize(prompt)}`;
+  const limit = options.limit ?? 6;
+  const fallback = retrieveCapabilitiesLexically(prompt, limit);
+  const key = `${options.model ?? DEFAULT_BGE_MODEL}|limit:${limit}|${normalize(prompt)}`;
   const cached = retrievalCache.get(key); if (cached) return cached;
   const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 2_800);
   try {
@@ -77,8 +78,22 @@ export async function retrieveCapabilitiesWithBge(prompt: string, options: BgeRe
     const ranked = CAPABILITY_CARDS.map((card, index) => {
       const maturityPenalty = card.status === "planned" ? 0.035 : card.status === "prototype" ? 0.015 : 0;
       return { id: card.id, score: cosine(query, parsed[index + 1]!) - maturityPenalty };
-    }).filter((entry) => entry.score >= 0.28).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id)).slice(0, options.limit ?? 6);
-    const result: CapabilityRetrieval = ranked.length > 0 ? { source: "bge", capabilityIds: ranked.map((entry) => entry.id), scores: Object.fromEntries(ranked.map((entry) => [entry.id, Number(entry.score.toFixed(4))])) } : fallback;
+    }).filter((entry) => entry.score >= 0.28).sort((a, b) => b.score - a.score || a.id.localeCompare(b.id)).slice(0, limit);
+    // Preserve exact local aliases alongside embeddings. BGE is excellent at
+    // semantic proximity but can rank a broad ecology card above an explicit
+    // Chinese functional noun; lexical hits are still bounded catalog IDs and
+    // must not be discarded when the model is available.
+    const mergedIds = [...new Set([
+      ...fallback.capabilityIds,
+      ...ranked.map((entry) => entry.id),
+    ])].slice(0, limit);
+    const mergedScores = Object.fromEntries([
+      ...Object.entries(fallback.scores).map(([id, score]) => [id, score]),
+      ...ranked.map((entry) => [entry.id, Number(entry.score.toFixed(4))]),
+    ]);
+    const result: CapabilityRetrieval = mergedIds.length > 0
+      ? { source: "bge", capabilityIds: mergedIds, scores: mergedScores }
+      : fallback;
     retrievalCache.set(key, result); if (retrievalCache.size > 48) retrievalCache.delete(retrievalCache.keys().next().value ?? key);
     return result;
   } catch { return fallback; } finally { clearTimeout(timeout); }

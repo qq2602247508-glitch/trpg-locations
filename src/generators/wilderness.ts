@@ -1,6 +1,11 @@
 import type { GeneratedScene, GeneratorContext, MaterialKey, ScenePrimitive, SemanticGenerationHints, SettlementBuildingKind } from "../schema";
 import type { BuildingFunctionalModuleProgram } from "../site-program/schema";
-import { embeddedFacilityCapabilities, embeddedFacilityIntent, embeddedFacilityProfile } from "../semantic/siteIntent";
+import {
+  embeddedFacilityCapabilities,
+  embeddedFacilityIntent,
+  embeddedFacilityProfile,
+  embeddedFacilitySpacesFromCapabilities,
+} from "../semantic/siteIntent";
 import { resolveCapabilityDomain } from "../composition/capabilityDomain";
 import { instantiateBuildingModule } from "./buildingModule";
 import {
@@ -2160,6 +2165,180 @@ function rerouteParentTrailsAroundBuilding(
   }
 }
 
+interface CellFootprint {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+function taggedPrimitiveFootprint(
+  scene: GeneratedScene,
+  tag: string,
+  fallback: CellFootprint,
+): CellFootprint {
+  return scene.primitives
+    .filter((primitiveEntry) => primitiveEntry.tags?.includes(tag))
+    .reduce((footprint, primitiveEntry) => {
+      const rotation = primitiveEntry.rotationY ?? 0;
+      const cosine = Math.abs(Math.cos(rotation));
+      const sine = Math.abs(Math.sin(rotation));
+      const halfX = (primitiveEntry.size.x * cosine + primitiveEntry.size.z * sine) / CELL / 2;
+      const halfZ = (primitiveEntry.size.x * sine + primitiveEntry.size.z * cosine) / CELL / 2;
+      const px = primitiveEntry.position.x / CELL;
+      const pz = primitiveEntry.position.z / CELL;
+      return {
+        minX: Math.min(footprint.minX, px - halfX),
+        maxX: Math.max(footprint.maxX, px + halfX),
+        minZ: Math.min(footprint.minZ, pz - halfZ),
+        maxZ: Math.max(footprint.maxZ, pz + halfZ),
+      };
+    }, fallback);
+}
+
+/**
+ * Routes authored by the parent wilderness generator can only be finalized
+ * after the child building has emitted its annexes, launch aprons and other
+ * prompt-derived geometry.  This post-pass moves affected service routes onto
+ * the outside edge of the complete child footprint and rebuilds their visible
+ * traversal geometry.  The model/BGE never supplies these points.
+ */
+function rerouteServiceRoutesAroundBuildingFootprint(
+  scene: GeneratedScene,
+  footprint: CellFootprint,
+  fallbackY: number,
+): void {
+  const clearance = 1.45;
+  const rect = {
+    minX: Math.max(1.25, footprint.minX - clearance),
+    maxX: Math.min(scene.boundsCells.x - 1.25, footprint.maxX + clearance),
+    minZ: Math.max(1.25, footprint.minZ - clearance),
+    maxZ: Math.min(scene.boundsCells.z - 1.25, footprint.maxZ + clearance),
+  };
+  const inside = (point: { x: number; z: number }) => (
+    point.x > rect.minX && point.x < rect.maxX
+    && point.z > rect.minZ && point.z < rect.maxZ
+  );
+  const crosses = (from: { x: number; z: number }, to: { x: number; z: number }): boolean => {
+    for (let sample = 0; sample <= 28; sample += 1) {
+      const ratio = sample / 28;
+      if (inside({
+        x: from.x + (to.x - from.x) * ratio,
+        z: from.z + (to.z - from.z) * ratio,
+      })) return true;
+    }
+    return false;
+  };
+  const perimeterCandidates = [
+    { x: rect.minX, z: rect.minZ },
+    { x: rect.maxX, z: rect.minZ },
+    { x: rect.maxX, z: rect.maxZ },
+    { x: rect.minX, z: rect.maxZ },
+  ];
+  const nearestPerimeter = (point: { x: number; z: number }) => perimeterCandidates
+    .slice()
+    .sort((left, right) => (
+      Math.hypot(left.x - point.x, left.z - point.z)
+      - Math.hypot(right.x - point.x, right.z - point.z)
+    ))[0]!;
+
+  for (const route of scene.routes.filter((entry) => entry.id === "wilderness-service-loop")) {
+    const cells = route.points.map((point) => ({ x: point.x / CELL, z: point.z / CELL, y: point.y }));
+    if (cells.length < 2) continue;
+    const affected = cells.some(inside)
+      || cells.some((point, index) => {
+        const next = cells[index + 1];
+        return next ? crosses(point, next) : false;
+      });
+    if (!affected) continue;
+
+    const start = cells[0]!;
+    const requestedEnd = cells.at(-1)!;
+    const startAnchor = inside(start) ? nearestPerimeter(start) : start;
+    const endAnchor = nearestPerimeter(requestedEnd);
+    const startCornerIndex = perimeterCandidates
+      .map((point) => Math.hypot(point.x - startAnchor.x, point.z - startAnchor.z))
+      .reduce((best, distance, index, distances) => distance < distances[best]! ? index : best, 0);
+    const endCornerIndex = perimeterCandidates
+      .map((point) => Math.hypot(point.x - endAnchor.x, point.z - endAnchor.z))
+      .reduce((best, distance, index, distances) => distance < distances[best]! ? index : best, 0);
+    const ringPath = (direction: 1 | -1) => {
+      const result: Array<{ x: number; z: number }> = [];
+      let index = startCornerIndex;
+      for (let guard = 0; guard < 5; guard += 1) {
+        result.push(perimeterCandidates[index]!);
+        if (index === endCornerIndex) break;
+        index = (index + direction + perimeterCandidates.length) % perimeterCandidates.length;
+      }
+      return result;
+    };
+    const pathLength = (points: Array<{ x: number; z: number }>) => {
+      const chain = [startAnchor, ...points, endAnchor];
+      return chain.slice(1).reduce((sum, point, index) => (
+        sum + Math.hypot(point.x - chain[index]!.x, point.z - chain[index]!.z)
+      ), 0);
+    };
+    const clockwise = ringPath(1);
+    const counterClockwise = ringPath(-1);
+    const selected = pathLength(clockwise) <= pathLength(counterClockwise) ? clockwise : counterClockwise;
+    const rebuiltCells = [
+      start,
+      ...(inside(start) ? [startAnchor] : []),
+      ...selected,
+      endAnchor,
+    ].filter((point, index, array) => (
+      index === 0
+      || Math.hypot(point.x - array[index - 1]!.x, point.z - array[index - 1]!.z) > 0.12
+    )).map((point) => ({
+      x: point.x,
+      z: point.z,
+      y: terrainSurfaceY(scene, point.x, point.z, fallbackY),
+    }));
+
+    route.points = createRoute(`${route.id}-footprint-detour`, route.kind, rebuiltCells).points;
+    scene.primitives = scene.primitives.filter((primitiveEntry) => (
+      primitiveEntry.id !== "wilderness-service-path-a"
+      && primitiveEntry.id !== "wilderness-service-path-b"
+      && !primitiveEntry.id.startsWith("wilderness-service-loop-detour-")
+    ));
+    for (let index = 1; index < rebuiltCells.length; index += 1) {
+      const from = rebuiltCells[index - 1]!;
+      const to = rebuiltCells[index]!;
+      const tags = ["road", "trail", "service-route", "site-program", "building-footprint-detour", "terrain-following"];
+      if (Math.abs(to.y - from.y) <= feetToMeters(1.25)) {
+        scene.primitives.push(corridor(
+          `wilderness-service-loop-detour-${index}`,
+          0,
+          from.x,
+          from.z,
+          to.x,
+          to.z,
+          (from.y + to.y) / 2 + 0.02,
+          1.15,
+          "rock",
+          tags,
+        ));
+      } else {
+        const lower = from.y <= to.y
+          ? { xCells: from.x, zCells: from.z, yMeters: from.y }
+          : { xCells: to.x, zCells: to.z, yMeters: to.y };
+        const upper = from.y <= to.y
+          ? { xCells: to.x, zCells: to.z, yMeters: to.y }
+          : { xCells: from.x, zCells: from.z, yMeters: from.y };
+        scene.primitives.push(stairConnection(
+          `wilderness-service-loop-detour-${index}`,
+          0,
+          lower,
+          upper,
+          1.15,
+          "rock",
+          [...tags, "vertical-route", "supported"],
+        ).primitive);
+      }
+    }
+  }
+}
+
 function addCustomFacilityThemeAtoms(
   scene: GeneratedScene,
   intent: NonNullable<ReturnType<typeof embeddedFacilityIntent>>,
@@ -2247,12 +2426,18 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const facilityProfile = embeddedFacilityProfile(text);
   const facilityIntent = embeddedFacilityIntent(text);
   const facilityCapabilities = embeddedFacilityCapabilities(text);
+  const retrievedFacilitySpaces = embeddedFacilitySpacesFromCapabilities(context.compositionProgram?.capabilityIds ?? []);
+  const retrievedFacilityContract = retrievedFacilitySpaces.length >= 2
+    || (
+      retrievedFacilitySpaces.length >= 1
+      && context.compositionProgram?.capabilityIds.includes("structure.embedded-building") === true
+    );
   const wantsBuilding = facilityProfile !== undefined || [
     "木屋", "小屋", "猎人屋", "炼金师小屋", "林间屋", "林务站", "林务所", "巡护站", "护林站",
     "检疫站", "气象站", "科研站", "研究站", "观测站", "通信站", "雷达站", "边防站",
     "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station", "驿站",
     "quarantine station", "weather station", "meteorological station", "research station", "field station", "radio station",
-  ].some((term) => text.includes(term));
+  ].some((term) => text.includes(term)) || retrievedFacilityContract;
   if (!wantsBuilding || !["forest", "river-valley", "mountain", "swamp", "ice", "volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype)) return;
   const alchemical = ["炼金", "alchemy", "alchemist"].some((term) => text.includes(term));
   const hunter = ["猎人", "hunter"].some((term) => text.includes(term));
@@ -2262,7 +2447,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const observatory = facilityProfile === "observatory";
   const forge = facilityProfile === "forge";
   const sanatorium = facilityProfile === "sanatorium";
-  const customFacility = facilityProfile === "custom";
+  const customFacility = facilityProfile === "custom" || (facilityProfile === undefined && retrievedFacilityContract);
   const borderOutpost = facilityProfile === "border";
   const rangerStation = facilityProfile === "ranger";
   const mangrove = ["红树林", "mangrove"].some((term) => text.includes(term));
@@ -2292,6 +2477,13 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
             : ["单层", "一层", "1层", "single-storey", "single-story", "one storey", "one story"].some((term) => text.includes(term)) ? 1
               : undefined;
   const customTowerLike = ["系留塔", "信号塔", "灯塔", "瞭望塔", "观察塔", "塔台", "mooring tower", "signal tower", "lighthouse", "watchtower", "control tower"].some((term) => text.includes(term));
+  const retrievedCustomKind: SettlementBuildingKind = retrievedFacilitySpaces.includes("chapel") ? "shrine"
+    : retrievedFacilitySpaces.includes("medical") ? "clinic"
+      : retrievedFacilitySpaces.some((space) => space === "hangar" || space === "fuel" || space === "workshop" || space === "distillation") ? "factory"
+        : retrievedFacilitySpaces.includes("quarters") ? "home"
+          : retrievedFacilitySpaces.includes("storage") ? "warehouse"
+            : retrievedFacilitySpaces.includes("observation") ? "tower"
+              : "guild";
   const customKind: SettlementBuildingKind = customTowerLike ? "tower"
     : facilityIntent?.use === "sacred" ? "shrine"
     : facilityIntent?.use === "medical" ? "clinic"
@@ -2300,7 +2492,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
           : facilityIntent?.use === "hospitality" ? "tavern"
             : facilityIntent?.use === "storage" ? "warehouse"
               : facilityIntent?.use === "residential" ? "home"
-                : "guild";
+                : retrievedCustomKind;
   if (coldWetland) {
     for (const primitiveEntry of scene.primitives) {
       if (!primitiveEntry.tags?.some((tag) => tag === "water" || tag === "thaw-basin" || tag === "thaw-pool")) continue;
@@ -2390,7 +2582,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     .sort((left, right) => Math.hypot(left.centerCells.x - x, left.centerCells.z - z) - Math.hypot(right.centerCells.x - x, right.centerCells.z - z))[0];
   const entranceDirection = nearestReservation && nearestReservation.centerCells.x > x ? -1 : 1;
   const entrance = { x: x + entranceDirection * 8.5, z: z + 5.5 };
-  const customSpaces = new Set(facilityIntent?.spaces ?? []);
+  const customSpaces = new Set([...(facilityIntent?.spaces ?? []), ...retrievedFacilitySpaces]);
   if (
     customFacility
     && facilityCapabilities.undergroundStore
@@ -3134,6 +3326,12 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     if (basement) basement.name = "Underground greenhouse and root laboratory";
   }
   if (hunter) scene.tactical.push(tacticalFeature("hunter-ambush-line", "cover", x + 5.5, z + 3, baseY, 2, "The woodpile, fence and tree line form a prepared hunter ambush position."));
+  const completeBuildingFootprint = taggedPrimitiveFootprint(
+    scene,
+    "building-instance:wilderness-core-building",
+    { minX: x - 7, maxX: x + 7, minZ: z - 6, maxZ: z + 6 },
+  );
+  rerouteServiceRoutesAroundBuildingFootprint(scene, completeBuildingFootprint, terrainBaseY);
   scene.siteProgram = { version: 1, siteType: "wilderness-site", districtCount: 1, roadCount: siteRoadCount, junctionCount: 1, blockCount: 1, parcelCount: 1, fullInteriorCount: 1, facadeCount: 0, massCount: 0, roadLengthCells: siteRoadLength, parcelCoverage: (13 * 12) / (width * depth), buildingCoverage: (9 * 8) / (width * depth), averageParcelArea: 13 * 12, openSpaceRatio: 1 - (13 * 12) / (width * depth), roadPattern: "anchor-web", curvedRoadRatio: siteRoadCount > 0 ? 1 : 0, nonRectangularBlockRatio: 1, terrainKind: archetype === "forest" ? "forest-clearing" : archetype === "mountain" ? "valley" : "rolling" };
   scene.floors = Math.max(scene.floors, 4);
   scene.floorHeightFeet = [12, 10, 8, 10];

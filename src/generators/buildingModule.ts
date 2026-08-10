@@ -528,21 +528,64 @@ function addFunctionalModuleGeometry(
       // A hangar is much wider than the normal functional annexes.  When the
       // parent building sits near a wilderness boundary, blindly alternating
       // left/right can send the wide door, launch apron and its route beyond
-      // the authored scene. Preserve the Seed-selected side whenever it fits;
-      // only flip to the alternate side when the preferred outer apron edge
-      // leaves the authored bounds and the alternate has more clearance.
-      const maximumX = scene.boundsCells.x * GRID_METERS;
-      const maximumZ = scene.boundsCells.z * GRID_METERS;
+      // the authored scene or cut through an already-authored wilderness
+      // route. Preserve the Seed-selected side whenever it fits both
+      // constraints; otherwise prefer the alternate side only when it has
+      // better boundary clearance and does not intersect the service network.
+      const maximumX = scene.boundsCells.x;
+      const maximumZ = scene.boundsCells.z;
       const apronWidth = 5.2;
+      const toLocal = (worldX: number, worldZ: number): { x: number; z: number } => {
+        const dx = worldX / GRID_METERS - lot.x;
+        const dz = worldZ / GRID_METERS - lot.z;
+        const cosine = Math.cos(lot.rotation);
+        const sine = Math.sin(lot.rotation);
+        return {
+          x: dx * cosine - dz * sine,
+          z: dx * sine + dz * cosine,
+        };
+      };
       const apronMargin = (candidateSide: number): number => {
         const candidateHangarX = candidateSide * (lot.width * 0.5 + hangarWidth * 0.5 + 0.28);
         const candidateApronX = candidateHangarX + candidateSide * (hangarWidth / 2 + 2.7);
         const outerEdge = point(candidateApronX + candidateSide * apronWidth * 0.5, localZ);
         return Math.min(outerEdge.x, maximumX - outerEdge.x, outerEdge.z, maximumZ - outerEdge.z);
       };
+      const routeCrossesBackWall = (candidateSide: number): boolean => {
+        const candidateHangarX = candidateSide * (lot.width * 0.5 + hangarWidth * 0.5 + 0.28);
+        const wallZ = localZ - hangarDepth / 2;
+        const wallMinX = candidateHangarX - hangarWidth / 2 - 0.55;
+        const wallMaxX = candidateHangarX + hangarWidth / 2 + 0.55;
+        const wallTolerance = 0.55;
+        return scene.routes.some((route) => route.points.some((routePoint, pointIndex) => {
+          const next = route.points[pointIndex + 1];
+          if (!next) return false;
+          const from = toLocal(routePoint.x, routePoint.z);
+          const to = toLocal(next.x, next.z);
+          const segmentMinZ = Math.min(from.z, to.z);
+          const segmentMaxZ = Math.max(from.z, to.z);
+          if (segmentMaxZ < wallZ - wallTolerance || segmentMinZ > wallZ + wallTolerance) return false;
+          const deltaZ = to.z - from.z;
+          if (Math.abs(deltaZ) < 1e-6) {
+            return Math.abs(from.z - wallZ) <= wallTolerance
+              && Math.max(from.x, to.x) >= wallMinX
+              && Math.min(from.x, to.x) <= wallMaxX;
+          }
+          const ratio = (wallZ - from.z) / deltaZ;
+          if (ratio < -0.08 || ratio > 1.08) return false;
+          const intersectionX = from.x + (to.x - from.x) * ratio;
+          return intersectionX >= wallMinX && intersectionX <= wallMaxX;
+        }));
+      };
       const preferredMargin = apronMargin(side);
       const alternateMargin = apronMargin(-side);
-      if (preferredMargin < 0 && alternateMargin > preferredMargin) side *= -1;
+      const preferredCrossesRoute = routeCrossesBackWall(side);
+      const alternateCrossesRoute = routeCrossesBackWall(-side);
+      if (
+        (preferredMargin < 0 || preferredCrossesRoute)
+        && alternateMargin > preferredMargin
+        && !alternateCrossesRoute
+      ) side *= -1;
       const hangarX = side * (lot.width * 0.5 + hangarWidth * 0.5 + 0.28);
       const hangarZ = localZ;
       const hangarHeight = feetToMeters(16);
