@@ -634,7 +634,8 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   // feet of earth above a nine-foot cellar wall.
   const basementDepthFeet = lot.siteProfile === "field-station" || lot.siteProfile === "weather-station" ? 12 : 16;
   const basementY = baseY - feetToMeters(basementDepthFeet);
-  const tags = ["settlement-building", "independent-building-module", "full-interior", `building:${lot.kind}`, `building-instance:${lot.id}`, `district:${lot.district}`];
+  const stateTags = lot.state && lot.state !== "active" ? [`building-state:${lot.state}`] : [];
+  const tags = ["settlement-building", "independent-building-module", "full-interior", `building:${lot.kind}`, `building-instance:${lot.id}`, `district:${lot.district}`, ...stateTags];
   const point = (x: number, z: number) => localPoint(lot, x, z);
   const addRotatedBox = (id: string, x: number, z: number, w: number, h: number, d: number, y: number, material: MaterialKey, extra: string[] = [], level = 0) => {
     const p = point(x, z);
@@ -724,15 +725,43 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   const upperWidth = width * 0.72;
   const upperDepth = depth * 0.64;
   const labels = fullInteriorLabels(lot.kind, lot.siteProfile);
+  const genericUpperFloorDatums: Array<{
+    y: number;
+    width: number;
+    depth: number;
+    centerX: number;
+    centerZ: number;
+    wallHeight: number;
+  }> = [];
   if (wizardTower) addWizardRoundFloorRing("upper-floor", primaryOffset.x + 0.08, primaryOffset.z - 0.05, Math.min(upperWidth, upperDepth), upperY, 1);
-  else addRotatedBox("upper-floor", primaryOffset.x + 0.08, primaryOffset.z - 0.05, upperWidth, FLOOR_SLAB_METERS, upperDepth, upperY, "wood", ["floor", "standable", "upper-floor"], 1);
+  else if (generated.floors > 1) addFloorWithCentralOpening("upper-floor", primaryOffset.x + 0.08, primaryOffset.z - 0.05, upperWidth, upperDepth, upperY, 1);
   if (wizardTower) {
     const firstUpperWallHeight = Math.max(feetToMeters(8), feetToMeters(generated.floorHeightFeet[1] ?? generated.floorHeightFeet[0] ?? 11) - FLOOR_SLAB_METERS);
     addWizardRoundWallRing("upper-ring-1", primaryOffset.x + 0.08, primaryOffset.z - 0.05, Math.min(upperWidth, upperDepth), upperY, firstUpperWallHeight, 1);
-  } else {
-    addRotatedBox("upper-north", primaryOffset.x + 0.08, primaryOffset.z - upperDepth / 2 - 0.05, upperWidth, wallHeight * 0.82, 0.2, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
-    addRotatedBox("upper-west", primaryOffset.x - upperWidth / 2 + 0.08, primaryOffset.z - 0.05, 0.2, wallHeight * 0.82, upperDepth, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
-    addRotatedBox("upper-east", primaryOffset.x + upperWidth / 2 + 0.08, primaryOffset.z - 0.05, 0.2, wallHeight * 0.82, upperDepth, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
+  } else if (generated.floors > 1) {
+    const firstUpperWallHeight = Math.max(feetToMeters(8), feetToMeters(generated.floorHeightFeet[1] ?? generated.floorHeightFeet[0] ?? 11) - FLOOR_SLAB_METERS);
+    const centerX = primaryOffset.x + 0.08;
+    const centerZ = primaryOffset.z - 0.05;
+    addRotatedBox("upper-north", centerX, centerZ - upperDepth / 2, upperWidth, firstUpperWallHeight, 0.2, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
+    addRotatedBox("upper-west", centerX - upperWidth / 2, centerZ, 0.2, firstUpperWallHeight, upperDepth, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
+    addRotatedBox("upper-east", centerX + upperWidth / 2, centerZ, 0.2, firstUpperWallHeight, upperDepth, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening", "focus-cutaway"], 1);
+    genericUpperFloorDatums.push({ y: upperY, width: upperWidth, depth: upperDepth, centerX, centerZ, wallHeight: firstUpperWallHeight });
+
+    let floorY = upperY;
+    for (let physicalFloor = 2; physicalFloor < generated.floors; physicalFloor += 1) {
+      floorY += feetToMeters(generated.floorHeightFeet[physicalFloor - 1] ?? generated.floorHeightFeet[0] ?? 11);
+      const scale = Math.max(0.46, 0.72 - physicalFloor * 0.055);
+      const floorWidth = Math.max(3.4, width * scale);
+      const floorDepth = Math.max(3.4, depth * scale);
+      const floorCenterX = primaryOffset.x + (physicalFloor % 2 === 0 ? -0.06 : 0.08);
+      const floorCenterZ = primaryOffset.z - physicalFloor * 0.045;
+      const floorWallHeight = Math.max(feetToMeters(8), feetToMeters(generated.floorHeightFeet[physicalFloor] ?? generated.floorHeightFeet[0] ?? 11) - FLOOR_SLAB_METERS);
+      addFloorWithCentralOpening(`stacked-upper-${physicalFloor}-floor`, floorCenterX, floorCenterZ, floorWidth, floorDepth, floorY, 1);
+      addRotatedBox(`stacked-upper-${physicalFloor}-north`, floorCenterX, floorCenterZ - floorDepth / 2, floorWidth, floorWallHeight, 0.2, floorY, generated.material, ["wall", "upper-floor", "stacked-floor", "opening", "window-opening"], 1);
+      addRotatedBox(`stacked-upper-${physicalFloor}-west`, floorCenterX - floorWidth / 2, floorCenterZ, 0.2, floorWallHeight, floorDepth, floorY, generated.material, ["wall", "upper-floor", "stacked-floor", "opening", "window-opening"], 1);
+      addRotatedBox(`stacked-upper-${physicalFloor}-east`, floorCenterX + floorWidth / 2, floorCenterZ, 0.2, floorWallHeight, floorDepth, floorY, generated.material, ["wall", "upper-floor", "stacked-floor", "opening", "window-opening", "focus-cutaway"], 1);
+      genericUpperFloorDatums.push({ y: floorY, width: floorWidth, depth: floorDepth, centerX: floorCenterX, centerZ: floorCenterZ, wallHeight: floorWallHeight });
+    }
   }
   if (generated.floors > 1 && (lot.siteProfile === "field-station" || lot.siteProfile === "weather-station")) {
     const fixtureTags = ["upper-floor", "observation-loft", "station-fixture", "cover"];
@@ -741,6 +770,7 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     addRotatedBox("upper-instrument-rack", primaryOffset.x + upperWidth * 0.32, primaryOffset.z - upperDepth * 0.2, 0.62, feetToMeters(5.6), Math.max(1.2, upperDepth * 0.3), upperY + FLOOR_SLAB_METERS, "metal", [...fixtureTags, "instrument-rack", "observation"], 1);
   }
   const wizardFloorDatums: Array<{ y: number; width: number; depth: number }> = [{ y: baseY, width, depth }, { y: upperY, width: upperWidth, depth: upperDepth }];
+  let authoredRoofBaseY = baseY + totalHeight;
   if (wizardTower) {
     let floorY = upperY;
     for (let physicalFloor = 2; physicalFloor < generated.floors; physicalFloor += 1) {
@@ -756,8 +786,14 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     const roofP = point(primaryOffset.x, primaryOffset.z);
     scene.primitives.push(primitive(`${lot.id}-wizard-spire-roof`, "cone", 2, roofP.x, baseY + totalHeight, roofP.z, Math.max(upperWidth, upperDepth) * 1.524, feetToMeters(8), Math.max(upperWidth, upperDepth) * 1.524, "roof", [...tags, "roof", "wizard-tower", "spire", "vertical-landmark"], lot.rotation));
   } else {
-    const roofP = point(primaryOffset.x + 0.08, primaryOffset.z - 0.05);
-    scene.primitives.push(primitive(`${lot.id}-gable-roof`, "gable", 2, roofP.x, upperY + wallHeight * 0.82, roofP.z, (upperDepth + 1) * 1.524, feetToMeters(5.5), (upperWidth + 1) * 1.524, "roof", [...tags, "roof", "pitched-roof", "standable"], lot.rotation + Math.PI / 2));
+    const topFloor = genericUpperFloorDatums.at(-1);
+    const roofCenterX = topFloor?.centerX ?? primaryOffset.x;
+    const roofCenterZ = topFloor?.centerZ ?? primaryOffset.z;
+    const roofWidth = topFloor?.width ?? width;
+    const roofDepth = topFloor?.depth ?? depth;
+    authoredRoofBaseY = topFloor ? topFloor.y + topFloor.wallHeight : baseY + wallHeight;
+    const roofP = point(roofCenterX, roofCenterZ);
+    scene.primitives.push(primitive(`${lot.id}-gable-roof`, "gable", 2, roofP.x, authoredRoofBaseY, roofP.z, (roofDepth + 1) * 1.524, feetToMeters(5.5), (roofWidth + 1) * 1.524, "roof", [...tags, "roof", "pitched-roof", "standable"], lot.rotation + Math.PI / 2));
   }
   addRotatedBox("basement-floor", 0, 0, width * 0.64, FLOOR_SLAB_METERS, depth * 0.58, basementY, "stone", ["floor", "underground", "standable"], 3);
   addRotatedBox("basement-north", 0, -depth * 0.29, width * 0.64, feetToMeters(9), 0.22, basementY, "darkStone", ["wall", "underground", "opening"], 3);
@@ -820,8 +856,9 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   const barrelP = point(width * 0.22, depth * 0.02);
   scene.primitives.push(cylinder(`${lot.id}-basement-barrel`, 3, barrelP.x, basementY + FLOOR_SLAB_METERS, barrelP.z, 0.72, feetToMeters(3.2), lot.kind === "clinic" ? "metal" : "wood", [...tags, "underground", "basement-fixture", "cellar-barrel", ...cellarRoleTags, "cover"]));
   scene.tactical.push(tacticalFeature(`${lot.id}-basement-storage-cover`, "cover", barrelP.x, barrelP.z, basementY, 1.4, "Shelving, stacked stores and a barrel divide the cellar into searchable cover lanes."));
-  const stairP = point(width * 0.28, depth * 0.08);
+  const stairP = point(wizardTower ? width * 0.28 : primaryOffset.x, wizardTower ? depth * 0.08 : primaryOffset.z);
   const wizardSpiralRoutePoints: Array<{ x: number; z: number; y: number }> = [];
+  const genericStackedRoutePoints: Array<{ x: number; z: number; y: number }> = [];
   if (wizardTower) {
     const stepCount = 18;
     for (let flight = 1; flight < wizardFloorDatums.length; flight += 1) {
@@ -873,7 +910,21 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       wizardSpiralRoutePoints.push({ x: landingWorld.x, z: landingWorld.z, y: to.y });
     }
   } else {
-    scene.primitives.push(stairs(`${lot.id}-upper-stair`, 0, stairP.x, baseY, stairP.z, 1.2, wallHeight, 4.2, "wood", [...tags, "building-stair", "vertical-opening"], lot.rotation));
+    const stackedDatums = [{ y: baseY, centerX: primaryOffset.x, centerZ: primaryOffset.z }, ...genericUpperFloorDatums];
+    for (let flight = 1; flight < stackedDatums.length; flight += 1) {
+      const from = stackedDatums[flight - 1]!;
+      const to = stackedDatums[flight]!;
+      const rise = to.y - from.y;
+      const stairLocalX = (from.centerX + to.centerX) / 2;
+      const stairLocalZ = (from.centerZ + to.centerZ) / 2;
+      const stairWorld = point(stairLocalX, stairLocalZ);
+      scene.primitives.push(
+        stairs(`${lot.id}-upper-stair-${flight}`, flight === 1 ? 0 : 1, stairWorld.x, from.y, stairWorld.z, 1.2, rise, 4.2, "wood", [...tags, "building-stair", "vertical-opening", "stacked-stair"], lot.rotation + (flight % 2 === 0 ? Math.PI : 0)),
+        box(`${lot.id}-upper-stair-landing-${flight}`, 1, stairWorld.x, to.y - 0.08, stairWorld.z, 1.35, 0.16, 1.35, "wood", [...tags, "building-stair", "stair-landing", "vertical-opening", "standable"], lot.rotation),
+      );
+      if (flight === 1) genericStackedRoutePoints.push({ x: stairWorld.x, z: stairWorld.z, y: from.y });
+      genericStackedRoutePoints.push({ x: stairWorld.x, z: stairWorld.z, y: to.y });
+    }
   }
   const cellarP = point(-width * 0.3, depth * 0.08);
   const hasDedicatedBasementAccess = lot.functionalModules?.some((module) => module.kind === "archive" && module.levelRole === "basement") === true;
@@ -897,6 +948,15 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       const roomId = `core-${lot.id}-wizard-upper-${physicalFloor}`;
       const roomName = physicalFloor === wizardFloorDatums.length - 1 ? "Observatory and roof access chamber" : `Arcane study chamber ${physicalFloor}`;
       scene.rooms.push(createRoom(roomId, roomName, physicalFloor === wizardFloorDatums.length - 1 ? "combat" : "private", 1, lot.x, lot.z, datum.width * 0.8, datum.depth * 0.8, datum.y));
+      connectRooms(scene.rooms, previousRoomId, roomId);
+      previousRoomId = roomId;
+    }
+  } else {
+    let previousRoomId = upperId;
+    for (let physicalFloor = 2; physicalFloor <= genericUpperFloorDatums.length; physicalFloor += 1) {
+      const datum = genericUpperFloorDatums[physicalFloor - 1]!;
+      const roomId = `core-${lot.id}-upper-${physicalFloor}`;
+      scene.rooms.push(createRoom(roomId, `${labels.upperName} ${physicalFloor}`, lot.kind === "tower" ? "combat" : "private", 1, datum.centerX, datum.centerZ, datum.width * 0.82, datum.depth * 0.82, datum.y));
       connectRooms(scene.rooms, previousRoomId, roomId);
       previousRoomId = roomId;
     }
@@ -926,10 +986,9 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     ];
   const upperRoutes = wizardTower
     ? [createRoute(`${lot.id}-wizard-spiral-route`, "vertical", wizardSpiralRoutePoints, { purpose: "movement", traffic: 0.52, schedule: "all" })]
-    : [createRoute(`${lot.id}-vertical-route`, "vertical", [
-      { x: stairP.x, z: stairP.z, y: baseY },
-      { x: upperP.x, z: upperP.z, y: upperY },
-    ])];
+    : genericStackedRoutePoints.length > 1
+      ? [createRoute(`${lot.id}-vertical-route`, "vertical", genericStackedRoutePoints, { purpose: "movement", traffic: 0.48, schedule: "all" })]
+      : [];
   scene.routes.push(
     createRoute(`${lot.id}-entry-route`, "primary", [
       ...entryRoutePoints,
@@ -1243,13 +1302,31 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       [labels.tags[Math.min(extensionIndex + 1, labels.tags.length - 1)] ?? "service", ...fixtureTags],
     );
   }
+  if (lot.state === "abandoned") {
+    const damagedPart = envelope.parts.at(-1);
+    if (damagedPart) {
+      // Full-interior buildings must express abandonment as changed geometry,
+      // not only a label. Remove one facade and part of the roof from the last
+      // annex, then turn the missing material into reachable rubble cover.
+      scene.primitives = scene.primitives.filter((primitiveEntry) => {
+        if (!primitiveEntry.id.startsWith(`${lot.id}-envelope-${damagedPart.id}-`)) return true;
+        return !primitiveEntry.id.includes("-front") && !primitiveEntry.id.endsWith("-roof");
+      });
+      const damagedCenter = point(damagedPart.offset.x, damagedPart.offset.z + damagedPart.size.z * 0.28);
+      scene.primitives.push(
+        box(`${lot.id}-abandoned-rubble`, 0, damagedCenter.x, baseY, damagedCenter.z, Math.max(1.4, damagedPart.size.x * 0.68), feetToMeters(2.4), Math.max(1.2, damagedPart.size.z * 0.38), "rock", [...tags, "collapsed", "rubble", "cover", "broken-roofline"], lot.rotation + 0.12),
+        box(`${lot.id}-abandoned-roof-fragment`, 0, damagedCenter.x - 0.35, baseY + feetToMeters(2.2), damagedCenter.z + 0.2, Math.max(1.2, damagedPart.size.x * 0.54), 0.18, Math.max(0.9, damagedPart.size.z * 0.28), "roof", [...tags, "collapsed", "roof-fragment", "cover"], lot.rotation - 0.2),
+      );
+      scene.tactical.push(tacticalFeature(`${lot.id}-abandoned-breach`, "cover", damagedCenter.x, damagedCenter.z, baseY, 1.6, "A collapsed annex wall opens a secondary breach through rubble and broken roofing."));
+    }
+  }
   scene.tactical.push(tacticalFeature(`${lot.id}-interior-choke`, "chokepoint", lot.x, lot.z + depth * 0.34, baseY, 1, "The independently generated entrance and internal partition form a defensible threshold."));
   const instance: BuildingInstance = {
     id: lot.id, archetype: lot.kind, seed: lot.seed, district: lot.district,
     positionCells: { x: lot.x, z: lot.z }, footprintCells: { x: lot.width, z: lot.depth }, rotationY: lot.rotation,
     floors: generated.floors, floorHeightFeet: [...generated.floorHeightFeet], detailLevel: "full-interior",
     baseYMeters: baseY,
-    exteriorHeightMeters: wizardTower ? totalHeight : wallHeight * 1.82,
+    exteriorHeightMeters: authoredRoofBaseY - baseY,
     ...(lot.parcelId ? { parcelId: lot.parcelId } : {}), ...(lot.frontageRoadId ? { frontageRoadId: lot.frontageRoadId } : {}), entranceCells: frontDoorP,
     buildingProgram: summarizeBuildingProgram(interiorProgram, [...labels.tags, ...functionalTags(lot)]),
     interiorProgram,

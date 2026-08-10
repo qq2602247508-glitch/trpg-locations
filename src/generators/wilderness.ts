@@ -1,6 +1,6 @@
-import type { GeneratedScene, GeneratorContext, MaterialKey, ScenePrimitive, SemanticGenerationHints } from "../schema";
+import type { GeneratedScene, GeneratorContext, MaterialKey, ScenePrimitive, SemanticGenerationHints, SettlementBuildingKind } from "../schema";
 import type { BuildingFunctionalModuleProgram } from "../site-program/schema";
-import { embeddedFacilityCapabilities, embeddedFacilityProfile } from "../semantic/siteIntent";
+import { embeddedFacilityCapabilities, embeddedFacilityIntent, embeddedFacilityProfile } from "../semantic/siteIntent";
 import { resolveCapabilityDomain } from "../composition/capabilityDomain";
 import { instantiateBuildingModule } from "./buildingModule";
 import {
@@ -2157,9 +2157,97 @@ function rerouteParentTrailsAroundBuilding(
   }
 }
 
+function addCustomFacilityThemeAtoms(
+  scene: GeneratedScene,
+  intent: NonNullable<ReturnType<typeof embeddedFacilityIntent>>,
+  x: number,
+  z: number,
+  baseY: number,
+  topFloorY: number,
+  roofY: number,
+): void {
+  const common = ["site-program", "prompt-derived-fixture", `facility-theme:${intent.theme}`, "building-instance:wilderness-core-building", "full-interior", "focus-interior"];
+  if (intent.theme === "clockwork") {
+    scene.primitives.push(
+      box("wilderness-custom-clock-bench", 0, x - 1.7, baseY + FLOOR_SLAB_METERS, z + 0.9, 3.4, feetToMeters(3.1), 1.1, "wood", [...common, "clockwork", "repair-bench", "cover"]),
+      box("wilderness-custom-clock-parts-rack", 0, x + 2.6, baseY + FLOOR_SLAB_METERS, z - 0.6, 0.62, feetToMeters(6), 3, "metal", [...common, "clockwork", "parts-cabinet", "archive", "cover"]),
+      cylinder("wilderness-custom-clock-main-gear", 0, x - 1.7, baseY + feetToMeters(3.2), z + 0.9, 1.35, 0.2, "metal", [...common, "clockwork", "gear", "machinery"]),
+      cylinder("wilderness-custom-clock-small-gear-a", 0, x - 0.8, baseY + feetToMeters(3.2), z + 0.9, 0.72, 0.18, "metal", [...common, "clockwork", "gear", "machinery"]),
+      cylinder("wilderness-custom-clock-small-gear-b", 0, x - 2.6, baseY + feetToMeters(3.2), z + 0.9, 0.62, 0.18, "metal", [...common, "clockwork", "gear", "machinery"]),
+      cylinder("wilderness-custom-clock-drive-shaft", 0, x + 0.6, baseY + FLOOR_SLAB_METERS, z - 1.5, 0.42, feetToMeters(8), "metal", [...common, "clockwork", "drive-shaft", "vertical-landmark"]),
+    );
+    scene.tactical.push(tacticalFeature("wilderness-custom-clock-cover", "cover", x - 1.5, z + 0.9, baseY, 1.4, "Clock benches, gear assemblies and parts cabinets divide the repair floor into close cover lanes."));
+  } else if (intent.theme === "specimen") {
+    scene.primitives.push(
+      box("wilderness-custom-specimen-prep-table", 0, x - 1.2, baseY + FLOOR_SLAB_METERS, z + 0.8, 3.6, feetToMeters(3), 1.3, "metal", [...common, "specimen", "preparation-table", "laboratory", "cover"]),
+      box("wilderness-custom-specimen-display-west", 0, x + 2.5, baseY + FLOOR_SLAB_METERS, z - 1.5, 0.8, feetToMeters(4.4), 2.2, "stone", [...common, "specimen", "display-plinth", "archive", "cover"]),
+      box("wilderness-custom-specimen-display-east", 0, x + 2.5, baseY + FLOOR_SLAB_METERS, z + 1.5, 0.8, feetToMeters(4.4), 2.2, "stone", [...common, "specimen", "display-plinth", "archive", "cover"]),
+      primitive("wilderness-custom-specimen-skull", "sphere", 0, x + 2.5, baseY + feetToMeters(5.2), z - 1.5, feetToMeters(3), feetToMeters(2.4), feetToMeters(3), "plaster", [...common, "specimen", "fossil-skull", "landmark"]),
+    );
+    for (let index = 0; index < 5; index += 1) {
+      scene.primitives.push(box(`wilderness-custom-specimen-rib-${index + 1}`, 0, x - 1.8 + index * 0.85, baseY + feetToMeters(3.25), z + 0.8 + Math.sin(index * 0.8) * 0.22, 0.58, 0.12, 1.15 + index * 0.08, "plaster", [...common, "specimen", "fossil-rib", "display"], 0.12 * (index - 2)));
+    }
+    scene.tactical.push(tacticalFeature("wilderness-custom-specimen-cover", "cover", x + 2.5, z, baseY, 1.4, "Heavy fossil displays and preparation tables form hard cover around the collection hall."));
+  } else if (intent.theme === "airship") {
+    // Airship facilities need one reinforced carrier deck rather than the
+    // generic observation kit plus a second coplanar platform.
+    scene.primitives = scene.primitives.filter((primitiveEntry) => (
+      !primitiveEntry.id.startsWith("wilderness-core-building-observation-")
+      && primitiveEntry.id !== "wilderness-core-building-gable-roof"
+    ));
+    const roofAccess = stairConnection(
+      "wilderness-custom-airship-roof-access",
+      1,
+      { xCells: x + 2.1, zCells: z + 0.8, yMeters: topFloorY },
+      { xCells: x - 2.1, zCells: z + 0.8, yMeters: roofY },
+      1.1,
+      "metal",
+      [...common, "airship", "roof-access", "standable", "supported"],
+    );
+    const basementY = baseY - feetToMeters(16);
+    scene.primitives.push(
+      box("wilderness-custom-airship-maintenance-bed", 0, x - 1.25, baseY + FLOOR_SLAB_METERS, z + 0.8, 3.4, feetToMeters(2.4), 1.3, "metal", [...common, "airship", "maintenance-workshop", "winch-bed", "machinery", "cover"]),
+      cylinder("wilderness-custom-airship-maintenance-drum-a", 0, x - 2.1, baseY + feetToMeters(2.5), z + 0.8, 0.92, feetToMeters(2.8), "metal", [...common, "airship", "maintenance-workshop", "winch-drum", "machinery"]),
+      cylinder("wilderness-custom-airship-maintenance-drum-b", 0, x - 0.4, baseY + feetToMeters(2.5), z + 0.8, 0.92, feetToMeters(2.8), "metal", [...common, "airship", "maintenance-workshop", "winch-drum", "machinery"]),
+      box("wilderness-custom-airship-gas-cell-cradle", 0, x + 2.25, baseY + FLOOR_SLAB_METERS, z - 0.9, 1.5, feetToMeters(5.2), 3.4, "wood", [...common, "airship", "gas-cell-store", "storage-frame", "cover"]),
+      cylinder("wilderness-custom-airship-fuel-tank-a", 3, x - 1.6, basementY + FLOOR_SLAB_METERS, z - 0.8, 1.2, feetToMeters(5.8), "metal", [...common, "airship", "fuel-bunker", "fuel-tank", "underground", "hazard", "cover"]),
+      cylinder("wilderness-custom-airship-fuel-tank-b", 3, x, basementY + FLOOR_SLAB_METERS, z - 0.8, 1.2, feetToMeters(5.8), "metal", [...common, "airship", "fuel-bunker", "fuel-tank", "underground", "hazard", "cover"]),
+      cylinder("wilderness-custom-airship-fuel-tank-c", 3, x + 1.6, basementY + FLOOR_SLAB_METERS, z - 0.8, 1.2, feetToMeters(5.8), "metal", [...common, "airship", "fuel-bunker", "fuel-tank", "underground", "hazard", "cover"]),
+      box("wilderness-custom-airship-fuel-manifold", 3, x, basementY + feetToMeters(4.6), z - 0.8, 4.2, 0.22, 0.3, "metal", [...common, "airship", "fuel-bunker", "fuel-manifold", "underground", "hazard"]),
+      box("wilderness-custom-airship-mooring-deck", 2, x, roofY, z, 6.2, 0.24, 5.4, "metal", [...common, "airship", "mooring-deck", "roof-platform", "standable", "high-ground"]),
+      roofAccess.primitive,
+      box("wilderness-custom-airship-roof-hatch", 2, x - 2.1, roofY + 0.24, z + 0.8, 1.35, feetToMeters(3.2), 0.18, "metal", [...common, "airship", "roof-hatch", "door-frame", "opening", "cover"]),
+      cylinder("wilderness-custom-airship-mooring-mast", 2, x, roofY + 0.24, z, 0.72, feetToMeters(18), "metal", [...common, "airship", "mooring-mast", "vertical-landmark", "climbable"]),
+      cylinder("wilderness-custom-airship-winch-a", 2, x - 1.8, roofY + 0.24, z + 1.4, 1.2, feetToMeters(2.8), "metal", [...common, "airship", "winch", "machinery", "cover"]),
+      cylinder("wilderness-custom-airship-winch-b", 2, x + 1.8, roofY + 0.24, z + 1.4, 1.2, feetToMeters(2.8), "metal", [...common, "airship", "winch", "machinery", "cover"]),
+      box("wilderness-custom-airship-tether-arm-west", 2, x - 2.3, roofY + feetToMeters(8), z, 4.6, 0.2, 0.24, "metal", [...common, "airship", "tether-arm", "supported"]),
+      box("wilderness-custom-airship-tether-arm-east", 2, x + 2.3, roofY + feetToMeters(11), z, 4.6, 0.2, 0.24, "metal", [...common, "airship", "tether-arm", "supported"]),
+    );
+    scene.routes.push(stairRoute("wilderness-custom-airship-roof-route", roofAccess));
+    scene.tactical.push(
+      tacticalFeature("wilderness-custom-airship-workshop-cover", "cover", x - 1.25, z + 0.8, baseY, 1.6, "Winch drums and the gas-cell cradle split the maintenance floor into hard cover lanes."),
+      tacticalFeature("wilderness-custom-airship-fuel-hazard", "hazard", x, z - 0.8, basementY, 1.8, "Pressurized fuel tanks make the underground bunker a dangerous but defensible objective."),
+      tacticalFeature("wilderness-custom-airship-high", "highGround", x, z, roofY, 2.4, "The roof mooring deck and winches create an exposed elevated objective."),
+    );
+  } else if (intent.theme === "communications") {
+    scene.primitives.push(
+      box("wilderness-custom-radio-console", 0, x - 1.4, baseY + FLOOR_SLAB_METERS, z + 0.7, 2.8, feetToMeters(3.2), 0.9, "metal", [...common, "communications", "radio-console", "cover"]),
+      box("wilderness-custom-signal-rack", 0, x + 2.3, baseY + FLOOR_SLAB_METERS, z - 0.4, 0.72, feetToMeters(6), 2.5, "metal", [...common, "communications", "signal-rack", "cover"]),
+      cylinder("wilderness-custom-signal-mast", 2, x, roofY, z, 0.48, feetToMeters(14), "metal", [...common, "communications", "signal-mast", "vertical-landmark"]),
+    );
+  } else if (intent.theme === "alchemy") {
+    scene.primitives.push(
+      box("wilderness-custom-alchemy-bench", 0, x - 1.4, baseY + FLOOR_SLAB_METERS, z + 0.8, 3.2, feetToMeters(3.1), 1, "wood", [...common, "alchemy", "distillation-bench", "cover"]),
+      cylinder("wilderness-custom-alembic-a", 0, x - 2.1, baseY + feetToMeters(3.2), z + 0.8, 0.72, feetToMeters(2.2), "metal", [...common, "alchemy", "alembic", "hazard"]),
+      cylinder("wilderness-custom-alembic-b", 0, x - 0.7, baseY + feetToMeters(3.2), z + 0.8, 0.58, feetToMeters(2.8), "warmLight", [...common, "alchemy", "alembic", "hazard"]),
+    );
+  }
+}
+
 function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorContext, width: number, depth: number, archetype: WildernessArchetype): void {
   const text = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const facilityProfile = embeddedFacilityProfile(text);
+  const facilityIntent = embeddedFacilityIntent(text);
   const facilityCapabilities = embeddedFacilityCapabilities(text);
   const wantsBuilding = facilityProfile !== undefined || [
     "木屋", "小屋", "猎人屋", "炼金师小屋", "林间屋", "林务站", "林务所", "巡护站", "护林站",
@@ -2176,6 +2264,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const observatory = facilityProfile === "observatory";
   const forge = facilityProfile === "forge";
   const sanatorium = facilityProfile === "sanatorium";
+  const customFacility = facilityProfile === "custom";
   const borderOutpost = facilityProfile === "border";
   const rangerStation = facilityProfile === "ranger";
   const mangrove = ["红树林", "mangrove"].some((term) => text.includes(term));
@@ -2204,6 +2293,16 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
           : ["两层", "二层", "2层", "two-storey", "two-story", "two storey", "two story"].some((term) => text.includes(term)) ? 2
             : ["单层", "一层", "1层", "single-storey", "single-story", "one storey", "one story"].some((term) => text.includes(term)) ? 1
               : undefined;
+  const customTowerLike = ["系留塔", "信号塔", "灯塔", "瞭望塔", "观察塔", "塔台", "mooring tower", "signal tower", "lighthouse", "watchtower", "control tower"].some((term) => text.includes(term));
+  const customKind: SettlementBuildingKind = customTowerLike ? "tower"
+    : facilityIntent?.use === "sacred" ? "shrine"
+    : facilityIntent?.use === "medical" ? "clinic"
+      : facilityIntent?.use === "industrial" ? "factory"
+        : facilityIntent?.use === "security" ? "tower"
+          : facilityIntent?.use === "hospitality" ? "tavern"
+            : facilityIntent?.use === "storage" ? "warehouse"
+              : facilityIntent?.use === "residential" ? "home"
+                : "guild";
   if (coldWetland) {
     for (const primitiveEntry of scene.primitives) {
       if (!primitiveEntry.tags?.some((tag) => tag === "water" || tag === "thaw-basin" || tag === "thaw-pool")) continue;
@@ -2293,6 +2392,9 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     .sort((left, right) => Math.hypot(left.centerCells.x - x, left.centerCells.z - z) - Math.hypot(right.centerCells.x - x, right.centerCells.z - z))[0];
   const entranceDirection = nearestReservation && nearestReservation.centerCells.x > x ? -1 : 1;
   const entrance = { x: x + entranceDirection * 8.5, z: z + 5.5 };
+  const customSpaces = new Set(facilityIntent?.spaces ?? []);
+  if (customFacility && facilityCapabilities.undergroundStore) customSpaces.add("archive");
+  if (customFacility && facilityCapabilities.laboratory) customSpaces.add("laboratory");
   const functionalModules: BuildingFunctionalModuleProgram[] = quarantine ? [
     { id: "quarantine-observation", kind: "observation", label: "Roof quarantine watch", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 16, tags: ["quarantine-watch", "restricted"] },
     { id: "quarantine-medical-vault", kind: "archive", label: "Secret medicine vault", levelRole: "basement", minimumFootprintCells: 14, tags: ["medical-vault", "medicine-store", "secret"] },
@@ -2315,14 +2417,51 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     { id: "sanatorium-treatment", kind: "laboratory", label: "Hydrotherapy and treatment wing", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 22, tags: ["hydrotherapy", "treatment", "medical"] },
     { id: "sanatorium-ward", kind: "archive", label: "Patient ward gallery", levelRole: "upper", minimumFootprintCells: 20, tags: ["patient-ward", "observation", "medical"] },
     { id: "sanatorium-boiler", kind: "workshop", label: "Underground boiler room", levelRole: "basement", minimumFootprintCells: 18, tags: ["boiler", "steam-pipes", "underground"] },
-  ] : [];
-  instantiateBuildingModule(scene, {
+  ] : customFacility ? [...customSpaces].map((space, index): BuildingFunctionalModuleProgram => {
+    const kind = space === "submerged-room" ? "submerged-room" : space;
+    const label = facilityIntent?.theme === "airship" && space === "observation" ? "Reinforced rooftop airship mooring deck"
+      : facilityIntent?.theme === "airship" && space === "archive" ? "Underground fuel bunker and gas-cell stores"
+        : facilityIntent?.theme === "airship" && space === "workshop" ? "Mooring machinery maintenance workshop"
+          : facilityIntent?.theme === "clockwork" && space === "workshop" ? "Clockwork repair workshop"
+            : facilityIntent?.theme === "clockwork" && space === "archive" ? "Clock parts and movement archive"
+              : facilityIntent?.theme === "specimen" && space === "laboratory" ? "Fossil preparation laboratory"
+                : facilityIntent?.theme === "specimen" && space === "archive" ? "Paleontological collection vault"
+                  : space === "observation" ? "Prompt-derived observation platform"
+                    : space === "laboratory" ? "Prompt-derived laboratory"
+                      : space === "archive" ? "Prompt-derived archive and collection room"
+                        : space === "workshop" ? "Prompt-derived working hall"
+                          : space === "greenhouse" ? "Prompt-derived greenhouse"
+                            : space === "distillation" ? "Prompt-derived distillation room"
+                              : "Prompt-derived submerged service room";
+    const levelRole = space === "observation" ? "roof"
+      : space === "submerged-room" ? "basement"
+        : space === "archive" && (facilityCapabilities.undergroundStore || ["地下", "underground", "cellar", "basement"].some((term) => text.includes(term))) ? "basement"
+          : "ground";
+    return {
+      id: `custom-${space}-${index + 1}`,
+      kind,
+      label,
+      levelRole,
+      requiresExteriorAccess: space === "workshop" || space === "greenhouse",
+      requiresVerticalLandmark: space === "observation",
+      minimumFootprintCells: space === "observation" ? 16 : space === "workshop" ? 20 : 15,
+      tags: ["prompt-derived-space", `facility-use:${facilityIntent?.use ?? "service"}`, space],
+    };
+  }) : [];
+  const customWidth = facilityIntent?.use === "medical" ? 13
+    : facilityIntent?.use === "industrial" || facilityIntent?.use === "storage" ? 12
+      : facilityIntent?.use === "security" ? 10
+        : 11;
+  const customDepth = facilityIntent?.use === "medical" ? 12
+    : facilityIntent?.use === "industrial" || facilityIntent?.use === "storage" ? 11
+      : 10;
+  const buildingInstance = instantiateBuildingModule(scene, {
     id: "wilderness-core-building",
-    kind: quarantine || sanatorium ? "clinic" : monastery ? "shrine" : forge ? "blacksmith" : weatherStation || researchStation || observatory ? "guild" : alchemical ? "guild" : "home",
+    kind: customFacility ? customKind : quarantine || sanatorium ? "clinic" : monastery ? "shrine" : forge ? "blacksmith" : weatherStation || researchStation || observatory ? "guild" : alchemical ? "guild" : "home",
     x,
     z,
-    width: forge ? 12 : observatory ? 11 : sanatorium ? 13 : alchemical ? 11 : 9,
-    depth: forge ? 11 : observatory ? 11 : sanatorium ? 12 : alchemical ? 10 : 8,
+    width: customFacility ? customWidth : forge ? 12 : observatory ? 11 : sanatorium ? 13 : alchemical ? 11 : 9,
+    depth: customFacility ? customDepth : forge ? 11 : observatory ? 11 : sanatorium ? 12 : alchemical ? 10 : 8,
     rotation: context.rng.fork("wilderness-building-facing").float(-0.18, 0.18),
     district: `${archetype}-clearing`,
     seed: `${context.request.seed}/wilderness-building/1`,
@@ -2332,10 +2471,19 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     frontageRoadId: "wilderness-access-trail",
     entrance,
     baseY,
+    state: facilityIntent?.abandoned ? "abandoned" : "active",
     functionalModules,
     siteProfile: quarantine ? "quarantine-station" : weatherStation ? "weather-station" : researchStation ? "field-station" : observatory ? "observatory" : forge ? "forge" : sanatorium ? "sanatorium" : borderOutpost ? "border-outpost" : rangerStation ? "ranger-station" : undefined,
     climateProfile: archetype === "ice" ? "polar" : archetype === "swamp" ? "wetland" : archetype === "volcanic" || archetype === "infernal-waste" ? "volcanic" : archetype === "mountain" || archetype === "rift" || archetype === "impact-crater" ? "alpine" : archetype === "forest" ? "forest" : archetype === "river-valley" ? "coastal" : "temperate",
   }, context.rng.fork("wilderness-building"));
+  if (customFacility && facilityIntent) {
+    const buildingHeight = buildingInstance.exteriorHeightMeters
+      ?? feetToMeters(buildingInstance.floorHeightFeet.reduce((sum, height) => sum + height, 0));
+    const roofY = baseY + buildingHeight;
+    const lastFloorHeight = buildingInstance.floorHeightFeet.at(-1) ?? 10;
+    const topFloorY = roofY - Math.max(feetToMeters(8), feetToMeters(lastFloorHeight) - FLOOR_SLAB_METERS);
+    addCustomFacilityThemeAtoms(scene, facilityIntent, x, z, baseY, topFloorY, roofY);
+  }
 
   // A requested exterior maintenance route is a real supported traversal
   // around the parent landform, not a floating decorative strip. Keep it
@@ -2449,17 +2597,38 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       const routeStartX = 1.5;
       const routeEndX = width - 1.5;
       const routePoint = (pointX: number, pointZ: number) => ({
-        x: pointX * CELL,
-        z: pointZ * CELL,
-        y: terrainSurfaceY(scene, pointX, pointZ, terrainBaseY),
+        x: pointX,
+        z: pointZ,
+        y: Math.max(terrainSurfaceY(scene, pointX, pointZ, terrainBaseY), feetToMeters(1.8)),
       });
-      reedRoute.points = [
+      const reedCells = [
         routePoint(routeStartX, northZ),
         routePoint(westX, northZ),
         routePoint(westX, southZ),
         routePoint(eastX, southZ),
         routePoint(routeEndX, southZ),
       ];
+      reedRoute.points = createRoute("swamp-reed-route-detour", "alternate", reedCells, {
+        purpose: reedRoute.purpose,
+        traffic: reedRoute.traffic,
+        schedule: reedRoute.schedule,
+      }).points;
+      for (let index = 1; index < reedCells.length; index += 1) {
+        const from = reedCells[index - 1]!;
+        const to = reedCells[index]!;
+        const common = ["swamp", "wetland", "reed-route", "boardwalk", "standable", "surface-grid", "supported", "building-detour"];
+        if (Math.abs(to.y - from.y) < feetToMeters(1.25)) {
+          scene.primitives.push(corridor(`wilderness-swamp-reed-detour-${index}`, 0, from.x, from.z, to.x, to.z, (from.y + to.y) / 2, 1.05, "wood", common));
+        } else {
+          const lower = from.y <= to.y ? { xCells: from.x, zCells: from.z, yMeters: from.y } : { xCells: to.x, zCells: to.z, yMeters: to.y };
+          const upper = from.y <= to.y ? { xCells: to.x, zCells: to.z, yMeters: to.y } : { xCells: from.x, zCells: from.z, yMeters: from.y };
+          scene.primitives.push(stairConnection(`wilderness-swamp-reed-detour-${index}`, 0, lower, upper, 1.05, "wood", [...common, "vertical-route"]).primitive);
+        }
+        const midpointX = (from.x + to.x) / 2;
+        const midpointZ = (from.z + to.z) / 2;
+        const deckY = (from.y + to.y) / 2;
+        scene.primitives.push(cylinder(`wilderness-swamp-reed-detour-support-${index}`, 0, midpointX, -feetToMeters(2), midpointZ, 0.18, deckY + feetToMeters(4), "wood", ["swamp", "wetland", "reed-route", "support", "structural-support"]));
+      }
     }
   }
 

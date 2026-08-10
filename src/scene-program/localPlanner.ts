@@ -63,8 +63,6 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
     "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇",
     "town", "village", "market village", "district", "harbor", "port town", "smuggler port", "water city", "canal city", "tower city", "megastructure city", "settlement",
   ]);
-  const hasWildernessBuilding = !hasNamedSettlementParent && !hasResourceCampParent && shouldComposeWildernessFacility(text);
-  if (hasWildernessBuilding) return { domain: "natural", primaryKind: "wilderness" };
   const hasCompoundSettlement = has(text, [
     "修道院群", "浮空修道院", "空心古树内部", "树内城市", "树上城市",
     "红树林沼泽", "走私港村", "走私港", "港村",
@@ -85,6 +83,8 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
   // and bell tower are embedded children.
   if (hasCavernMonasteryCompound && !has(text, ["盐晶", "salt crystal"])) return { domain: "natural", primaryKind: "cave" };
   if (hasCompoundSettlement || hasCavernMonasteryCompound) return { domain: "settlement", primaryKind: "settlement" };
+  const hasWildernessBuilding = !hasNamedSettlementParent && !hasResourceCampParent && shouldComposeWildernessFacility(text);
+  if (hasWildernessBuilding) return { domain: "natural", primaryKind: "wilderness" };
   const hasCompoundRoadSite = has(text, ["驿站", "road station", "coach stop"])
     && has(text, ["主路", "桥", "马厩", "收费岗", "仓库", "main road", "bridge", "stable", "toll", "warehouse"]);
   if (hasCompoundRoadSite) return { domain: "settlement", primaryKind: "settlement" };

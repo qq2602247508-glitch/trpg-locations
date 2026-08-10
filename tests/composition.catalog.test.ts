@@ -804,6 +804,69 @@ describe("five-layer composition catalog", () => {
     expect(signature(alternate)).not.toBe(signature(scene));
   });
 
+  it.each([
+    {
+      prompt: "沼泽中的废弃钟表修复所，有机械工坊、零件档案室、屋顶信号平台和地下防潮库",
+      seed: "custom-clock-repair",
+      archetype: "swamp",
+      kind: "factory",
+      features: ["workshop", "archive", "observation", "prompt-derived-space"],
+    },
+    {
+      prompt: "高山峡谷中的古生物标本馆，有标本处理室、收藏档案库、屋顶骨架观察台和地下储藏室",
+      seed: "custom-specimen-hall",
+      archetype: "mountain",
+      kind: "guild",
+      features: ["laboratory", "archive", "observation", "prompt-derived-space"],
+    },
+    {
+      prompt: "冰原上的飞艇系留塔，有维护车间、气囊仓、屋顶系留平台和地下燃料库",
+      seed: "custom-airship-mooring",
+      archetype: "ice",
+      kind: "tower",
+      features: ["workshop", "archive", "observation", "prompt-derived-space"],
+    },
+  ] as const)("composes an unknown facility noun from semantic spaces: $seed", ({ prompt, seed, archetype, kind, features }) => {
+    const sparse = generateScene({ prompt, seed, size: "large", density: 0.28 }, "adaptive");
+    const dense = generateScene({ prompt, seed, size: "large", density: 0.86 }, "adaptive");
+    const alternate = generateScene({ prompt, seed: `${seed}-b`, size: "large", density: 0.86 }, "adaptive");
+    const building = dense.buildingInstances?.find((entry) => entry.id === "wilderness-core-building");
+    const tags = new Set(dense.primitives.flatMap((primitive) => primitive.tags ?? []));
+    const structuralSignature = (scene: typeof dense) => scene.primitives
+      .filter((primitive) => primitive.tags?.some((tag) => tag === "terrain" || tag === "building-pad" || tag === "prompt-derived-space"))
+      .map((primitive) => `${primitive.id}:${primitive.position.x.toFixed(2)}:${primitive.position.z.toFixed(2)}:${primitive.size.x.toFixed(2)}:${primitive.size.z.toFixed(2)}`)
+      .join("|");
+    expect(dense.archetype).toBe(archetype);
+    expect(dense.sceneProgram?.domain).toBe("natural");
+    expect(building?.archetype).toBe(kind);
+    expect(building?.detailLevel).toBe("full-interior");
+    expect(building?.buildingProgram?.requiredFeatures).toEqual(expect.arrayContaining([...features]));
+    expect(tags.has("prompt-derived-space")).toBe(true);
+    expect(tags.has("building-state:abandoned")).toBe(prompt.includes("废弃"));
+    expect(dense.routes.some((route) => route.id === "wilderness-building-access")).toBe(true);
+    expect(dense.diagnostics.warnings, dense.diagnostics.warnings.join("\n")).toHaveLength(0);
+    expect(sparse.diagnostics.warnings, sparse.diagnostics.warnings.join("\n")).toHaveLength(0);
+    expect(alternate.diagnostics.warnings, alternate.diagnostics.warnings.join("\n")).toHaveLength(0);
+    expect(structuralSignature(alternate)).not.toBe(structuralSignature(dense));
+    expect(structuralSignature(sparse)).not.toBe(structuralSignature(dense));
+    if (archetype === "swamp") {
+      const reedCount = (scene: typeof dense) => scene.primitives.filter((primitive) => primitive.tags?.includes("reed")).length;
+      expect(reedCount(dense)).toBeGreaterThan(reedCount(sparse));
+    } else {
+      expect(dense.primitives.length).not.toBe(sparse.primitives.length);
+    }
+    if (seed === "custom-airship-mooring") {
+      const deck = dense.primitives.find((primitive) => primitive.id === "wilderness-custom-airship-mooring-deck");
+      const expectedRoofY = (building?.baseYMeters ?? 0) + (building?.exteriorHeightMeters ?? 0);
+      expect(deck?.position.y).toBeCloseTo(expectedRoofY, 5);
+      expect(dense.primitives.some((primitive) => primitive.id === "wilderness-core-building-gable-roof")).toBe(false);
+      expect(dense.primitives.some((primitive) => primitive.tags?.includes("gas-cell-store"))).toBe(true);
+      expect(dense.primitives.some((primitive) => primitive.tags?.includes("fuel-bunker"))).toBe(true);
+      expect(dense.primitives.filter((primitive) => primitive.tags?.includes("stacked-stair")).length).toBeGreaterThanOrEqual((building?.floors ?? 1) - 1);
+      expect(dense.routes.some((route) => route.id === "wilderness-custom-airship-roof-route")).toBe(true);
+    }
+  });
+
   it("keeps polar ice-cap monitoring stations owned by wilderness terrain", () => {
     const prompt = "极地冰盖上的地震监测站，有钻芯实验室、通信桅杆、备用发电棚、防风入口和地下冰芯库";
     const scene = generateScene({ prompt, seed: "polar-site-ownership", size: "medium", density: 0.78 }, "adaptive");
