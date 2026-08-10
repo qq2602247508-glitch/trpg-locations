@@ -71,7 +71,7 @@ const SHELTER_TERMS = [
 ] as const;
 
 const PROFILE_TERMS: Readonly<Record<Exclude<EmbeddedFacilityProfile, "shelter" | "custom">, readonly string[]>> = {
-  quarantine: ["检疫站", "隔离站", "quarantine station", "isolation station"],
+  quarantine: ["检疫站", "检疫所", "隔离站", "隔离所", "隔离院", "净化所", "quarantine station", "quarantine house", "isolation station", "isolation house"],
   weather: ["气象站", "气象观测站", "测候站", "weather station", "meteorological station"],
   research: [
     "科研站", "研究站", "观测站", "监测站", "实验站", "地震站", "水文站", "生态站", "测绘站", "通信站", "雷达站",
@@ -121,6 +121,7 @@ export function hasNaturalParentContext(prompt: string): boolean {
 export function embeddedFacilityProfile(prompt: string): EmbeddedFacilityProfile | undefined {
   const text = normalized(prompt);
   if (includesAny(text, PROFILE_TERMS.quarantine)) return "quarantine";
+  if (/(?:检疫|隔离|净化|洗消)[^，。；;]{0,7}(?:站|所|院|堂|设施)/u.test(text)) return "quarantine";
   if (includesAny(text, PROFILE_TERMS.sanatorium)) return "sanatorium";
   if (includesAny(text, PROFILE_TERMS.forge)) return "forge";
   if (includesAny(text, PROFILE_TERMS.observatory)) return "observatory";
@@ -204,8 +205,8 @@ export function embeddedFacilityIntent(prompt: string): EmbeddedFacilityIntent |
   if (has(["机库", "艇库", "飞行棚", "飞艇棚", "载具棚", "hangar", "airship shed", "vehicle bay", "boat house"])) spaces.add("hangar");
   if (has(["燃料库", "油库", "燃料舱", "燃料掩体", "fuel store", "fuel bunker", "fuel bay", "tank farm"])) spaces.add("fuel");
   if (has(["居室", "宿舍", "寝室", "住舱", "船员舱", "僧侣房", "quarters", "dormitory", "bunk room", "crew room", "cells"])) spaces.add("quarters");
-  if (has(["礼拜堂", "小圣堂", "祭室", "祷告室", "chapel", "oratory", "prayer room"])) spaces.add("chapel");
-  if (has(["治疗室", "医务室", "病房", "手术室", "急救室", "检伤区", "treatment room", "infirmary", "ward", "operating room", "triage"])) spaces.add("medical");
+  if (has(["礼拜堂", "小圣堂", "祈祷小堂", "祷告小堂", "祭室", "祷告室", "chapel", "oratory", "prayer room"])) spaces.add("chapel");
+  if (has(["治疗室", "医务室", "病房", "伤员病房", "手术室", "急救室", "检伤区", "treatment room", "infirmary", "ward", "operating room", "triage"])) spaces.add("medical");
   if (has(["工坊", "车间", "修复", "维护", "机械", "锻造", "铸造", "workshop", "repair", "maintenance", "machine shop", "forge", "foundry"])) spaces.add("workshop");
   if (has(["温室", "苗圃", "植物房", "greenhouse", "nursery", "conservatory"])) spaces.add("greenhouse");
   if (has(["蒸馏", "酿造", "炼金", "精炼", "distillation", "distillery", "brewery", "alchemy", "refinery"])) spaces.add("distillation");

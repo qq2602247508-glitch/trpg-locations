@@ -380,6 +380,120 @@ function addFunctionalModuleGeometry(
   const totalHeight = feetToMeters(generated.floorHeightFeet.reduce((sum, height) => sum + height, 0));
   const exteriorFunctionalWings = lot.id === "wilderness-core-building";
   const point = (x: number, z: number) => localPoint(lot, x, z);
+  const entranceLocalSide = lot.entrance
+    ? Math.sign(
+      ((lot.entrance.x - lot.x) * Math.cos(lot.rotation))
+      - ((lot.entrance.z - lot.z) * Math.sin(lot.rotation)),
+    )
+    : 0;
+  const toLocal = (worldX: number, worldZ: number): { x: number; z: number } => {
+    const dx = worldX / GRID_METERS - lot.x;
+    const dz = worldZ / GRID_METERS - lot.z;
+    const cosine = Math.cos(lot.rotation);
+    const sine = Math.sin(lot.rotation);
+    return {
+      x: dx * cosine - dz * sine,
+      z: dx * sine + dz * cosine,
+    };
+  };
+  const routeCrossingScore = (centerX: number, centerZ: number, width: number, depth: number): number => {
+    const minX = centerX - width * 0.5 - 0.35;
+    const maxX = centerX + width * 0.5 + 0.35;
+    const minZ = centerZ - depth * 0.5 - 0.35;
+    const maxZ = centerZ + depth * 0.5 + 0.35;
+    const inside = (candidate: { x: number; z: number }) => candidate.x >= minX && candidate.x <= maxX && candidate.z >= minZ && candidate.z <= maxZ;
+    let score = 0;
+    for (const route of scene.routes) {
+      for (let pointIndex = 1; pointIndex < route.points.length; pointIndex += 1) {
+        const fromPoint = route.points[pointIndex - 1]!;
+        const toPoint = route.points[pointIndex]!;
+        const from = toLocal(fromPoint.x, fromPoint.z);
+        const to = toLocal(toPoint.x, toPoint.z);
+        let crosses = false;
+        for (let sample = 0; sample <= 16; sample += 1) {
+          const ratio = sample / 16;
+          if (inside({ x: from.x + (to.x - from.x) * ratio, z: from.z + (to.z - from.z) * ratio })) {
+            crosses = true;
+            break;
+          }
+        }
+        if (crosses) score += route.id.includes("entry") || route.id.includes("access") ? 4 : 1;
+      }
+    }
+    return score;
+  };
+  const cutDoorOpeningsAlongLocalSegment = (
+    idPrefix: string,
+    from: { x: number; z: number },
+    to: { x: number; z: number },
+  ): number => {
+    let openingsCut = 0;
+    const candidateWalls = scene.primitives.filter((primitiveEntry) => (
+      primitiveEntry.level === 0
+      && primitiveEntry.tags?.includes("wall")
+      && primitiveEntry.tags?.includes(`building-instance:${lot.id}`)
+      && !primitiveEntry.tags?.includes("underground")
+    ));
+    for (const wall of candidateWalls) {
+      const wallLocal = toLocal(wall.position.x, wall.position.z);
+      const widthCells = wall.size.x / GRID_METERS;
+      const depthCells = wall.size.z / GRID_METERS;
+      const halfWidth = widthCells * 0.5 + 0.08;
+      const halfDepth = depthCells * 0.5 + 0.08;
+      let intersection: { x: number; z: number } | undefined;
+      for (let sample = 0; sample <= 32; sample += 1) {
+        const ratio = sample / 32;
+        const candidate = {
+          x: from.x + (to.x - from.x) * ratio,
+          z: from.z + (to.z - from.z) * ratio,
+        };
+        if (Math.abs(candidate.x - wallLocal.x) <= halfWidth && Math.abs(candidate.z - wallLocal.z) <= halfDepth) {
+          intersection = candidate;
+          break;
+        }
+      }
+      if (!intersection) continue;
+      const index = scene.primitives.indexOf(wall);
+      if (index < 0) continue;
+      const wallTags = [...new Set([...(wall.tags ?? []), "door-frame", "opening", "functional-route-opening"])];
+      const gap = 1.35;
+      const replacements = [];
+      if (depthCells >= widthCells) {
+        const minimum = wallLocal.z - depthCells * 0.5;
+        const maximum = wallLocal.z + depthCells * 0.5;
+        const gapMinimum = Math.max(minimum, intersection.z - gap * 0.5);
+        const gapMaximum = Math.min(maximum, intersection.z + gap * 0.5);
+        const northLength = gapMinimum - minimum;
+        const southLength = maximum - gapMaximum;
+        if (northLength > 0.28) {
+          const center = point(wallLocal.x, minimum + northLength * 0.5);
+          replacements.push(box(`${wall.id}-${idPrefix}-north`, wall.level, center.x, wall.position.y, center.z, widthCells, wall.size.y, northLength, wall.material, wallTags, lot.rotation));
+        }
+        if (southLength > 0.28) {
+          const center = point(wallLocal.x, gapMaximum + southLength * 0.5);
+          replacements.push(box(`${wall.id}-${idPrefix}-south`, wall.level, center.x, wall.position.y, center.z, widthCells, wall.size.y, southLength, wall.material, wallTags, lot.rotation));
+        }
+      } else {
+        const minimum = wallLocal.x - widthCells * 0.5;
+        const maximum = wallLocal.x + widthCells * 0.5;
+        const gapMinimum = Math.max(minimum, intersection.x - gap * 0.5);
+        const gapMaximum = Math.min(maximum, intersection.x + gap * 0.5);
+        const westLength = gapMinimum - minimum;
+        const eastLength = maximum - gapMaximum;
+        if (westLength > 0.28) {
+          const center = point(minimum + westLength * 0.5, wallLocal.z);
+          replacements.push(box(`${wall.id}-${idPrefix}-west`, wall.level, center.x, wall.position.y, center.z, westLength, wall.size.y, depthCells, wall.material, wallTags, lot.rotation));
+        }
+        if (eastLength > 0.28) {
+          const center = point(gapMaximum + eastLength * 0.5, wallLocal.z);
+          replacements.push(box(`${wall.id}-${idPrefix}-east`, wall.level, center.x, wall.position.y, center.z, eastLength, wall.size.y, depthCells, wall.material, wallTags, lot.rotation));
+        }
+      }
+      scene.primitives.splice(index, 1, ...replacements);
+      openingsCut += 1;
+    }
+    return openingsCut;
+  };
   const common = ["functional-module", `building-instance:${lot.id}`, `building:${lot.kind}`];
   const addBox = (module: BuildingFunctionalModuleProgram, id: string, level: number, x: number, y: number, z: number, width: number, height: number, depth: number, material: MaterialKey, tags: string[] = []) => {
     const world = point(x, z);
@@ -536,16 +650,6 @@ function addFunctionalModuleGeometry(
       const maximumX = scene.boundsCells.x;
       const maximumZ = scene.boundsCells.z;
       const apronWidth = 5.2;
-      const toLocal = (worldX: number, worldZ: number): { x: number; z: number } => {
-        const dx = worldX / GRID_METERS - lot.x;
-        const dz = worldZ / GRID_METERS - lot.z;
-        const cosine = Math.cos(lot.rotation);
-        const sine = Math.sin(lot.rotation);
-        return {
-          x: dx * cosine - dz * sine,
-          z: dx * sine + dz * cosine,
-        };
-      };
       const apronMargin = (candidateSide: number): number => {
         const candidateHangarX = candidateSide * (lot.width * 0.5 + hangarWidth * 0.5 + 0.28);
         const candidateApronX = candidateHangarX + candidateSide * (hangarWidth / 2 + 2.7);
@@ -731,7 +835,10 @@ function addFunctionalModuleGeometry(
       addBox(module, "bell-cote-cap", 2, bellX, baseY + chapelHeight + feetToMeters(4.7), localZ, 0.55, 0.2, 1.25, "stone", ["bell-cote", "chapel-roof", "vertical-landmark"]);
       addCylinder(module, "bell", 2, bellX, baseY + chapelHeight + feetToMeters(1.7), localZ, 0.42, feetToMeters(2.2), "metal", ["bell-cote", "bell", "sacred-silhouette"]);
       const chapelEntry = point(entryX, localZ);
-      const chapelThreshold = point(side * lot.width * 0.46, localZ);
+      const chapelThresholdLocal = { x: side * lot.width * 0.46, z: localZ };
+      const chapelEntryLocal = { x: entryX, z: localZ };
+      cutDoorOpeningsAlongLocalSegment(`chapel-${index + 1}`, chapelThresholdLocal, chapelEntryLocal);
+      const chapelThreshold = point(chapelThresholdLocal.x, chapelThresholdLocal.z);
       scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "alternate", [
         { x: chapelThreshold.x, z: chapelThreshold.z, y: baseY },
         { x: chapelEntry.x, z: chapelEntry.z, y: baseY },
@@ -746,13 +853,26 @@ function addFunctionalModuleGeometry(
     } else if (module.kind === "medical") {
       const medicalWidth = exteriorFunctionalWings ? Math.max(5.4, lot.width * 0.5) : Math.max(4.2, lot.width * 0.6);
       const medicalDepth = exteriorFunctionalWings ? Math.max(5.2, lot.depth * 0.48) : Math.max(3.8, lot.depth * 0.66);
+      if (exteriorFunctionalWings) {
+        const medicalCenterForSide = (candidateSide: number) => candidateSide * (lot.width * 0.5 + medicalWidth * 0.28);
+        const preferredScore = routeCrossingScore(medicalCenterForSide(side), localZ, medicalWidth, medicalDepth)
+          + (side === entranceLocalSide ? 0.25 : 0);
+        const alternateScore = routeCrossingScore(medicalCenterForSide(-side), localZ, medicalWidth, medicalDepth)
+          + (-side === entranceLocalSide ? 0.25 : 0);
+        if (alternateScore < preferredScore) side *= -1;
+      }
       const medicalX = exteriorFunctionalWings ? side * (lot.width * 0.5 + medicalWidth * 0.28) : localX * 0.24;
       const medicalHeight = feetToMeters(10.5);
       const center = point(medicalX, localZ);
       addBox(module, "ward-floor", 0, medicalX, baseY, localZ, medicalWidth, FLOOR_SLAB_METERS, medicalDepth, "stone", ["floor", "standable", "ward-floor", "medical-wing"]);
       const entryX = medicalX - side * medicalWidth * 0.5;
       if (exteriorFunctionalWings) {
-        addBox(module, "rear-wall", 0, medicalX, baseY, localZ - medicalDepth * 0.5, medicalWidth, medicalHeight, 0.2, "plaster", ["wall", "medical-shell", "ward-wall"]);
+        const rearOpeningWidth = Math.min(1.5, medicalWidth * 0.24);
+        const rearSegmentWidth = Math.max(0.8, (medicalWidth - rearOpeningWidth) / 2);
+        const rearOpeningOffset = (rearOpeningWidth + rearSegmentWidth) / 2;
+        addBox(module, "rear-port-post-west", 0, medicalX - rearOpeningOffset, baseY, localZ - medicalDepth * 0.5, 0.28, medicalHeight, 0.28, "plaster", ["medical-shell", "ward-wall", "service-entry", "structural-support"]);
+        addBox(module, "rear-port-post-east", 0, medicalX + rearOpeningOffset, baseY, localZ - medicalDepth * 0.5, 0.28, medicalHeight, 0.28, "plaster", ["medical-shell", "ward-wall", "service-entry", "structural-support"]);
+        addBox(module, "rear-door-frame", 0, medicalX, baseY, localZ - medicalDepth * 0.5, rearOpeningWidth, feetToMeters(7), 0.22, "metal", ["door-frame", "opening", "medical-shell", "ward-wall", "service-entry"]);
         const outerSideX = medicalX + side * medicalWidth * 0.5;
         addBox(module, "outer-side-wall", 0, outerSideX, baseY, localZ, 0.2, medicalHeight, medicalDepth, "plaster", ["wall", "medical-shell", "ward-wall"]);
         const frontSegmentDepth = Math.max(0.8, (medicalDepth - 1.6) / 2);
@@ -1514,6 +1634,21 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     addRotatedBox("quarantine-gate-left", primaryOffset.x + width * 0.22, primaryOffset.z, 0.1, feetToMeters(7), depth * 0.32, baseY, "metal", ["controlled-threshold", "screening-gate", "opening"]);
     addRotatedBox("quarantine-gate-right", primaryOffset.x + width * 0.22, primaryOffset.z - depth * 0.38, 0.1, feetToMeters(7), depth * 0.18, baseY, "metal", ["controlled-threshold", "screening-gate", "opening"]);
     addRotatedBox("quarantine-nurse-counter", primaryOffset.x + width * 0.34, primaryOffset.z + depth * 0.24, 0.72, feetToMeters(3.2), depth * 0.22, baseY + FLOOR_SLAB_METERS, "metal", ["nurse-counter", "quarantine-reception", "cover"]);
+    const deconCourtZ = primaryOffset.z + depth * 0.68;
+    const deconCourt = point(primaryOffset.x, deconCourtZ);
+    addRotatedBox("quarantine-decontamination-court", primaryOffset.x, deconCourtZ, Math.max(4.4, width * 0.5), FLOOR_SLAB_METERS, Math.max(3.2, depth * 0.34), baseY, "stone", ["floor", "standable", "decontamination-court", "open-air-court", "quarantine"]);
+    addRotatedBox("quarantine-drainage-channel", primaryOffset.x, deconCourtZ, Math.max(3.4, width * 0.4), 0.12, 0.42, baseY + 0.04, "water", ["decontamination-court", "drainage-channel", "wash-zone"]);
+    for (const [washIndex, offsetX] of [-0.28, 0.28].entries()) {
+      const wash = point(primaryOffset.x + width * offsetX, deconCourtZ);
+      scene.primitives.push(cylinder(`${lot.id}-quarantine-wash-pillar-${washIndex + 1}`, 0, wash.x, baseY, wash.z, 0.42, feetToMeters(5.4), "metal", [...tags, "decontamination-court", "wash-pillar", "medical-fixture", "cover"]));
+    }
+    addRotatedBox("quarantine-court-screen-west", primaryOffset.x - Math.max(4.4, width * 0.5) * 0.5, deconCourtZ, 0.16, feetToMeters(5.2), Math.max(2.4, depth * 0.26), baseY, "metal", ["decontamination-court", "screen", "cover", "controlled-threshold"]);
+    addRotatedBox("quarantine-court-screen-east", primaryOffset.x + Math.max(4.4, width * 0.5) * 0.5, deconCourtZ, 0.16, feetToMeters(5.2), Math.max(2.4, depth * 0.26), baseY, "metal", ["decontamination-court", "screen", "cover", "controlled-threshold"]);
+    scene.routes.push(createRoute(`${lot.id}-decontamination-court-route`, "alternate", [
+      { x: publicP.x, z: publicP.z, y: baseY },
+      { x: deconCourt.x, z: deconCourt.z, y: baseY },
+    ], { purpose: "movement", traffic: 0.38, schedule: "all" }));
+    scene.tactical.push(tacticalFeature(`${lot.id}-decontamination-court-choke`, "chokepoint", deconCourt.x, deconCourt.z, baseY, 1.5, "Screens and wash pillars turn the open-air decontamination court into a controlled tactical threshold."));
   }
   const extensionRooms: Array<{ id: string; x: number; z: number; partId: string }> = [];
   for (const [extensionIndex, extension] of envelope.parts.slice(1).entries()) {

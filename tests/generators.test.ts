@@ -4,7 +4,7 @@ import { SeededRandom } from "../src/core/random";
 import { instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
-import { floorBaseY, fogDensityForSpan, levelForY, overlayTouchesFloor, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
+import { floorBaseY, focusedCameraFactors, fogDensityForSpan, levelForY, overlayTouchesFloor, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
 import { planSettlementSite } from "../src/site-program";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
@@ -52,6 +52,16 @@ describe("scene generators", () => {
     expect(fogDensityForSpan(25)).toBe(0.009);
     expect(fogDensityForSpan(160)).toBeLessThan(0.003);
     expect(fogDensityForSpan(160)).toBeGreaterThanOrEqual(0.0014);
+  });
+
+  it("uses a genuinely lower and closer camera for focused-building mass inspection", () => {
+    const overview = focusedCameraFactors("overview", false);
+    const low = focusedCameraFactors("low", false);
+    expect(low.horizontalDistance).toBeLessThan(overview.horizontalDistance);
+    expect(low.verticalDistanceFactor).toBeLessThan(overview.verticalDistanceFactor);
+    expect(low.verticalSpanFactor).toBeLessThan(overview.verticalSpanFactor);
+    expect(low.targetHeightFraction).toBeLessThan(overview.targetHeightFraction);
+    expect(focusedCameraFactors("low", true).spanScale).toBeLessThan(low.spanScale);
   });
 
   it("keeps small maps in one render batch region and partitions large districts", () => {
@@ -966,6 +976,21 @@ describe("scene generators", () => {
     expect(skirts.every((primitive) => primitive.size.z > slopes[0]!.size.z && !primitive.tags?.includes("standable"))).toBe(true);
     expect(scene.description).toContain("slope facades");
     expect(scene.description).toContain("perimeter skirts");
+  });
+
+  it("builds a salt wasteland parent for an embedded plague oratory", () => {
+    const prompt = "盐碱荒原中的瘟疫隔离礼拜所，有露天净化庭、伤员病房、祈祷小堂、地下焚化燃料库和屋顶钟火信号台";
+    const scene = generateScene({ ...request("salt-waste-oratory-contract", "medium", 0.71), prompt }, "adaptive");
+    expect(scene.archetype).toBe("dry-riverbed");
+    expect(scene.title).toBe("SceneProgram · The Saltbound Quarantine Oratory");
+    expect(hasTag(scene, "salt-wasteland")).toBe(true);
+    expect(hasTag(scene, "brine-basin")).toBe(true);
+    expect(hasTag(scene, "salt-ridge")).toBe(true);
+    expect(hasTag(scene, "decontamination-court")).toBe(true);
+    expect(hasTag(scene, "chapel-floor")).toBe(true);
+    expect(hasTag(scene, "ward-floor")).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+    expect(scene.diagnostics.warnings).toEqual([]);
   });
 
   it("keeps giant fungi as standable tactical platforms", () => {

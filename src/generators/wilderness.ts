@@ -47,7 +47,7 @@ interface TerrainMorphology {
 
 const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>> = {
   "river-valley": ["river", "stream", "creek", "waterfall", "riverbank", "river bend", "河谷", "河流", "河川", "河湾", "溪流", "溪谷", "瀑布", "峡谷", "水湾", "峡谷河"],
-  "dry-riverbed": ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床", "河床"],
+  "dry-riverbed": ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床", "河床", "盐碱荒原", "盐碱地", "盐沼荒原", "盐壳荒地", "salt wasteland", "salt flat", "salt flats", "salt desert"],
   "impact-crater": ["impact crater", "meteor crater", "陨石坑", "撞击坑", "流星坑"],
   volcanic: ["volcano", "volcanic", "caldera", "火山", "火山口", "破火山口"],
   "infernal-waste": ["avernus", "hellscape", "infernal waste", "阿弗纳斯", "地狱荒原", "地狱"],
@@ -70,6 +70,11 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
 
 function includesAny(text: string, terms: readonly string[]): boolean {
   return terms.some((term) => text.includes(term));
+}
+
+function isSaltWastelandPrompt(prompt: string): boolean {
+  const text = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  return includesAny(text, ["盐碱荒原", "盐碱地", "盐沼荒原", "盐壳荒地", "salt wasteland", "salt flat", "salt flats", "salt desert"]);
 }
 
 function analyzeTerrainMorphology(prompt: string, hints?: SemanticGenerationHints): TerrainMorphology {
@@ -156,6 +161,7 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   if (explicitRift && !explicitVolcanicCrater) return "rift";
   if (morphology.crater) return "volcanic";
   if (morphology.burial) return "burial-ground";
+  if (isSaltWastelandPrompt(normalized)) return "dry-riverbed";
   if (morphology.dryChannel) return "dry-riverbed";
   // Cold wetlands are not ordinary temperate swamps or generic mountains.
   // Their frozen substrate owns the macro terrain while thaw pools and
@@ -880,6 +886,87 @@ function buildDryRiverbed(scene: GeneratedScene, width: number, depth: number, d
   scene.routes.push(createRoute("dry-channel-long-route", "primary", [{ x: 2, z: channelAt(2), y: rendered.yOf(0) }, { x: cols * 0.35, z: channelAt(cols * 0.35), y: rendered.yOf(0) }, { x: cols * 0.7, z: channelAt(cols * 0.7), y: rendered.yOf(0) }, { x: cols - 2, z: channelAt(cols - 2), y: rendered.yOf(0) }]), createRoute("dry-channel-bank-crossing", "alternate", [{ x: crossingXs[1] ?? cols / 2, z: 2, y: rendered.yOf(3) }, { x: crossingXs[1] ?? cols / 2, z: channelAt(crossingXs[1] ?? cols / 2), y: rendered.yOf(0) }, { x: crossingXs[1] ?? cols / 2, z: rows - 2, y: rendered.yOf(3) }]));
   scene.tactical.push(tacticalFeature("dry-channel-entrance", "entrance", 2, channelAt(2), rendered.yOf(0), 2, "The dry channel enters through a narrow upstream cut."), tacticalFeature("dry-channel-flash-flood", "hazard", cols * 0.5, channelAt(cols * 0.5), rendered.yOf(0), 3, "The exposed river bed is a fast route but becomes a flash-flood kill zone."), tacticalFeature("dry-channel-overlook", "highGround", cols * 0.62, rows * 0.2, rendered.yOf(3), 3, "An eroded bank overlooks two channel crossings."));
   scene.description = `Dry-channel morphology with ${rendered.walkable} walkable cells, ${rendered.cliffs} eroded boundaries (${rendered.slopes} slope facades, ${rendered.skirts} perimeter skirts), three crossings, scoured boulders, and a continuous low river bed.`;
+}
+
+/** A salt wasteland is not a renamed riverbed. It is an irregular crust field
+ * with low brine basins, raised salt ridges, broken seams, and a route that
+ * alternates between stable crust and exposed wet depressions. */
+function buildSaltWasteland(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  const cols = Math.max(30, Math.floor(width));
+  const rows = Math.max(26, Math.floor(depth));
+  const phase = rng.float(-Math.PI, Math.PI);
+  const basinAt = (x: number) => rows * 0.52 + Math.sin(x * 0.11 + phase) * rows * 0.12;
+  const heights: Array<number | undefined> = [];
+  for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
+    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+    const basinDistance = Math.abs(z - basinAt(x));
+    const crossSeam = Math.abs(Math.sin(x * 0.23 + z * 0.07 + phase)) > 0.985 - density * 0.035;
+    const brokenEdge = edge < 2 && Math.sin(x * 0.41 + z * 0.17) > 0.35;
+    if (brokenEdge || crossSeam) {
+      heights.push(undefined);
+    } else if (basinDistance < 2.1) {
+      heights.push(0);
+    } else if (basinDistance < 5.4) {
+      heights.push(1);
+    } else if (basinDistance < 9.5) {
+      heights.push(2 + (Math.sin(x * 0.16 - z * 0.09) > 0.35 ? 1 : 0));
+    } else {
+      heights.push(3 + (Math.sin(x * 0.08 + z * 0.13) > 0.52 ? 1 : 0));
+    }
+  }
+  const rendered = renderMorphologyField(scene, {
+    prefix: "salt-waste",
+    cols,
+    rows,
+    heights,
+    materialFor: (level) => level === 0 ? "water" : level >= 4 ? "stone" : level >= 2 ? "rock" : "earth",
+    tagsFor: (level) => [
+      "salt-wasteland",
+      level === 0 ? "brine-basin" : level >= 4 ? "salt-ridge" : "salt-crust",
+      level >= 2 ? "high-ground" : "standable",
+    ],
+    slopeFacades: true,
+    slopeMaterial: "stone",
+    edgeSkirts: true,
+    edgeSkirtMaterial: "darkStone",
+  });
+  const brineCount = 2 + Math.round(density * 4);
+  for (let index = 0; index < brineCount; index += 1) {
+    const x = rng.float(cols * 0.16, cols * 0.84);
+    const z = basinAt(x) + rng.float(-1.4, 1.4);
+    scene.primitives.push(water(`salt-waste-brine-${index}`, 0, x, rendered.yOf(0) - 0.08, z, rng.float(1.8, 3.6), 0.16, rng.float(1.4, 3.2), ["salt-wasteland", "brine-pool", "hazard", "watercourse"], rng.float(-0.3, 0.3)));
+    scene.tactical.push(tacticalFeature(`salt-waste-brine-hazard-${index}`, "hazard", x, z, rendered.yOf(0), 2, "A shallow brine pool hides a brittle salt crust and slows movement."));
+  }
+  const outcropCount = 3 + Math.round(density * 5);
+  for (let index = 0; index < outcropCount; index += 1) {
+    const x = rng.float(4, cols - 4);
+    const z = basinAt(x) + rng.float(-10, 10);
+    const y = rendered.yOf(Math.min(4, 2 + index % 3));
+    scene.primitives.push(cylinder(`salt-waste-crust-spire-${index}`, 0, x, y, z, rng.float(0.55, 1.2), feetToMeters(rng.float(3, 8)), "stone", ["salt-wasteland", "salt-spire", "cover", "standable", "high-ground"]));
+  }
+  const crossingXs = [cols * 0.22, cols * 0.52, cols * 0.79];
+  scene.rooms.push(
+    createRoom("salt-waste-west-crust", "Western salt crust", "natural", 0, cols * 0.2, rows * 0.24, cols * 0.28, rows * 0.3, rendered.yOf(3)),
+    createRoom("salt-waste-brine-basin", "Brine basin", "combat", 0, cols * 0.5, rows * 0.52, cols * 0.82, 6, rendered.yOf(0)),
+    createRoom("salt-waste-east-ridge", "Eastern salt ridge", "combat", 0, cols * 0.78, rows * 0.72, cols * 0.28, rows * 0.28, rendered.yOf(4)),
+  );
+  connectRooms(scene.rooms, "salt-waste-west-crust", "salt-waste-brine-basin");
+  connectRooms(scene.rooms, "salt-waste-brine-basin", "salt-waste-east-ridge");
+  scene.routes.push(
+    createRoute("salt-waste-crust-route", "primary", [
+      { x: 2, z: basinAt(2) - 7, y: rendered.yOf(3) },
+      { x: cols * 0.28, z: basinAt(cols * 0.28) - 6, y: rendered.yOf(3) },
+      { x: cols * 0.56, z: basinAt(cols * 0.56) + 6, y: rendered.yOf(4) },
+      { x: cols - 2, z: basinAt(cols - 2) + 7, y: rendered.yOf(3) },
+    ]),
+    createRoute("salt-waste-basin-crossing", "alternate", crossingXs.map((x) => ({ x, z: basinAt(x), y: rendered.yOf(0) }))),
+  );
+  scene.tactical.push(
+    tacticalFeature("salt-waste-entrance", "entrance", 2, basinAt(2) - 7, rendered.yOf(3), 2, "A narrow crust path enters between broken salt shelves."),
+    tacticalFeature("salt-waste-basin-hazard", "hazard", cols * 0.5, basinAt(cols * 0.5), rendered.yOf(0), 4, "The central brine basin is exposed, unstable ground."),
+    tacticalFeature("salt-waste-ridge-highground", "highGround", cols * 0.78, rows * 0.72, rendered.yOf(4), 3, "A raised salt ridge overlooks the basin and all three crossings."),
+  );
+  scene.description = `Salt-wasteland morphology with ${rendered.walkable} walkable crust cells, ${rendered.cliffs} broken salt faces (${rendered.slopes} slope facades, ${rendered.skirts} edge skirts), ${brineCount} brine basins, raised salt ridges, and two routes that alternate between stable crust and exposed wet depressions.`;
 }
 
 function buildImpactCrater(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
@@ -2438,7 +2525,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station", "驿站",
     "quarantine station", "weather station", "meteorological station", "research station", "field station", "radio station",
   ].some((term) => text.includes(term)) || retrievedFacilityContract;
-  if (!wantsBuilding || !["forest", "river-valley", "mountain", "swamp", "ice", "volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype)) return;
+  if (!wantsBuilding || !["forest", "river-valley", "dry-riverbed", "mountain", "swamp", "ice", "volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype)) return;
   const alchemical = ["炼金", "alchemy", "alchemist"].some((term) => text.includes(term));
   const hunter = ["猎人", "hunter"].some((term) => text.includes(term));
   const quarantine = facilityProfile === "quarantine";
@@ -2663,6 +2750,48 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       tags: ["prompt-derived-space", `facility-use:${facilityIntent?.use ?? "service"}`, space],
     };
   }) : [];
+  // Known site profiles provide a strong base program, but they must not erase
+  // additional prompt-owned spaces. A quarantine station can also be a chapel,
+  // fuel store or hangar; merge those requested atoms into the profile instead
+  // of treating the profile as an exclusive fixed template.
+  if (!customFacility && customSpaces.size > 0) {
+    for (const [index, space] of [...customSpaces].entries()) {
+      if (functionalModules.some((module) => module.kind === space)) continue;
+      const levelRole: BuildingFunctionalModuleProgram["levelRole"] = space === "observation" ? "roof"
+        : space === "submerged-room" ? "basement"
+          : space === "hangar" ? "exterior"
+            : space === "quarters" ? "upper"
+              : space === "fuel" && ["地下", "underground", "cellar", "basement"].some((term) => text.includes(term)) ? "basement"
+                : (space === "archive" || space === "storage") && (facilityCapabilities.undergroundStore || ["地下", "underground", "cellar", "basement"].some((term) => text.includes(term))) ? "basement"
+                  : "ground";
+      functionalModules.push({
+        id: `profile-prompt-${space}-${index + 1}`,
+        kind: space,
+        label: space === "observation" ? "Prompt-requested observation platform"
+          : space === "chapel" ? "Prompt-requested chapel"
+            : space === "medical" ? "Prompt-requested treatment ward"
+              : space === "fuel" ? "Prompt-requested fuel bunker"
+                : space === "hangar" ? "Prompt-requested hangar"
+                  : space === "quarters" ? "Prompt-requested quarters"
+                    : space === "storage" ? "Prompt-requested supply store"
+                      : space === "archive" ? "Prompt-requested archive"
+                        : space === "laboratory" ? "Prompt-requested laboratory"
+                          : space === "workshop" ? "Prompt-requested workshop"
+                            : space === "greenhouse" ? "Prompt-requested greenhouse"
+                              : space === "distillation" ? "Prompt-requested distillation space"
+                                : "Prompt-requested submerged room",
+        levelRole,
+        requiresExteriorAccess: space === "workshop" || space === "greenhouse" || space === "hangar" || space === "fuel",
+        requiresVerticalLandmark: space === "observation" || space === "hangar" || space === "chapel",
+        minimumFootprintCells: space === "hangar" ? 28
+          : space === "medical" ? 22
+            : space === "observation" ? 16
+              : space === "workshop" || space === "quarters" || space === "chapel" ? 20
+                : 15,
+        tags: ["prompt-derived-space", `facility-use:${facilityIntent?.use ?? "service"}`, space, `profile:${facilityProfile}`],
+      });
+    }
+  }
   const customWidth = facilityIntent?.use === "medical" ? 13
     : facilityIntent?.use === "industrial" || facilityIntent?.use === "storage" ? 12
       : facilityIntent?.use === "security" ? 10
@@ -2730,9 +2859,9 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     version: 1,
     mode: "site",
     focusCells: { x, z },
-    radiusCells: Math.max(18, Math.min(28, 18 + context.request.density * 8)),
+    radiusCells: Math.max(16, Math.min(22, 16 + context.request.density * 5)),
     includeTags: ["site-program", "building-pad", "settlement-building", "communications-tower", "generator-shed"],
-    reason: "Keep the single authored wilderness compound readable while retaining its immediate parent-terrain context.",
+    reason: "Frame the authored wilderness compound as the tactical subject while retaining enough parent terrain to explain access, hazards and elevation.",
   };
   const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
 
@@ -4008,12 +4137,26 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
     "industrial-ruin": ["The Rustworks District", "The Flooded Foundry Quarter"],
     "coral-tide": ["The Tidal Coral Court", "Reef of the Changing Path"],
   };
-  const scene = baseScene("wilderness", choose(context.rng, titlePool[archetype]), `${archetype} terrain with elevation bands, route choices, tactical cover, and explicit hazards.`, context.request.seed, { x: profile.width, z: profile.depth }, 1, [Math.ceil(profile.height + 11)]);
+  const saltWasteland = isSaltWastelandPrompt(context.request.prompt);
+  const scene = baseScene(
+    "wilderness",
+    saltWasteland
+      ? (embeddedFacilityProfile(context.request.prompt) === "quarantine" ? "The Saltbound Quarantine Oratory" : "The White Salt Expanse")
+      : choose(context.rng, titlePool[archetype]),
+    `${archetype} terrain with elevation bands, route choices, tactical cover, and explicit hazards.`,
+    context.request.seed,
+    { x: profile.width, z: profile.depth },
+    1,
+    [Math.ceil(profile.height + 11)],
+  );
   scene.archetype = archetype;
   if (archetype === "industrial-ruin") buildIndustrialRuin(scene, profile.width, profile.depth, profile.density, context.rng.fork("industrial"));
   else if (archetype === "coral-tide") buildCoralTide(scene, profile.width, profile.depth, context.rng.fork("coral"));
   else if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, profile.density, context.rng.fork("river"));
-  else if (archetype === "dry-riverbed") buildDryRiverbed(scene, profile.width, profile.depth, profile.density, context.rng.fork("dry-riverbed"));
+  else if (archetype === "dry-riverbed") {
+    if (saltWasteland) buildSaltWasteland(scene, profile.width, profile.depth, profile.density, context.rng.fork("salt-wasteland"));
+    else buildDryRiverbed(scene, profile.width, profile.depth, profile.density, context.rng.fork("dry-riverbed"));
+  }
   else if (archetype === "impact-crater") buildImpactCrater(scene, profile.width, profile.depth, profile.density, context.rng.fork("impact-crater"));
   else if (archetype === "volcanic") buildVolcanic(scene, profile.width, profile.depth, profile.density, context.rng.fork("volcanic"));
   else if (archetype === "infernal-waste") buildInfernalWaste(scene, profile.width, profile.depth, profile.density, context.rng.fork("infernal-waste"));

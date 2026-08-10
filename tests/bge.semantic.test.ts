@@ -57,6 +57,13 @@ describe("local capability retrieval", () => {
       "structure.storage-space",
       "structure.observation-platform",
     ]));
+    const quarantine = retrieveCapabilitiesLexically("盐碱荒原中的瘟疫隔离礼拜所，有伤员病房、祈祷小堂、地下焚化燃料库和屋顶钟火信号台", 10);
+    expect(quarantine.capabilityIds).toEqual(expect.arrayContaining([
+      "structure.medical-space",
+      "structure.chapel-space",
+      "structure.fuel-space",
+      "structure.observation-platform",
+    ]));
   });
 
   it("never returns an invented capability when BGE ranks the bounded catalog", async () => {

@@ -121,12 +121,12 @@ function requestedFunctionalModules(text: string): BuildingFunctionalModuleProgr
     minimumFootprintCells: 20,
     tags: ["quarters", "bunk", "private", "cover"],
   });
-  add("chapel", "Dedicated chapel and prayer room", ["礼拜堂", "小圣堂", "祭室", "祷告室", "chapel", "oratory", "prayer room"], "ground", {
+  add("chapel", "Dedicated chapel and prayer room", ["礼拜堂", "小圣堂", "祈祷小堂", "祷告小堂", "祭室", "祷告室", "chapel", "oratory", "prayer room"], "ground", {
     minimumFootprintCells: 20,
     requiresVerticalLandmark: true,
     tags: ["chapel", "altar", "pew", "sacred"],
   });
-  add("medical", "Treatment and ward suite", ["治疗室", "医务室", "病房", "手术室", "急救室", "检伤区", "treatment room", "infirmary", "ward", "operating room", "triage"], "ground", {
+  add("medical", "Treatment and ward suite", ["治疗室", "医务室", "病房", "伤员病房", "手术室", "急救室", "检伤区", "treatment room", "infirmary", "ward", "operating room", "triage"], "ground", {
     minimumFootprintCells: 22,
     tags: ["medical", "treatment", "bed", "restricted"],
   });
@@ -141,7 +141,7 @@ function requestedFunctionalModules(text: string): BuildingFunctionalModuleProgr
     requiresWater: true,
     tags: ["submerged", "flooded", "water-access"],
   });
-  add("observation", "Observation platform", ["观测台", "观星台", "天线", "瞭望平台", "observation", "observatory", "antenna"], "roof", {
+  add("observation", "Observation platform", ["观测台", "观星台", "天线", "瞭望平台", "信号台", "钟火信号台", "屋顶信号台", "observation", "observatory", "antenna", "signal platform"], "roof", {
     minimumFootprintCells: 14,
     requiresExteriorAccess: true,
     requiresVerticalLandmark: true,

@@ -1081,6 +1081,24 @@ describe("five-layer composition catalog", () => {
     expect(scene.diagnostics.warnings, scene.diagnostics.warnings.join("\n")).toHaveLength(0);
   });
 
+  it("composes an unfamiliar plague oratory without dropping its functional spaces", () => {
+    const prompt = "盐碱荒原中的瘟疫隔离礼拜所，有露天净化庭、伤员病房、祈祷小堂、地下焚化燃料库和屋顶钟火信号台";
+    const scene = generateScene({ prompt, seed: "plague-oratory-generalization", size: "medium", density: 0.71 }, "adaptive");
+    const building = scene.buildingInstances?.find((entry) => entry.id === "wilderness-core-building");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(building?.envelopeProgram?.variant.startsWith("quarantine-")).toBe(true);
+    expect(building?.buildingProgram?.requiredFeatures).toEqual(expect.arrayContaining(["chapel", "medical", "fuel", "observation"]));
+    for (const tag of ["chapel-floor", "ward-floor", "containment-curb", "signal-platform", "decontamination-court", "wash-pillar"]) {
+      expect(tags.has(tag), `missing plague-oratory geometry tag ${tag}`).toBe(true);
+    }
+    expect(scene.routes.some((route) => route.id === "wilderness-core-building-decontamination-court-route")).toBe(true);
+    expect(scene.diagnostics.warnings, scene.diagnostics.warnings.join("\n")).toHaveLength(0);
+    const alternate = generateScene({ prompt, seed: "round-82-plague-oratory-alt", size: "medium", density: 0.71 }, "adaptive");
+    expect(alternate.diagnostics.warnings, alternate.diagnostics.warnings.join("\n")).toHaveLength(0);
+    expect(alternate.routes.some((route) => route.id === "wilderness-core-building-chapel-route")).toBe(true);
+    expect(alternate.primitives.some((primitive) => primitive.tags?.includes("functional-route-opening"))).toBe(true);
+  });
+
   it("keeps an unfamiliar seismic monitoring station inside its natural parent", () => {
     const prompt = "高原泥炭湿地地震监测站，有钻芯实验室、样本清洗间、通信桅杆、备用发电棚、架高步道和地下岩芯库";
     const request = { prompt, seed: "seismic-parent-contract", size: "medium" as const, density: 0.74 };

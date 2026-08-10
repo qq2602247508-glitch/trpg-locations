@@ -172,6 +172,31 @@ export function fogDensityForSpan(spanMeters: number): number {
   return THREE.MathUtils.clamp(0.42 / Math.max(1, spanMeters), 0.0014, 0.009);
 }
 
+export function focusedCameraFactors(preset: "overview" | "low", isBasement: boolean): {
+  spanScale: number;
+  horizontalDistance: number;
+  targetHeightFraction: number;
+  verticalSpanFactor: number;
+  verticalDistanceFactor: number;
+} {
+  if (preset === "low") {
+    return {
+      spanScale: isBasement ? 0.74 : 0.92,
+      horizontalDistance: 0.96,
+      targetHeightFraction: 0.3,
+      verticalSpanFactor: 0.4,
+      verticalDistanceFactor: 0.22,
+    };
+  }
+  return {
+    spanScale: isBasement ? 0.78 : 1.02,
+    horizontalDistance: 1.18,
+    targetHeightFraction: 0.5,
+    verticalSpanFactor: 0.72,
+    verticalDistanceFactor: 0.42,
+  };
+}
+
 /**
  * A deliberately compact Three.js renderer: primitive types are batched into
  * InstancedMesh groups, while the small diagnostic overlays stay independent.
@@ -335,7 +360,7 @@ export class SceneRenderer {
     this.setFloorView(0);
   }
 
-  private positionCameraForFocusedBuilding(selected: BuildingInstance, view: FloorView): void {
+  private positionCameraForFocusedBuilding(selected: BuildingInstance, view: FloorView, preset: "overview" | "low" = "overview"): void {
     const numericLevel = typeof view === "number" ? view : 0;
     const isBasement = typeof view === "number" && this.currentScene?.floorLabels?.[view]?.startsWith("B") === true;
     const priorHeight = selected.floorHeightFeet.slice(0, Math.min(numericLevel, selected.floorHeightFeet.length)).reduce((sum, value) => sum + value, 0) * 0.3048;
@@ -362,10 +387,13 @@ export class SceneRenderer {
     const maxZ = visibleBuildingPrimitives.length > 0 ? Math.max(...visibleBuildingPrimitives.map((primitive) => primitive.position.z + primitive.size.z / 2)) : selected.positionCells.z * GRID_METERS + selected.footprintCells.z * GRID_METERS / 2;
     const minY = visibleBuildingPrimitives.length > 0 ? Math.min(...visibleBuildingPrimitives.map((primitive) => primitive.position.y)) : fallbackFocusY - currentHeight * 0.35;
     const maxY = visibleBuildingPrimitives.length > 0 ? Math.max(...visibleBuildingPrimitives.map((primitive) => primitive.position.y + primitive.size.y)) : fallbackFocusY + currentHeight * 0.65;
-    const targetY = visibleBuildingPrimitives.length > 0 ? (minY + maxY) / 2 : fallbackFocusY;
-    const target = new THREE.Vector3((minX + maxX) / 2, targetY, (minZ + maxZ) / 2);
     const verticalSpan = Math.max(1, maxY - minY);
-    const span = Math.max(maxX - minX, maxZ - minZ, verticalSpan * 1.45, 7 * GRID_METERS) * (isBasement ? 0.78 : 1.02);
+    const cameraFactors = focusedCameraFactors(preset, isBasement);
+    const targetY = visibleBuildingPrimitives.length > 0
+      ? minY + verticalSpan * cameraFactors.targetHeightFraction
+      : fallbackFocusY;
+    const target = new THREE.Vector3((minX + maxX) / 2, targetY, (minZ + maxZ) / 2);
+    const span = Math.max(maxX - minX, maxZ - minZ, verticalSpan * 1.45, 7 * GRID_METERS) * cameraFactors.spanScale;
     // The focus blueprint cuts its local east and south walls. Approach from
     // that same local diagonal after applying the building's authored yaw;
     // a fixed world-space camera could otherwise look straight at the two
@@ -384,9 +412,9 @@ export class SceneRenderer {
     // context for walls and stairs while bringing the selected floor into a
     // readable combat scale.
     this.camera.position.set(
-      target.x + viewX * span * 1.18,
-      target.y + Math.max(verticalSpan * 0.72, span * 0.42),
-      target.z + viewZ * span * 1.18,
+      target.x + viewX * span * cameraFactors.horizontalDistance,
+      target.y + Math.max(verticalSpan * cameraFactors.verticalSpanFactor, span * cameraFactors.verticalDistanceFactor),
+      target.z + viewZ * span * cameraFactors.horizontalDistance,
     );
     this.camera.near = 0.1;
     this.camera.far = Math.max(300, span * 20);
@@ -471,7 +499,7 @@ export class SceneRenderer {
     if (this.focusedBuildingId && this.currentScene) {
       const focused = this.currentScene.buildingInstances?.find((building) => building.id === this.focusedBuildingId);
       if (focused) {
-        this.positionCameraForFocusedBuilding(focused, this.activeFloorView);
+        this.positionCameraForFocusedBuilding(focused, this.activeFloorView, "low");
         return;
       }
     }
