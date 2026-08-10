@@ -824,7 +824,7 @@ describe("five-layer composition catalog", () => {
       seed: "custom-airship-mooring",
       archetype: "ice",
       kind: "tower",
-      features: ["workshop", "archive", "observation", "prompt-derived-space"],
+      features: ["workshop", "storage", "fuel", "observation", "prompt-derived-space"],
     },
   ] as const)("composes an unknown facility noun from semantic spaces: $seed", ({ prompt, seed, archetype, kind, features }) => {
     const sparse = generateScene({ prompt, seed, size: "large", density: 0.28 }, "adaptive");
@@ -860,11 +860,63 @@ describe("five-layer composition catalog", () => {
       const expectedRoofY = (building?.baseYMeters ?? 0) + (building?.exteriorHeightMeters ?? 0);
       expect(deck?.position.y).toBeCloseTo(expectedRoofY, 5);
       expect(dense.primitives.some((primitive) => primitive.id === "wilderness-core-building-gable-roof")).toBe(false);
-      expect(dense.primitives.some((primitive) => primitive.tags?.includes("gas-cell-store"))).toBe(true);
-      expect(dense.primitives.some((primitive) => primitive.tags?.includes("fuel-bunker"))).toBe(true);
+      expect(dense.primitives.some((primitive) => primitive.tags?.includes("storage-rack"))).toBe(true);
+      expect(dense.primitives.some((primitive) => primitive.tags?.includes("fuel-tank"))).toBe(true);
       expect(dense.primitives.filter((primitive) => primitive.tags?.includes("stacked-stair")).length).toBeGreaterThanOrEqual((building?.floors ?? 1) - 1);
       expect(dense.routes.some((route) => route.id === "wilderness-custom-airship-roof-route")).toBe(true);
     }
+  });
+
+  it.each([
+    {
+      prompt: "高山峡谷中的沙暴救护所，有检伤区、病房、药品储藏室、屋顶信号台和地下净水库",
+      seed: "atomic-rescue-clinic",
+      archetype: "mountain",
+      carrier: "clinic",
+      modules: ["medical", "storage", "observation"],
+      geometryTags: ["medical-bed", "storage-rack", "roof-platform"],
+    },
+    {
+      prompt: "海岸悬崖中的风帆滑翔机库，有大型机库、维修车间、燃料库、机组宿舍和屋顶风向塔",
+      seed: "atomic-glider-hangar",
+      archetype: "mountain",
+      carrier: "factory",
+      modules: ["hangar", "workshop", "fuel", "quarters", "observation"],
+      geometryTags: ["hangar-floor", "maintenance-bay", "fuel-tank", "bunk"],
+    },
+    {
+      prompt: "巨木森林中的朝圣者避难院，有小礼拜堂、宿舍、医务室、补给库和树冠瞭望台",
+      seed: "atomic-pilgrim-hospice",
+      archetype: "forest",
+      carrier: "shrine",
+      modules: ["chapel", "quarters", "medical", "storage", "observation"],
+      geometryTags: ["altar", "bunk", "medical-bed", "storage-rack"],
+    },
+  ] as const)("realizes reusable functional space atoms for $seed", ({ prompt, seed, archetype, carrier, modules, geometryTags }) => {
+    const scene = generateScene({ prompt, seed, size: "large", density: 0.76 }, "adaptive");
+    const repeat = generateScene({ prompt, seed, size: "large", density: 0.76 }, "adaptive");
+    const alternate = generateScene({ prompt, seed: `${seed}-b`, size: "large", density: 0.76 }, "adaptive");
+    const sparse = generateScene({ prompt, seed, size: "large", density: 0.28 }, "adaptive");
+    const building = scene.buildingInstances?.find((entry) => entry.id === "wilderness-core-building");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    const signature = (value: typeof scene) => value.primitives
+      .filter((primitive) => primitive.tags?.some((tag) => tag === "terrain" || tag === "functional-module" || tag === "building-shell"))
+      .map((primitive) => `${primitive.id}:${primitive.position.x.toFixed(2)}:${primitive.position.y.toFixed(2)}:${primitive.position.z.toFixed(2)}:${primitive.size.x.toFixed(2)}:${primitive.size.z.toFixed(2)}`)
+      .join("|");
+
+    expect(scene).toEqual(repeat);
+    expect(scene.sceneProgram?.domain).toBe("natural");
+    expect(scene.archetype).toBe(archetype);
+    expect(building?.archetype).toBe(carrier);
+    expect(building?.detailLevel).toBe("full-interior");
+    expect(building?.buildingProgram?.requiredFeatures).toEqual(expect.arrayContaining([...modules]));
+    for (const tag of geometryTags) expect(tags.has(tag), `missing geometry tag ${tag}`).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-building-access")).toBe(true);
+    expect(signature(alternate)).not.toBe(signature(scene));
+    expect(scene.primitives.length).not.toBe(sparse.primitives.length);
+    expect(scene.diagnostics.warnings, scene.diagnostics.warnings.join("\n")).toHaveLength(0);
+    expect(alternate.diagnostics.warnings, alternate.diagnostics.warnings.join("\n")).toHaveLength(0);
+    expect(sparse.diagnostics.warnings, sparse.diagnostics.warnings.join("\n")).toHaveLength(0);
   });
 
   it("keeps polar ice-cap monitoring stations owned by wilderness terrain", () => {
@@ -890,6 +942,47 @@ describe("five-layer composition catalog", () => {
     expect(scene.sceneProgram?.domain).toBe("natural");
     expect(scene.archetype).toBe("mountain");
     expect(scene.compositionProgram?.semanticCoverage?.missing).not.toContain("主河道");
+  });
+
+  it("does not let retrieved floating atoms replace an explicit coastal-cliff parent", () => {
+    const request = {
+      prompt: "海岸悬崖中的风帆滑翔机库，有大型机库、维修车间、燃料库、机组宿舍和屋顶风向塔",
+      seed: "retrieval-coastal-cliff-ownership",
+      size: "large" as const,
+      density: 0.76,
+    };
+    const composition = compileSceneComposition(request, "bge", ["terrain.salt-crystal-island", "route.vertical"]);
+    const scene = generateScene(request, "adaptive", undefined, undefined, composition);
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+
+    expect(scene.archetype).toBe("mountain");
+    expect(scene.buildingInstances?.some((building) => building.archetype === "factory")).toBe(true);
+    expect(tags.has("coastal-cliff")).toBe(true);
+    expect(tags.has("hangar-floor")).toBe(true);
+    expect(tags.has("floating-island")).toBe(false);
+    expect(scene.diagnostics.warnings, scene.diagnostics.warnings.join("\n")).toHaveLength(0);
+  });
+
+  it("keeps a medium coastal hangar and its launch route inside the wilderness bounds", () => {
+    const prompt = "海岸悬崖中的风帆滑翔机库，有大型机库、维修车间、燃料库、机组宿舍和屋顶风向塔";
+    const scene = generateScene({
+      prompt,
+      seed: "round-79-hangar-a",
+      size: "medium",
+      density: 0.2,
+    }, "adaptive");
+    const hangarRoute = scene.routes.find((route) => route.id === "wilderness-core-building-hangar-route");
+    const maximumX = scene.boundsCells.x * GRID_METERS;
+    const maximumZ = scene.boundsCells.z * GRID_METERS;
+
+    expect(hangarRoute).toBeDefined();
+    for (const point of hangarRoute?.points ?? []) {
+      expect(point.x).toBeGreaterThanOrEqual(0);
+      expect(point.x).toBeLessThanOrEqual(maximumX);
+      expect(point.z).toBeGreaterThanOrEqual(0);
+      expect(point.z).toBeLessThanOrEqual(maximumZ);
+    }
+    expect(scene.diagnostics.warnings, scene.diagnostics.warnings.join("\n")).toHaveLength(0);
   });
 
   it("keeps an unfamiliar seismic monitoring station inside its natural parent", () => {

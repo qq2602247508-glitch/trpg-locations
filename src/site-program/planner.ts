@@ -102,6 +102,34 @@ function requestedFunctionalModules(text: string): BuildingFunctionalModuleProgr
     requiresWater: floodedArchive,
     tags: ["archive", "reserve-vault", "shelf", "restricted", ...(floodedArchive ? ["flooded", "water-access"] : [])],
   });
+  add("storage", "Dedicated equipment and supply store", ["储藏室", "储备库", "补给库", "器材库", "零件库", "物资仓", "气囊仓", "storage room", "supply store", "equipment store", "parts store", "gas-cell store"], contains(text, ["地下储", "地下补给", "地下器材", "underground storage", "basement store"]) ? "basement" : "ground", {
+    minimumFootprintCells: 16,
+    tags: ["storage", "supply-store", "rack", "cover"],
+  });
+  add("hangar", "Vehicle and maintenance hangar", ["机库", "艇库", "飞行棚", "飞艇棚", "载具棚", "维修机库", "hangar", "airship shed", "vehicle bay", "boat house"], "exterior", {
+    minimumFootprintCells: 28,
+    requiresExteriorAccess: true,
+    requiresVerticalLandmark: true,
+    tags: ["hangar", "wide-door", "gantry", "maintenance-bay"],
+  });
+  add("fuel", "Secured fuel bunker", ["燃料库", "油库", "燃料舱", "燃料掩体", "fuel store", "fuel bunker", "fuel bay", "tank farm"], contains(text, ["地下燃料", "地下油库", "underground fuel", "basement fuel"]) ? "basement" : "exterior", {
+    minimumFootprintCells: 18,
+    requiresExteriorAccess: true,
+    tags: ["fuel", "tank", "hazard", "restricted"],
+  });
+  add("quarters", "Resident and crew quarters", ["居室", "宿舍", "寝室", "住舱", "船员舱", "僧侣房", "quarters", "dormitory", "bunk room", "crew room", "monastic cell"], "upper", {
+    minimumFootprintCells: 20,
+    tags: ["quarters", "bunk", "private", "cover"],
+  });
+  add("chapel", "Dedicated chapel and prayer room", ["礼拜堂", "小圣堂", "祭室", "祷告室", "chapel", "oratory", "prayer room"], "ground", {
+    minimumFootprintCells: 20,
+    requiresVerticalLandmark: true,
+    tags: ["chapel", "altar", "pew", "sacred"],
+  });
+  add("medical", "Treatment and ward suite", ["治疗室", "医务室", "病房", "手术室", "急救室", "检伤区", "treatment room", "infirmary", "ward", "operating room", "triage"], "ground", {
+    minimumFootprintCells: 22,
+    tags: ["medical", "treatment", "bed", "restricted"],
+  });
   add("greenhouse", submergedGreenhouse ? "Submerged cultivation greenhouse" : undergroundGreenhouse ? "Underground fungal greenhouse" : "Cultivation greenhouse", ["温室", "培育室", "植物研究", "greenhouse", "glasshouse", "cultivation"], submergedGreenhouse || undergroundGreenhouse ? "basement" : "exterior", {
     minimumFootprintCells: 20,
     requiresWater: submergedGreenhouse,
@@ -129,6 +157,11 @@ function requestedFunctionalModules(text: string): BuildingFunctionalModuleProgr
 function preferredCarrier(module: BuildingFunctionalModuleProgram): SettlementBuildingKind {
   if (module.kind === "observation") return "tower";
   if (module.kind === "distillation") return "factory";
+  if (module.kind === "hangar" || module.kind === "fuel") return "factory";
+  if (module.kind === "storage") return "warehouse";
+  if (module.kind === "quarters") return "home";
+  if (module.kind === "chapel") return "shrine";
+  if (module.kind === "medical") return "clinic";
   if (module.kind === "laboratory" && module.tags.includes("elevated")) return "home";
   if (module.kind === "submerged-room") return "warehouse";
   if (module.kind === "greenhouse") return "factory";

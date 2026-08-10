@@ -48,7 +48,10 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   "infernal-waste": ["avernus", "hellscape", "infernal waste", "阿弗纳斯", "地狱荒原", "地狱"],
   "burial-ground": ["cemetery", "graveyard", "burial ground", "墓地", "墓园", "坟场", "陵园"],
   rift: ["rift", "chasm", "ravine", "裂谷", "裂隙", "深坑", "断崖"],
-  mountain: ["mountain", "mountain top", "cliff", "ridge", "weathered rock ridge", "山地", "山顶", "山脊", "风化岩脊", "高山", "峭壁"],
+  mountain: [
+    "mountain", "mountain top", "cliff", "coastal cliff", "sea cliff", "ridge", "weathered rock ridge",
+    "山地", "山顶", "山脊", "风化岩脊", "高山", "峭壁", "悬崖", "海崖", "海岸悬崖",
+  ],
   ice: ["ice", "ice sheet", "ice cap", "polar", "glacier", "tundra", "冰原", "冰盖", "冰帽", "极地", "冰川", "冻土", "雪原"],
   ruin: ["ruin", "ruined", "wilderness ruin", "遗迹", "废墟", "残垣", "荒野遗迹"],
   "underground-lake": ["underground lake", "dark lake", "subterranean lake", "地下湖", "地底湖"],
@@ -2195,6 +2198,8 @@ function addCustomFacilityThemeAtoms(
       !primitiveEntry.id.startsWith("wilderness-core-building-observation-")
       && primitiveEntry.id !== "wilderness-core-building-gable-roof"
     ));
+    scene.routes = scene.routes.filter((route) => route.id !== "wilderness-core-building-observation-route");
+    scene.tactical = scene.tactical.filter((feature) => feature.id !== "wilderness-core-building-observation-high");
     const roofAccess = stairConnection(
       "wilderness-custom-airship-roof-access",
       1,
@@ -2204,17 +2209,11 @@ function addCustomFacilityThemeAtoms(
       "metal",
       [...common, "airship", "roof-access", "standable", "supported"],
     );
-    const basementY = baseY - feetToMeters(16);
     scene.primitives.push(
       box("wilderness-custom-airship-maintenance-bed", 0, x - 1.25, baseY + FLOOR_SLAB_METERS, z + 0.8, 3.4, feetToMeters(2.4), 1.3, "metal", [...common, "airship", "maintenance-workshop", "winch-bed", "machinery", "cover"]),
       cylinder("wilderness-custom-airship-maintenance-drum-a", 0, x - 2.1, baseY + feetToMeters(2.5), z + 0.8, 0.92, feetToMeters(2.8), "metal", [...common, "airship", "maintenance-workshop", "winch-drum", "machinery"]),
       cylinder("wilderness-custom-airship-maintenance-drum-b", 0, x - 0.4, baseY + feetToMeters(2.5), z + 0.8, 0.92, feetToMeters(2.8), "metal", [...common, "airship", "maintenance-workshop", "winch-drum", "machinery"]),
-      box("wilderness-custom-airship-gas-cell-cradle", 0, x + 2.25, baseY + FLOOR_SLAB_METERS, z - 0.9, 1.5, feetToMeters(5.2), 3.4, "wood", [...common, "airship", "gas-cell-store", "storage-frame", "cover"]),
-      cylinder("wilderness-custom-airship-fuel-tank-a", 3, x - 1.6, basementY + FLOOR_SLAB_METERS, z - 0.8, 1.2, feetToMeters(5.8), "metal", [...common, "airship", "fuel-bunker", "fuel-tank", "underground", "hazard", "cover"]),
-      cylinder("wilderness-custom-airship-fuel-tank-b", 3, x, basementY + FLOOR_SLAB_METERS, z - 0.8, 1.2, feetToMeters(5.8), "metal", [...common, "airship", "fuel-bunker", "fuel-tank", "underground", "hazard", "cover"]),
-      cylinder("wilderness-custom-airship-fuel-tank-c", 3, x + 1.6, basementY + FLOOR_SLAB_METERS, z - 0.8, 1.2, feetToMeters(5.8), "metal", [...common, "airship", "fuel-bunker", "fuel-tank", "underground", "hazard", "cover"]),
-      box("wilderness-custom-airship-fuel-manifold", 3, x, basementY + feetToMeters(4.6), z - 0.8, 4.2, 0.22, 0.3, "metal", [...common, "airship", "fuel-bunker", "fuel-manifold", "underground", "hazard"]),
-      box("wilderness-custom-airship-mooring-deck", 2, x, roofY, z, 6.2, 0.24, 5.4, "metal", [...common, "airship", "mooring-deck", "roof-platform", "standable", "high-ground"]),
+      box("wilderness-custom-airship-mooring-deck", 2, x, roofY, z, 6.2, 0.24, 5.4, "metal", [...common, "airship", "mooring-deck", "floor", "platform", "roof-platform", "standable", "high-ground"]),
       roofAccess.primitive,
       box("wilderness-custom-airship-roof-hatch", 2, x - 2.1, roofY + 0.24, z + 0.8, 1.35, feetToMeters(3.2), 0.18, "metal", [...common, "airship", "roof-hatch", "door-frame", "opening", "cover"]),
       cylinder("wilderness-custom-airship-mooring-mast", 2, x, roofY + 0.24, z, 0.72, feetToMeters(18), "metal", [...common, "airship", "mooring-mast", "vertical-landmark", "climbable"]),
@@ -2225,8 +2224,7 @@ function addCustomFacilityThemeAtoms(
     );
     scene.routes.push(stairRoute("wilderness-custom-airship-roof-route", roofAccess));
     scene.tactical.push(
-      tacticalFeature("wilderness-custom-airship-workshop-cover", "cover", x - 1.25, z + 0.8, baseY, 1.6, "Winch drums and the gas-cell cradle split the maintenance floor into hard cover lanes."),
-      tacticalFeature("wilderness-custom-airship-fuel-hazard", "hazard", x, z - 0.8, basementY, 1.8, "Pressurized fuel tanks make the underground bunker a dangerous but defensible objective."),
+      tacticalFeature("wilderness-custom-airship-workshop-cover", "cover", x - 1.25, z + 0.8, baseY, 1.6, "Winch drums split the maintenance floor into hard cover lanes."),
       tacticalFeature("wilderness-custom-airship-high", "highGround", x, z, roofY, 2.4, "The roof mooring deck and winches create an exposed elevated objective."),
     );
   } else if (intent.theme === "communications") {
@@ -2393,7 +2391,18 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const entranceDirection = nearestReservation && nearestReservation.centerCells.x > x ? -1 : 1;
   const entrance = { x: x + entranceDirection * 8.5, z: z + 5.5 };
   const customSpaces = new Set(facilityIntent?.spaces ?? []);
-  if (customFacility && facilityCapabilities.undergroundStore) customSpaces.add("archive");
+  if (
+    customFacility
+    && facilityCapabilities.undergroundStore
+    && !customSpaces.has("archive")
+    && !customSpaces.has("storage")
+    && !customSpaces.has("fuel")
+  ) {
+    // An unspecified underground "store/vault/cache" is a storage function.
+    // Archive and fuel modules are reserved for prompts that explicitly ask
+    // for records/collections or combustible reserves.
+    customSpaces.add("storage");
+  }
   if (customFacility && facilityCapabilities.laboratory) customSpaces.add("laboratory");
   const functionalModules: BuildingFunctionalModuleProgram[] = quarantine ? [
     { id: "quarantine-observation", kind: "observation", label: "Roof quarantine watch", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 16, tags: ["quarantine-watch", "restricted"] },
@@ -2418,9 +2427,10 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     { id: "sanatorium-ward", kind: "archive", label: "Patient ward gallery", levelRole: "upper", minimumFootprintCells: 20, tags: ["patient-ward", "observation", "medical"] },
     { id: "sanatorium-boiler", kind: "workshop", label: "Underground boiler room", levelRole: "basement", minimumFootprintCells: 18, tags: ["boiler", "steam-pipes", "underground"] },
   ] : customFacility ? [...customSpaces].map((space, index): BuildingFunctionalModuleProgram => {
-    const kind = space === "submerged-room" ? "submerged-room" : space;
+    const kind = space;
     const label = facilityIntent?.theme === "airship" && space === "observation" ? "Reinforced rooftop airship mooring deck"
-      : facilityIntent?.theme === "airship" && space === "archive" ? "Underground fuel bunker and gas-cell stores"
+      : facilityIntent?.theme === "airship" && space === "storage" ? "Gas-cell and envelope stores"
+        : facilityIntent?.theme === "airship" && space === "fuel" ? "Underground fuel bunker"
         : facilityIntent?.theme === "airship" && space === "workshop" ? "Mooring machinery maintenance workshop"
           : facilityIntent?.theme === "clockwork" && space === "workshop" ? "Clockwork repair workshop"
             : facilityIntent?.theme === "clockwork" && space === "archive" ? "Clock parts and movement archive"
@@ -2429,22 +2439,35 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
                   : space === "observation" ? "Prompt-derived observation platform"
                     : space === "laboratory" ? "Prompt-derived laboratory"
                       : space === "archive" ? "Prompt-derived archive and collection room"
-                        : space === "workshop" ? "Prompt-derived working hall"
-                          : space === "greenhouse" ? "Prompt-derived greenhouse"
-                            : space === "distillation" ? "Prompt-derived distillation room"
-                              : "Prompt-derived submerged service room";
+                        : space === "storage" ? "Prompt-derived equipment and supply store"
+                          : space === "hangar" ? "Prompt-derived vehicle hangar"
+                            : space === "fuel" ? "Prompt-derived fuel bunker"
+                              : space === "quarters" ? "Prompt-derived resident quarters"
+                                : space === "chapel" ? "Prompt-derived chapel"
+                                  : space === "medical" ? "Prompt-derived treatment suite"
+                                    : space === "workshop" ? "Prompt-derived working hall"
+                                      : space === "greenhouse" ? "Prompt-derived greenhouse"
+                                        : space === "distillation" ? "Prompt-derived distillation room"
+                                          : "Prompt-derived submerged service room";
     const levelRole = space === "observation" ? "roof"
       : space === "submerged-room" ? "basement"
-        : space === "archive" && (facilityCapabilities.undergroundStore || ["地下", "underground", "cellar", "basement"].some((term) => text.includes(term))) ? "basement"
-          : "ground";
+        : space === "hangar" ? "exterior"
+          : space === "quarters" ? "upper"
+            : space === "fuel" && ["地下", "underground", "cellar", "basement"].some((term) => text.includes(term)) ? "basement"
+              : (space === "archive" || space === "storage") && (facilityCapabilities.undergroundStore || ["地下", "underground", "cellar", "basement"].some((term) => text.includes(term))) ? "basement"
+                : "ground";
     return {
       id: `custom-${space}-${index + 1}`,
       kind,
       label,
       levelRole,
-      requiresExteriorAccess: space === "workshop" || space === "greenhouse",
-      requiresVerticalLandmark: space === "observation",
-      minimumFootprintCells: space === "observation" ? 16 : space === "workshop" ? 20 : 15,
+      requiresExteriorAccess: space === "workshop" || space === "greenhouse" || space === "hangar" || space === "fuel",
+      requiresVerticalLandmark: space === "observation" || space === "hangar" || space === "chapel",
+      minimumFootprintCells: space === "hangar" ? 28
+        : space === "medical" ? 22
+          : space === "observation" ? 16
+            : space === "workshop" || space === "quarters" || space === "chapel" ? 20
+              : 15,
       tags: ["prompt-derived-space", `facility-use:${facilityIntent?.use ?? "service"}`, space],
     };
   }) : [];
@@ -3356,7 +3379,84 @@ function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchet
 
 /** Theme pass for outdoor grammars. These are structural features (banks,
  * fissures, terraces, hummocks), not a bag of decorative props. */
-function addSemanticThemeStructure(scene: GeneratedScene, archetype: WildernessArchetype, width: number, depth: number, rng: GeneratorContext["rng"]): void {
+function addSemanticThemeStructure(
+  scene: GeneratedScene,
+  archetype: WildernessArchetype,
+  width: number,
+  depth: number,
+  rng: GeneratorContext["rng"],
+  prompt: string,
+): void {
+  const text = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const coastalCliff = ["海岸悬崖", "海崖", "coastal cliff", "sea cliff"].some((term) => text.includes(term));
+  if (coastalCliff && archetype === "mountain") {
+    const coastY = -feetToMeters(8);
+    const cliffHeight = feetToMeters(26);
+    const segmentWidth = width / 3;
+    scene.primitives.push(
+      water(
+        "mountain-coastal-sea",
+        0,
+        width * 0.5,
+        coastY,
+        -2.7,
+        width + 5,
+        0.4,
+        8,
+        ["coastal-cliff", "sea", "hazard", "terrain"],
+      ),
+    );
+    for (let index = 0; index < 3; index += 1) {
+      const x = segmentWidth * (index + 0.5);
+      const topOffset = feetToMeters(index === 1 ? 5 : 0);
+      scene.primitives.push(box(
+        `mountain-coastal-cliff-face-${index + 1}`,
+        0,
+        x,
+        coastY,
+        0.65 + (index === 1 ? 0.3 : 0),
+        segmentWidth + 0.5,
+        cliffHeight + topOffset,
+        1.1,
+        "darkStone",
+        ["coastal-cliff", "cliff-face", "vertical-face", "terrain", "wave-cut-face"],
+      ));
+    }
+    scene.primitives.push(
+      corridor(
+        "mountain-coastal-cliff-shelf",
+        0,
+        width * 0.14,
+        1.55,
+        width * 0.86,
+        1.75,
+        feetToMeters(18) + FLOOR_SLAB_METERS,
+        1.25,
+        "rock",
+        ["coastal-cliff", "cliff-shelf", "standable", "high-ground", "terrain"],
+      ),
+    );
+    scene.tactical.push(
+      tacticalFeature(
+        "mountain-coastal-cliff-overwatch",
+        "highGround",
+        width * 0.5,
+        1.65,
+        feetToMeters(18),
+        3,
+        "A wave-cut sea cliff forms an exposed high shelf above the waterline.",
+      ),
+      tacticalFeature(
+        "mountain-coastal-cliff-drop",
+        "hazard",
+        width * 0.5,
+        0.3,
+        coastY,
+        4,
+        "The coastal face drops directly into deep water.",
+      ),
+    );
+  }
   if (archetype === "river-valley") {
     const fallX = width * rng.float(0.28, 0.72);
     scene.primitives.push(box("river-west-cliff-face", 0, fallX, feetToMeters(5), depth * 0.32, 0.22, feetToMeters(10), depth * 0.42, "darkStone", ["cliff-face", "river-bank", "vertical-face"]), water("river-waterfall", 0, fallX + 0.2, feetToMeters(1), depth * 0.32, 0.5, feetToMeters(4), 2.4, ["waterfall", "hazard", "terrain"]));
@@ -3731,7 +3831,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   if (morphology.woodland && archetype !== "forest" && !infernalTheme) {
     addWoodlandCoverage(scene, profile.width, profile.depth, profile.density, context.rng.fork("woodland-coverage"), archetype === "river-valley");
   }
-  addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"));
+  addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"), context.request.prompt);
   addPromptDrivenTheme(scene, context.request.prompt, profile.width, profile.depth, context.rng.fork("prompt-theme"));
   addSemanticAnchorLandmarks(scene, context.semanticHints, profile.width, profile.depth, context.rng.fork("semantic-anchors"));
   const fungalText = [context.request.prompt, ...(context.semanticHints?.anchors ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");

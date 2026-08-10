@@ -7,7 +7,20 @@ export interface EmbeddedFacilityCapabilities {
   washRoom: boolean;
 }
 export type EmbeddedFacilityUse = "residential" | "industrial" | "medical" | "sacred" | "research" | "security" | "hospitality" | "storage" | "service";
-export type EmbeddedFacilitySpace = "observation" | "laboratory" | "archive" | "workshop" | "greenhouse" | "distillation" | "submerged-room";
+export type EmbeddedFacilitySpace =
+  | "observation"
+  | "laboratory"
+  | "archive"
+  | "storage"
+  | "hangar"
+  | "fuel"
+  | "quarters"
+  | "chapel"
+  | "medical"
+  | "workshop"
+  | "greenhouse"
+  | "distillation"
+  | "submerged-room";
 export type EmbeddedFacilityTheme = "clockwork" | "specimen" | "airship" | "communications" | "alchemy" | "generic";
 export interface EmbeddedFacilityIntent {
   profile: EmbeddedFacilityProfile;
@@ -63,7 +76,8 @@ function includesAny(text: string, terms: readonly string[]): boolean {
 }
 
 function hasGenericFacilityNoun(text: string): boolean {
-  return /(?:修复|收藏|标本|档案|抄写|制图|测量|系留|维护|观景|警戒|巡查|实验|工艺|冶炼|蒸馏|酿造|医疗|救护|避难|储备|货运|信号|灯号|祭祀|礼拜|学术|研究|勘探|采集|加工)[^，。；;]{0,8}(?:站|所|院|塔|楼|馆|屋|堡|堂|庙|工坊|车间|基地|营房|设施|实验室|仓|库)/u.test(text)
+  return includesAny(text, ["机库", "艇库", "飞行棚", "飞艇棚", "收容院", "避难院", "救护所", "医务所"])
+    || /(?:修复|收藏|标本|档案|抄写|制图|测量|系留|维护|观景|警戒|巡查|实验|工艺|冶炼|蒸馏|酿造|医疗|救护|避难|储备|货运|信号|灯号|祭祀|礼拜|学术|研究|勘探|采集|加工)[^，。；;]{0,8}(?:站|所|院|塔|楼|馆|屋|堡|堂|庙|工坊|车间|基地|营房|设施|实验室|仓|库)/u.test(text)
     || /(?:station|facility|observatory|repair shop|collection hall|specimen hall|archive|scriptorium|cartography room|survey post|mooring tower|maintenance depot|lookout|watch post|laboratory|workshop|foundry|distillery|brewery|clinic|infirmary|shelter|depot|signal tower|chapel|shrine|academy|research outpost|hangar|warehouse)\b/u.test(text);
 }
 
@@ -139,17 +153,32 @@ export function embeddedFacilityIntent(prompt: string): EmbeddedFacilityIntent |
   const has = (terms: readonly string[]) => includesAny(text, terms);
   const use: EmbeddedFacilityUse = has(["教堂", "礼拜堂", "神殿", "寺院", "修道院", "祭祀", "chapel", "shrine", "temple", "monastery", "abbey"]) ? "sacred"
     : has(["医院", "诊所", "医务", "救护", "疗养", "病房", "clinic", "hospital", "infirmary", "sanatorium", "medical"]) ? "medical"
-      : has(["铸造", "熔炉", "锻造", "工坊", "车间", "加工", "冶炼", "factory", "forge", "foundry", "workshop", "smelter"]) ? "industrial"
+      : has(["铸造", "熔炉", "锻造", "工坊", "车间", "加工", "冶炼", "机库", "艇库", "维修", "燃料库", "factory", "forge", "foundry", "workshop", "smelter", "hangar", "maintenance", "fuel store"]) ? "industrial"
         : has(["哨所", "警戒", "巡查", "防御", "守备", "堡", "watch post", "outpost", "guard", "bunker", "fort"]) ? "security"
           : has(["酒馆", "旅店", "客栈", "酒店", "招待", "tavern", "inn", "hotel", "lodge", "hostel"]) ? "hospitality"
             : has(["仓库", "储备", "货运", "补给", "depot", "warehouse", "storehouse", "supply"]) ? "storage"
-              : has(["住宅", "住处", "木屋", "小屋", "宿舍", "cabin", "cottage", "house", "quarters"]) ? "residential"
+              : has(["住宅", "住处", "木屋", "小屋", "宿舍", "居室", "寝室", "船员舱", "cabin", "cottage", "house", "quarters", "dormitory", "bunk room"]) ? "residential"
                 : has(["研究", "实验", "观测", "天文", "标本", "档案", "制图", "测量", "research", "laboratory", "observatory", "specimen", "archive", "survey"]) ? "research"
                   : "service";
   const spaces = new Set<EmbeddedFacilitySpace>();
-  if (has(["观测", "观察", "瞭望", "天文", "观星", "信号塔", "信号平台", "系留塔", "系留平台", "塔台", "observation", "observatory", "lookout", "signal tower", "signal platform", "mooring tower", "mooring platform"])) spaces.add("observation");
+  if (has([
+    "观测", "观察", "瞭望", "天文", "观星",
+    "信号台", "信号塔", "信号平台", "屋顶信号台",
+    "风向塔", "风向标", "气象塔",
+    "系留塔", "系留平台", "塔台",
+    "observation", "observatory", "lookout",
+    "signal deck", "signal station", "signal tower", "signal platform",
+    "wind tower", "weather vane", "weather tower",
+    "mooring tower", "mooring platform",
+  ])) spaces.add("observation");
   if (has(["实验室", "化验", "校准", "标本处理", "研究室", "laboratory", "lab", "calibration", "specimen processing"])) spaces.add("laboratory");
-  if (has(["档案", "藏书", "记录", "图纸", "星图", "标本馆", "收藏", "气囊仓", "燃料库", "archive", "library", "records", "chart room", "collection", "specimen hall", "gas-cell store", "fuel store", "fuel bunker"])) spaces.add("archive");
+  if (has(["档案", "藏书", "记录", "图纸", "星图", "标本馆", "收藏", "archive", "library", "records", "chart room", "collection", "specimen hall"])) spaces.add("archive");
+  if (has(["储藏室", "储备库", "补给库", "器材库", "零件库", "气囊仓", "物资仓", "storage room", "store room", "supply store", "equipment store", "parts store", "gas-cell store"])) spaces.add("storage");
+  if (has(["机库", "艇库", "飞行棚", "飞艇棚", "载具棚", "hangar", "airship shed", "vehicle bay", "boat house"])) spaces.add("hangar");
+  if (has(["燃料库", "油库", "燃料舱", "燃料掩体", "fuel store", "fuel bunker", "fuel bay", "tank farm"])) spaces.add("fuel");
+  if (has(["居室", "宿舍", "寝室", "住舱", "船员舱", "僧侣房", "quarters", "dormitory", "bunk room", "crew room", "cells"])) spaces.add("quarters");
+  if (has(["礼拜堂", "小圣堂", "祭室", "祷告室", "chapel", "oratory", "prayer room"])) spaces.add("chapel");
+  if (has(["治疗室", "医务室", "病房", "手术室", "急救室", "检伤区", "treatment room", "infirmary", "ward", "operating room", "triage"])) spaces.add("medical");
   if (has(["工坊", "车间", "修复", "维护", "机械", "锻造", "铸造", "workshop", "repair", "maintenance", "machine shop", "forge", "foundry"])) spaces.add("workshop");
   if (has(["温室", "苗圃", "植物房", "greenhouse", "nursery", "conservatory"])) spaces.add("greenhouse");
   if (has(["蒸馏", "酿造", "炼金", "精炼", "distillation", "distillery", "brewery", "alchemy", "refinery"])) spaces.add("distillation");
