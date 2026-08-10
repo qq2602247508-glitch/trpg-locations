@@ -472,15 +472,6 @@ export class SceneRenderer {
       const focused = this.currentScene.buildingInstances?.find((building) => building.id === this.focusedBuildingId);
       if (focused) {
         this.positionCameraForFocusedBuilding(focused, this.activeFloorView);
-        const target = this.controls.target.clone();
-        const span = Math.max(focused.footprintCells.x, focused.footprintCells.z, 7) * GRID_METERS;
-        const cosine = Math.cos(focused.rotationY);
-        const sine = Math.sin(focused.rotationY);
-        const viewX = (cosine + sine) / Math.SQRT2;
-        const viewZ = (-sine + cosine) / Math.SQRT2;
-        this.camera.position.set(target.x + viewX * span * 2.15, target.y + Math.max(3.8, span * 0.36), target.z + viewZ * span * 2.15);
-        this.camera.lookAt(target);
-        this.controls.update();
         return;
       }
     }

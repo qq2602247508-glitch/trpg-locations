@@ -645,6 +645,22 @@ describe("five-layer composition catalog", () => {
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
+  it("uses volcanic density to change macro terrain structure, not only props", () => {
+    const prompt = "火山熔岩台地，有破碎火山口、熔岩沟、黑曜石脊和战术玄武岩高台";
+    const sparse = generateScene({ prompt, seed: "volcanic-density-contract", size: "large", density: 0.2 }, "adaptive");
+    const dense = generateScene({ prompt, seed: "volcanic-density-contract", size: "large", density: 0.78 }, "adaptive");
+    const count = (scene: typeof sparse, tag: string) => scene.primitives.filter((entry) => entry.tags?.includes(tag)).length;
+    const terrainSignature = (scene: typeof sparse) => scene.primitives
+      .filter((entry) => entry.tags?.includes("volcanic") || entry.tags?.includes("lava-flow") || entry.tags?.includes("obsidian-ridge"))
+      .map((entry) => `${entry.id}:${entry.position.x.toFixed(2)}:${entry.position.z.toFixed(2)}:${entry.size.x.toFixed(2)}:${entry.size.z.toFixed(2)}`)
+      .join("|");
+    expect(count(dense, "lava-flow")).toBeGreaterThan(count(sparse, "lava-flow"));
+    expect(count(dense, "obsidian-ridge")).toBeGreaterThanOrEqual(count(sparse, "obsidian-ridge"));
+    expect(terrainSignature(dense)).not.toBe(terrainSignature(sparse));
+    expect(sparse.diagnostics.warnings).toHaveLength(0);
+    expect(dense.diagnostics.warnings).toHaveLength(0);
+  });
+
   it("publishes narrow water ownership zones for river valleys", () => {
     const scene = generateScene({
       prompt: "弯曲河谷中的水文测量站，有瀑布、支流、深潭、样本实验室和通信塔",
