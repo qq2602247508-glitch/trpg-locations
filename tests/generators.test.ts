@@ -343,9 +343,28 @@ describe("scene generators", () => {
     const harbor = generateScene({ ...request("r12-deepwater-not-canal", "large", 0.78), prompt: "深水城港区，有弯曲海岸、六码头、沿岸货运大道和仓储街区" }, "adaptive");
     const canalCity = generateScene({ ...request("r12-literal-water-city", "large", 0.78), prompt: "河道交错的水城街区，有主运河、支流、石桥和木桥" }, "adaptive");
     expect(harbor.sceneProgram?.domain).toBe("settlement");
+    expect(harbor.compositionProgram?.primaryDomain).toBe("settlement");
+    expect(harbor.compositionProgram?.grammarId).toBe("grammar.settlement-compound-v1");
     expect(hasTag(harbor, "harbor-edge")).toBe(true);
     expect(hasTag(harbor, "main-canal")).toBe(false);
+    expect(harbor.compositionProgram?.semanticCoverage?.missing).not.toContain("弯曲主河道");
+    expect(harbor.compositionProgram?.semanticCoverage?.missing).not.toContain("支流网络");
+    expect(canalCity.compositionProgram?.primaryDomain).toBe("river");
+    expect(canalCity.compositionProgram?.grammarId).toBe("grammar.water-city-v1");
     expect(hasTag(canalCity, "main-canal")).toBe(true);
+  });
+
+  it("does not promote a named old-harbor district to a canal city just because it has docks", () => {
+    const prompt = "深水城旧城区与河港交界，有弯曲街巷、石木混合民居、酒馆、神殿、仓库、塔楼、门廊、烟囱和码头装卸区";
+    const scene = generateScene({ ...request("round72-mass-city", "large", 0.76), prompt }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.compositionProgram?.primaryDomain).toBe("settlement");
+    expect(scene.compositionProgram?.grammarId).toBe("grammar.settlement-compound-v1");
+    expect(scene.siteProgram?.siteType).toBe("harbor-district");
+    expect(scene.siteProgram?.roadPattern).toBe("harbor-spine");
+    expect(hasTag(scene, "main-canal")).toBe(false);
+    expect(scene.diagnostics.warnings.some((warning) => warning.includes("弯曲主河道") || warning.includes("支流网络"))).toBe(false);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
   it("keeps explicit city landmarks as independent building instances", () => {

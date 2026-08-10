@@ -14,6 +14,16 @@ function hasSettlementParent(text: string): boolean {
   ]);
 }
 
+function hasExplicitWaterCity(text: string): boolean {
+  // “深水城” is the proper name Waterdeep, not the Chinese morphology noun
+  // “水城”. Remove the proper name before testing the generic substring.
+  const morphologyText = text.replaceAll("深水城", "");
+  return has(morphologyText, [
+    "水城", "河道水城", "水镇", "潮汐水镇", "运河城", "水上市集", "水上市场", "泄洪渠",
+    "canal city", "water city", "water town", "tidal town", "water market",
+  ]);
+}
+
 function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   const text = normalized(prompt);
   if (has(text, ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"])) return "crater";
@@ -27,7 +37,11 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   // Mangroves are tidal wetlands. They must not be claimed by the generic
   // forest branch merely because the Chinese word contains “树林”.
   if (has(text, ["红树林", "mangrove"])) return "swamp";
-  if (has(text, ["水城", "河道水城", "水镇", "潮汐水镇", "运河城", "水上市集", "船坞", "泄洪渠", "沿岸街巷", "水轮", "canal city", "water city", "water town", "tidal town", "water market", "dock", "quay", "waterwheel"])) return "river";
+  // A dock, quay or waterwheel is a child facility, not proof that an entire
+  // named town/harbor is a canal city. Preserve settlement ownership unless
+  // the prompt explicitly names a water-city morphology.
+  if (hasExplicitWaterCity(text)) return "river";
+  if (hasSettlementParent(text)) return "settlement";
   if (has(text, ["河谷", "河流", "溪流", "瀑布", "river", "stream", "waterfall", "valley"])) return "river";
   if (has(text, ["森林", "林地", "树林", "巨树", "树冠", "forest", "woodland", "canopy"])) return "forest";
   if (has(text, ["沼泽", "湿地", "泥沼", "marsh", "swamp", "bog", "wetland"])) return "swamp";
@@ -148,7 +162,7 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
     if (has(text, ["倒木防线", "倒木", "fallen-log defense", "log barricade"])) add("wetland-log-defense", "倒木防线", ["fallen-log-defense", "cover"], "major");
   }
   if (domain === "river") {
-    const waterCity = has(text, ["水城", "河道水城", "水镇", "潮汐水镇", "运河城", "水上市集", "船坞", "泄洪渠", "沿岸街巷", "水轮", "canal city", "water city", "water town", "tidal town", "water market", "dock", "quay", "waterwheel"]);
+    const waterCity = hasExplicitWaterCity(text);
     if (waterCity) {
       add("water-city-main", "弯曲主河道", ["water-city", "main-canal", "watercourse"], "critical");
       add("water-city-branches", "支流网络", ["water-city", "branch-canal", "watercourse"], "critical");
@@ -206,7 +220,7 @@ export function compileSceneComposition(request: GenerationRequest, source: Scen
         ? lexicalDomain
         : retrievedDomain.domain ?? lexicalDomain
     : lexicalDomain;
-  const isWaterCity = domain === "river" && has(text, ["水城", "河道水城", "水镇", "潮汐水镇", "运河城", "水上市集", "船坞", "泄洪渠", "沿岸街巷", "水轮", "canal city", "water city", "water town", "tidal town", "water market", "dock", "quay", "waterwheel"]);
+  const isWaterCity = domain === "river" && hasExplicitWaterCity(text);
   const grammarId = isWaterCity ? "grammar.water-city-v1" : COMPOSITION_GRAMMARS.find((entry) => entry.domain === domain)?.id ?? "grammar.generic-v1";
   const motifIds: string[] = [];
   const domainMotif = {
