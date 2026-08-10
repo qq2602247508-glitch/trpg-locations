@@ -34,6 +34,8 @@ export interface BuildingLot {
   district: string;
   seed: string;
   lod?: BuildingInstance["detailLevel"];
+  /** Explicit prompt-owned above-ground floor count. */
+  floorCount?: number;
   parcelId?: string;
   frontageRoadId?: string;
   entrance?: { x: number; z: number };
@@ -114,8 +116,8 @@ function addMassSilhouetteLandmarks(
   }
 }
 
-function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], siteProfile?: SiteBuildingProfile): { floors: number; floorHeightFeet: number[]; material: MaterialKey } {
-  const floors = siteProfile === "wizard-tower" ? rng.int(4, 5)
+function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], siteProfile?: SiteBuildingProfile, requestedFloors?: number): { floors: number; floorHeightFeet: number[]; material: MaterialKey } {
+  const generatedFloors = siteProfile === "wizard-tower" ? rng.int(4, 5)
     : siteProfile === "field-station" ? rng.int(1, 2)
     : siteProfile === "weather-station" ? rng.int(1, 2)
     : siteProfile === "quarantine-station" ? rng.int(1, 2)
@@ -127,6 +129,7 @@ function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], sit
         : kind === "home" ? rng.int(1, 3)
           : kind === "factory" || kind === "barn" ? rng.int(1, 2)
             : rng.int(2, 3);
+  const floors = requestedFloors === undefined ? generatedFloors : Math.max(1, Math.min(6, Math.round(requestedFloors)));
   const range: readonly [number, number] = siteProfile === "wizard-tower" ? [11, 14]
     : siteProfile ? [9, 12]
     : kind === "warehouse" ? [14, 18]
@@ -449,6 +452,13 @@ function addFunctionalModuleGeometry(
       const shaftSouth = point(upperFlightLocalX, localZ - flightRun / 2 + 0.7);
       const shaftWest = point(upperFlightLocalX - 0.7, localZ - flightRun / 2);
       const shaftEast = point(upperFlightLocalX + 0.7, localZ - flightRun / 2);
+      const shaftWallHalfWidth = flightOffsetX + 0.74;
+      const shaftWallHeight = baseY - archiveY;
+      const shaftWestWall = point(archiveLocalX - shaftWallHalfWidth, localZ);
+      const shaftEastWall = point(archiveLocalX + shaftWallHalfWidth, localZ);
+      const shaftLandingWall = point(archiveLocalX, localZ + flightRun / 2 + 0.68);
+      const landingSupportWest = point(archiveLocalX - flightOffsetX, localZ + flightRun / 2);
+      const landingSupportEast = point(archiveLocalX + flightOffsetX, localZ + flightRun / 2);
       const archiveThresholdLocalX = authoredUnderground
         ? Math.sign(archiveLocalX || 1) * authoredUnderground.halfWidthCells
         : archiveLocalX;
@@ -462,6 +472,11 @@ function addFunctionalModuleGeometry(
         box(`${lot.id}-${module.kind}-shaft-collar-south`, 3, shaftSouth.x, baseY - 0.34, shaftSouth.z, 1.6, 0.34, 0.18, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),
         box(`${lot.id}-${module.kind}-shaft-collar-west`, 3, shaftWest.x, baseY - 0.34, shaftWest.z, 0.18, 0.34, 1.6, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),
         box(`${lot.id}-${module.kind}-shaft-collar-east`, 3, shaftEast.x, baseY - 0.34, shaftEast.z, 0.18, 0.34, 1.6, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),
+        box(`${lot.id}-${module.kind}-shaft-wall-west`, 3, shaftWestWall.x, archiveY, shaftWestWall.z, 0.18, shaftWallHeight, flightRun + 1.36, "darkStone", [...common, `function:${module.kind}`, "archive-access", "stairwell-wall", "structural-support", "underground"], lot.rotation),
+        box(`${lot.id}-${module.kind}-shaft-wall-east`, 3, shaftEastWall.x, archiveY, shaftEastWall.z, 0.18, shaftWallHeight, flightRun + 1.36, "darkStone", [...common, `function:${module.kind}`, "archive-access", "stairwell-wall", "structural-support", "underground", "focus-cutaway"], lot.rotation),
+        box(`${lot.id}-${module.kind}-shaft-wall-landing`, 3, shaftLandingWall.x, archiveY, shaftLandingWall.z, shaftWallHalfWidth * 2, shaftWallHeight, 0.18, "darkStone", [...common, `function:${module.kind}`, "archive-access", "stairwell-wall", "structural-support", "underground"], lot.rotation),
+        box(`${lot.id}-${module.kind}-landing-support-west`, 3, landingSupportWest.x, archiveY, landingSupportWest.z, 0.18, flightRise, 0.18, "darkStone", [...common, `function:${module.kind}`, "archive-access", "landing-support", "structural-support", "underground"], lot.rotation),
+        box(`${lot.id}-${module.kind}-landing-support-east`, 3, landingSupportEast.x, archiveY, landingSupportEast.z, 0.18, flightRise, 0.18, "darkStone", [...common, `function:${module.kind}`, "archive-access", "landing-support", "structural-support", "underground"], lot.rotation),
         stairs(`${lot.id}-${module.kind}-access-lower-flight`, 3, lowerFlight.x, archiveY, lowerFlight.z, 1.05, flightRise, flightRun, "stone", [...common, `function:${module.kind}`, "archive-access", "stair-flight", "vertical-opening", "standable", "underground"], lot.rotation),
         box(`${lot.id}-${module.kind}-access-landing`, 3, landing.x, archiveY + flightRise, landing.z, Math.max(1.8, flightOffsetX * 2 + 1.05), FLOOR_SLAB_METERS, 1.05, "stone", [...common, `function:${module.kind}`, "archive-access", "stair-landing", "standable", "underground"], lot.rotation),
         stairs(`${lot.id}-${module.kind}-access-upper-flight`, 3, upperFlight.x, archiveY + flightRise, upperFlight.z, 1.05, flightRise, flightRun, "stone", [...common, `function:${module.kind}`, "archive-access", "stair-flight", "vertical-opening", "standable", "underground"], lot.rotation + Math.PI),
@@ -606,7 +621,8 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
   // high-bank building without intersecting the basement shell. Sixteen feet
   // still yields a compact two-flight access while preserving at least seven
   // feet of earth above a nine-foot cellar wall.
-  const basementY = baseY - feetToMeters(16);
+  const basementDepthFeet = lot.siteProfile === "field-station" || lot.siteProfile === "weather-station" ? 12 : 16;
+  const basementY = baseY - feetToMeters(basementDepthFeet);
   const tags = ["settlement-building", "independent-building-module", "full-interior", `building:${lot.kind}`, `building-instance:${lot.id}`, `district:${lot.district}`];
   const point = (x: number, z: number) => localPoint(lot, x, z);
   const addRotatedBox = (id: string, x: number, z: number, w: number, h: number, d: number, y: number, material: MaterialKey, extra: string[] = [], level = 0) => {
@@ -706,6 +722,12 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     addRotatedBox("upper-north", primaryOffset.x + 0.08, primaryOffset.z - upperDepth / 2 - 0.05, upperWidth, wallHeight * 0.82, 0.2, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
     addRotatedBox("upper-west", primaryOffset.x - upperWidth / 2 + 0.08, primaryOffset.z - 0.05, 0.2, wallHeight * 0.82, upperDepth, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
     addRotatedBox("upper-east", primaryOffset.x + upperWidth / 2 + 0.08, primaryOffset.z - 0.05, 0.2, wallHeight * 0.82, upperDepth, upperY, generated.material, ["wall", "upper-floor", "opening", "window-opening"], 1);
+  }
+  if (generated.floors > 1 && (lot.siteProfile === "field-station" || lot.siteProfile === "weather-station")) {
+    const fixtureTags = ["upper-floor", "observation-loft", "station-fixture", "cover"];
+    addRotatedBox("upper-radio-console", primaryOffset.x - upperWidth * 0.27, primaryOffset.z - upperDepth * 0.24, Math.max(1.25, upperWidth * 0.28), feetToMeters(3.2), 0.72, upperY + FLOOR_SLAB_METERS, "metal", [...fixtureTags, "radio-console", "communications"], 1);
+    addRotatedBox("upper-chart-table", primaryOffset.x + upperWidth * 0.08, primaryOffset.z + upperDepth * 0.08, Math.max(1.4, upperWidth * 0.3), feetToMeters(2.9), Math.max(0.9, upperDepth * 0.22), upperY + FLOOR_SLAB_METERS, "wood", [...fixtureTags, "chart-table", "worktable"], 1);
+    addRotatedBox("upper-instrument-rack", primaryOffset.x + upperWidth * 0.32, primaryOffset.z - upperDepth * 0.2, 0.62, feetToMeters(5.6), Math.max(1.2, upperDepth * 0.3), upperY + FLOOR_SLAB_METERS, "metal", [...fixtureTags, "instrument-rack", "observation"], 1);
   }
   const wizardFloorDatums: Array<{ y: number; width: number; depth: number }> = [{ y: baseY, width, depth }, { y: upperY, width: upperWidth, depth: upperDepth }];
   if (wizardTower) {
@@ -1249,7 +1271,7 @@ function addFocusInteriorBlueprint(scene: GeneratedScene, lot: BuildingLot, gene
 
 /** Independent exterior grammar consumed by settlement planners. */
 export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLot, rng: GeneratorContext["rng"]): BuildingInstance {
-  const generated = profile(lot.kind, rng, lot.siteProfile);
+  const generated = profile(lot.kind, rng, lot.siteProfile, lot.floorCount);
   if (lot.functionalModules?.some((module) => module.kind === "laboratory" && module.levelRole === "upper")) generated.material = "wood";
   const envelope = planBuildingEnvelope(lot.kind, lot.width, lot.depth, rng.fork("building-envelope"), lot.siteProfile);
   const interiorProgram = planSettlementBuildingProgram(lot, generated, envelope);

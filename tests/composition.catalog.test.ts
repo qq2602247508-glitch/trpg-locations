@@ -617,6 +617,34 @@ describe("five-layer composition catalog", () => {
     expect(scene.diagnostics.warnings).toHaveLength(0);
   });
 
+  it("honors explicit floor count and shelter geometry in a volcanic field station", () => {
+    const prompt = "建在火山熔岩台地边缘的1920年代地质观测站，有玄武岩支撑基座、两层实验楼、地下避难所、熔岩沟、维修栈桥和屋顶观测平台";
+    const scene = generateScene({ prompt, seed: "volcanic-two-floor-station", size: "large", density: 0.78 }, "adaptive");
+    const building = scene.buildingInstances?.find((entry) => entry.id === "wilderness-core-building");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(scene.archetype).toBe("volcanic");
+    expect(building?.floors).toBe(2);
+    expect(building?.floorHeightFeet).toHaveLength(2);
+    expect(building?.detailLevel).toBe("full-interior");
+    expect(tags.has("basalt-foundation")).toBe(true);
+    expect(tags.has("field-laboratory")).toBe(true);
+    expect(tags.has("bunker")).toBe(true);
+    expect(tags.has("field-observation")).toBe(true);
+    expect(tags.has("volcanic-maintenance-bridge")).toBe(true);
+    expect(tags.has("lava-flow")).toBe(true);
+    expect(scene.floorLabels).toContain("2F实验与通信层");
+    expect(tags.has("radio-console")).toBe(true);
+    expect(tags.has("chart-table")).toBe(true);
+    expect(tags.has("instrument-rack")).toBe(true);
+    const archiveFlights = scene.primitives.filter((primitive) => primitive.tags?.includes("archive-access") && primitive.tags?.includes("stair-flight"));
+    expect(archiveFlights).toHaveLength(2);
+    expect(Math.max(...archiveFlights.map((primitive) => primitive.size.y))).toBeLessThanOrEqual(1.84);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("stairwell-wall") && primitive.tags?.includes("structural-support"))).toHaveLength(3);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("landing-support") && primitive.tags?.includes("structural-support"))).toHaveLength(2);
+    expect(scene.routes.some((route) => route.id === "volcanic-station-inspection-route")).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("publishes narrow water ownership zones for river valleys", () => {
     const scene = generateScene({
       prompt: "弯曲河谷中的水文测量站，有瀑布、支流、深潭、样本实验室和通信塔",

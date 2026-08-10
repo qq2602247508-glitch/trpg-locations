@@ -2095,7 +2095,14 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const wantsReserveVault = facilityCapabilities.undergroundStore;
   const monastery = ["修道院", "寺院", "monastery", "abbey", "cloister"].some((term) => text.includes(term));
   const wantsMaintenanceWalk = ["维护栈道", "外部栈道", "维修栈道", "维护步道", "maintenance walkway", "maintenance catwalk", "service catwalk"].some((term) => text.includes(term));
-  const wantsBunker = ["地下防空洞", "防空洞", "掩体", "bunker", "air-raid shelter"].some((term) => text.includes(term));
+  const wantsBunker = ["地下防空洞", "防空洞", "地下避难所", "紧急避难所", "掩体", "bunker", "air-raid shelter", "underground shelter", "emergency shelter"].some((term) => text.includes(term));
+  const requestedFloors = ["六层", "6层", "six-storey", "six-story", "six storey", "six story"].some((term) => text.includes(term)) ? 6
+    : ["五层", "5层", "five-storey", "five-story", "five storey", "five story"].some((term) => text.includes(term)) ? 5
+      : ["四层", "4层", "four-storey", "four-story", "four storey", "four story"].some((term) => text.includes(term)) ? 4
+        : ["三层", "3层", "three-storey", "three-story", "three storey", "three story"].some((term) => text.includes(term)) ? 3
+          : ["两层", "二层", "2层", "two-storey", "two-story", "two storey", "two story"].some((term) => text.includes(term)) ? 2
+            : ["单层", "一层", "1层", "single-storey", "single-story", "one storey", "one story"].some((term) => text.includes(term)) ? 1
+              : undefined;
   if (coldWetland) {
     for (const primitiveEntry of scene.primitives) {
       if (!primitiveEntry.tags?.some((tag) => tag === "water" || tag === "thaw-basin" || tag === "thaw-pool")) continue;
@@ -2164,7 +2171,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     FLOOR_SLAB_METERS,
     12,
     quarantine || weatherStation || archetype === "swamp" ? "wood" : archetype === "forest" ? "earth" : "rock",
-    ["floor", "terrain", "building-pad", "site-program", "standable", ...(raisedFoundationFeet > 0 ? ["stilt-platform", "raised-foundation"] : [])],
+    ["floor", "terrain", "building-pad", "site-program", "standable", ...(archetype === "volcanic" ? ["basalt-foundation", "heat-resistant-foundation"] : []), ...(raisedFoundationFeet > 0 ? ["stilt-platform", "raised-foundation"] : [])],
   ));
   for (const [index, dx, dz] of [[0, -4.8, -3.8], [1, 4.8, -3.8], [2, -4.8, 3.8], [3, 4.8, 3.8]] as const) {
     scene.primitives.push(cylinder(
@@ -2176,7 +2183,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       0.7,
       Math.max(FLOOR_SLAB_METERS, baseY - Math.min(terrainBaseY, 0)),
       quarantine || weatherStation || archetype === "swamp" ? "wood" : "darkStone",
-      ["foundation", "terrain-adapter", "site-program", ...(raisedFoundationFeet > 0 ? ["stilt-foundation", "structural-support"] : [])],
+      ["foundation", "terrain-adapter", "site-program", ...(archetype === "volcanic" ? ["basalt-foundation", "structural-support"] : []), ...(raisedFoundationFeet > 0 ? ["stilt-foundation", "structural-support"] : [])],
     ));
   }
   const nearestReservation = scene.terrainReservations
@@ -2194,7 +2201,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   ] : researchStation ? [
     { id: "field-laboratory", kind: "laboratory", label: "Field laboratory", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 18, tags: ["field-laboratory", "sample-processing"] },
     { id: "field-observation", kind: "observation", label: "Observation and radio deck", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 14, tags: ["field-observation", "radio-deck"] },
-    { id: "field-archive", kind: "archive", label: "Underground specimen archive", levelRole: "basement", minimumFootprintCells: 15, tags: ["specimen-archive", "reserve-vault"] },
+    { id: "field-archive", kind: "archive", label: wantsBunker ? "Underground emergency shelter and specimen archive" : "Underground specimen archive", levelRole: "basement", minimumFootprintCells: 15, tags: ["specimen-archive", "reserve-vault", ...(wantsBunker ? ["bunker", "emergency-shelter"] : [])] },
   ] : [];
   instantiateBuildingModule(scene, {
     id: "wilderness-core-building",
@@ -2207,6 +2214,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     district: `${archetype}-clearing`,
     seed: `${context.request.seed}/wilderness-building/1`,
     lod: "full-interior",
+    ...(requestedFloors ? { floorCount: requestedFloors } : {}),
     parcelId: "wilderness-parcel-1",
     frontageRoadId: "wilderness-access-trail",
     entrance,
@@ -2824,7 +2832,10 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   scene.siteProgram = { version: 1, siteType: "wilderness-site", districtCount: 1, roadCount: siteRoadCount, junctionCount: 1, blockCount: 1, parcelCount: 1, fullInteriorCount: 1, facadeCount: 0, massCount: 0, roadLengthCells: siteRoadLength, parcelCoverage: (13 * 12) / (width * depth), buildingCoverage: (9 * 8) / (width * depth), averageParcelArea: 13 * 12, openSpaceRatio: 1 - (13 * 12) / (width * depth), roadPattern: "anchor-web", curvedRoadRatio: siteRoadCount > 0 ? 1 : 0, nonRectangularBlockRatio: 1, terrainKind: archetype === "forest" ? "forest-clearing" : archetype === "mountain" ? "valley" : "rolling" };
   scene.floors = Math.max(scene.floors, 4);
   scene.floorHeightFeet = [12, 10, 8, 10];
-  scene.floorLabels = ["地形/1F", "阁楼", "屋顶", "B1"];
+  const upperFloorLabel = requestedFloors && requestedFloors >= 2
+    ? researchStation ? "2F实验与通信层" : weatherStation ? "2F观测层" : "2F"
+    : "阁楼";
+  scene.floorLabels = ["地形/1F", upperFloorLabel, "屋顶", "B1"];
 }
 
 function buildSwamp(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
