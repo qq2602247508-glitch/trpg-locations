@@ -140,6 +140,12 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   if (morphology.impactCrater) return "impact-crater";
   if (WILDERNESS_TERMS["floating-islands"].some((term) => normalized.includes(term))) return "floating-islands";
   if (morphology.infernal) return "infernal-waste";
+  const explicitRift = includesAny(normalized, ["裂谷", "地裂", "深裂隙", "rift", "chasm", "fissure"]);
+  const explicitVolcanicCrater = includesAny(normalized, ["火山口", "破火山口", "熔岩湖", "caldera", "volcanic crater", "lava lake"]);
+  // In a phrase such as “火山裂谷中的铸造所”, the rift is the parent
+  // topology and volcanic language is a material/hazard layer.  Selecting a
+  // generic caldera here discards the requested two banks and crossings.
+  if (explicitRift && !explicitVolcanicCrater) return "rift";
   if (morphology.crater) return "volcanic";
   if (morphology.burial) return "burial-ground";
   if (morphology.dryChannel) return "dry-riverbed";
@@ -338,7 +344,7 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
   scene.floorHeightFeet = [Math.ceil((yOf(3) + feetToMeters(12)) / 0.3048)];
 }
 
-function buildRift(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+function buildRift(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"], volcanicTheme = false): void {
   const cols = Math.max(32, Math.floor(width)); const rows = Math.max(28, Math.floor(depth));
   const phase = rng.float(-Math.PI, Math.PI); const halfGap = 3.4 + density * 3.2; const bottomHalf = 1.15 + density * 0.45;
   const riftAt = (z: number) => cols * 0.5 + Math.sin(z * (0.12 + density * 0.035) + phase) * (2.4 + density * 3.2) + Math.sin(z * 0.037 - phase) * 2;
@@ -350,7 +356,26 @@ function buildRift(scene: GeneratedScene, width: number, depth: number, density:
     else if (distance <= bottomHalf) heights.push(0);
     else { const high = x < riftAt(z) ? 5 : 4; heights.push(Math.min(6, high + (Math.sin(z * 0.17 + (x < riftAt(z) ? 0 : 1.4)) > 0.72 ? 1 : 0))); }
   }
-  const rendered = renderMorphologyField(scene, { prefix: "rift", cols, rows, heights, stepFeet: 5, materialFor: (level) => level === 0 ? "darkStone" : level >= 5 ? "rock" : "earth", tagsFor: (level) => ["rift", "crevasse", level === 0 ? "rift-bottom" : "rift-bank", level >= 5 ? "high-ground" : "standable"] });
+  const rendered = renderMorphologyField(scene, { prefix: "rift", cols, rows, heights, stepFeet: 5, materialFor: (level) => level === 0 ? "darkStone" : level >= 5 ? "rock" : volcanicTheme ? "darkStone" : "earth", tagsFor: (level) => ["rift", "crevasse", ...(volcanicTheme ? ["volcanic-rift", "basalt"] : []), level === 0 ? "rift-bottom" : "rift-bank", level >= 5 ? "high-ground" : "standable"] });
+  if (volcanicTheme) {
+    const lavaRng = rng.fork("volcanic-rift-lava");
+    const lavaPools = Math.max(8, Math.round(8 + density * 9));
+    for (let index = 0; index < lavaPools; index += 1) {
+      const lavaZ = rows * (index + 0.65) / (lavaPools + 0.3);
+      const lavaX = riftAt(lavaZ) + lavaRng.float(-bottomHalf * 0.32, bottomHalf * 0.32);
+      scene.primitives.push(cylinder(
+        `volcanic-rift-lava-pool-${index + 1}`,
+        0,
+        lavaX,
+        rendered.yOf(0) + 0.03,
+        lavaZ,
+        Math.max(0.9, bottomHalf * lavaRng.float(0.75, 1.3)),
+        0.18,
+        "hazard",
+        ["rift", "volcanic-rift", "lava", "lava-flow", "hazard", "not-standable"],
+      ));
+    }
+  }
   const reservationSegments = Math.max(8, Math.round(rows / 5));
   for (let index = 0; index < reservationSegments; index += 1) {
     const fromZ = (rows * index) / reservationSegments;
@@ -380,7 +405,7 @@ function buildRift(scene: GeneratedScene, width: number, depth: number, density:
   scene.rooms.push(westRoom, eastRoom, bottomRoom, bridgeRoom); connectRooms(scene.rooms, westRoom.id, bridgeRoom.id); connectRooms(scene.rooms, eastRoom.id, bridgeRoom.id); connectRooms(scene.rooms, westRoom.id, bottomRoom.id);
   scene.routes.push(createRoute("rift-primary-route", "primary", [{ x: 2, z: bridgeRows[0]!, y: rendered.yOf(5) }, { x: westEdge(bridgeRows[0]!), z: bridgeRows[0]!, y: rendered.yOf(5) }, { x: eastEdge(bridgeRows[0]!), z: bridgeRows[0]!, y: rendered.yOf(5) }, { x: cols - 2, z: bridgeRows[0]!, y: rendered.yOf(4) }]), createRoute("rift-alternate-route", "alternate", [{ x: 2, z: bridgeRows[1]!, y: rendered.yOf(5) }, { x: westEdge(bridgeRows[1]!), z: bridgeRows[1]!, y: rendered.yOf(4) }, { x: eastEdge(bridgeRows[1]!), z: bridgeRows[1]!, y: rendered.yOf(4) }, { x: cols - 2, z: bridgeRows[1]!, y: rendered.yOf(4) }]));
   scene.tactical.push(tacticalFeature("rift-entrance", "entrance", 2, bridgeRows[0]!, rendered.yOf(5), 2, "A fractured shelf approaches the upper natural bridge."), tacticalFeature("rift-bridge-choke", "chokepoint", riftAt(bridgeRows[0]!), bridgeRows[0]!, rendered.yOf(5), 2, "The upper bridge is exposed to both banks."), tacticalFeature("rift-void-hazard", "hazard", riftAt(rows * 0.5), rows * 0.5, rendered.yOf(0), Math.ceil(halfGap), "The winding void separates both banks and exposes a deep playable floor."), tacticalFeature("rift-bank-highground", "highGround", cols * 0.24, rows * 0.48, rendered.yOf(6), 3, "The western bank overlooks both crossings and the rift bottom."));
-  scene.description = `Rift grammar with a winding ${Math.round(halfGap * 2)}-cell fracture, explicit cliff faces, two distinct bank crossings, a deep floor, and a supported descent route.`;
+  scene.description = `${volcanicTheme ? "Volcanic " : ""}rift grammar with a winding ${Math.round(halfGap * 2)}-cell fracture, explicit cliff faces, two distinct bank crossings, a deep ${volcanicTheme ? "lava-streaked basalt" : "playable"} floor, and a supported descent route.`;
   scene.floorHeightFeet = [48];
 }
 
@@ -2059,6 +2084,79 @@ function ancientPlatformsNear(scene: GeneratedScene, xCells: number, zCells: num
     .sort((left, right) => Math.hypot(left.x - xCells, left.z - zCells) - Math.hypot(right.x - xCells, right.z - zCells));
 }
 
+function rerouteParentTrailsAroundBuilding(
+  scene: GeneratedScene,
+  centerX: number,
+  centerZ: number,
+  halfWidth: number,
+  halfDepth: number,
+  fallbackY: number,
+): void {
+  const clearance = 1.6;
+  const minX = centerX - halfWidth - clearance;
+  const maxX = centerX + halfWidth + clearance;
+  const minZ = centerZ - halfDepth - clearance;
+  const maxZ = centerZ + halfDepth + clearance;
+  const inside = (point: { x: number; z: number }) => point.x >= minX && point.x <= maxX && point.z >= minZ && point.z <= maxZ;
+  const crosses = (from: { x: number; z: number }, to: { x: number; z: number }) => {
+    for (let sample = 0; sample <= 20; sample += 1) {
+      const ratio = sample / 20;
+      if (inside({ x: from.x + (to.x - from.x) * ratio, z: from.z + (to.z - from.z) * ratio })) return true;
+    }
+    return false;
+  };
+  for (const route of scene.routes.filter((entry) => entry.kind === "primary" || entry.kind === "alternate")) {
+    if (route.id.startsWith("wilderness-") || route.id.includes("building") || route.id.includes("station")) continue;
+    const cells = route.points.map((point) => ({ x: point.x / CELL, z: point.z / CELL, y: point.y }));
+    const affectedSegments = cells.flatMap((point, index) => {
+      const next = cells[index + 1];
+      return next && crosses(point, next) ? [index] : [];
+    });
+    if (affectedSegments.length === 0 && !cells.some(inside)) continue;
+    const firstSegment = Math.min(...affectedSegments, Math.max(0, cells.findIndex(inside) - 1));
+    const lastInside = cells.findLastIndex(inside);
+    const lastSegment = Math.max(...affectedSegments, lastInside < 0 ? firstSegment : lastInside);
+    const beforeIndex = Math.max(0, firstSegment);
+    const afterIndex = Math.min(cells.length - 1, lastSegment + 1);
+    const before = cells[beforeIndex]!;
+    const after = cells[afterIndex]!;
+    const candidates = [
+      [{ x: minX, z: minZ }, { x: maxX, z: minZ }],
+      [{ x: minX, z: maxZ }, { x: maxX, z: maxZ }],
+      [{ x: minX, z: minZ }, { x: minX, z: maxZ }],
+      [{ x: maxX, z: minZ }, { x: maxX, z: maxZ }],
+    ].map((corners) => ({
+      corners,
+      length: Math.hypot(before.x - corners[0]!.x, before.z - corners[0]!.z)
+        + Math.hypot(corners[0]!.x - corners[1]!.x, corners[0]!.z - corners[1]!.z)
+        + Math.hypot(corners[1]!.x - after.x, corners[1]!.z - after.z),
+    })).sort((left, right) => left.length - right.length);
+    const detour = candidates[0]!.corners.map((point) => ({
+      ...point,
+      y: terrainSurfaceY(scene, point.x, point.z, fallbackY),
+    }));
+    const rebuilt = [
+      ...cells.slice(0, beforeIndex + 1),
+      ...detour,
+      ...cells.slice(afterIndex),
+    ].filter((point, index, array) => index === 0 || Math.hypot(point.x - array[index - 1]!.x, point.z - array[index - 1]!.z) > 0.12);
+    route.points = createRoute(`${route.id}-detour`, route.kind, rebuilt).points;
+    scene.primitives = scene.primitives.filter((primitiveEntry) => !primitiveEntry.id.startsWith(`${route.id}-segment-`) && !primitiveEntry.id.startsWith(`${route.id}-rise-`));
+    for (let index = 1; index < rebuilt.length; index += 1) {
+      const from = rebuilt[index - 1]!;
+      const to = rebuilt[index]!;
+      const routeTags = ["route", "trail", "surface-grid", "terrain-following", "building-detour"];
+      if (Math.abs(to.y - from.y) <= feetToMeters(1.25)) {
+        scene.primitives.push(corridor(`${route.id}-segment-${index}`, 0, from.x, from.z, to.x, to.z, (from.y + to.y) / 2 + 0.02, route.kind === "primary" ? 1.25 : 0.85, "earth", routeTags));
+      } else {
+        const lower = from.y <= to.y ? { xCells: from.x, zCells: from.z, yMeters: from.y } : { xCells: to.x, zCells: to.z, yMeters: to.y };
+        const upper = from.y <= to.y ? { xCells: to.x, zCells: to.z, yMeters: to.y } : { xCells: from.x, zCells: from.z, yMeters: from.y };
+        scene.primitives.push(stairConnection(`${route.id}-rise-${index}`, 0, lower, upper, route.kind === "primary" ? 1.25 : 0.85, "earth", [...routeTags, "vertical-route", "supported"]).primitive);
+      }
+    }
+  }
+}
+
 function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorContext, width: number, depth: number, archetype: WildernessArchetype): void {
   const text = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const facilityProfile = embeddedFacilityProfile(text);
@@ -2075,6 +2173,9 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const quarantine = facilityProfile === "quarantine";
   const weatherStation = facilityProfile === "weather";
   const researchStation = facilityProfile === "research";
+  const observatory = facilityProfile === "observatory";
+  const forge = facilityProfile === "forge";
+  const sanatorium = facilityProfile === "sanatorium";
   const borderOutpost = facilityProfile === "border";
   const rangerStation = facilityProfile === "ranger";
   const mangrove = ["红树林", "mangrove"].some((term) => text.includes(term));
@@ -2161,6 +2262,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   // ridge produced a formally connected but physically impossible composite.
   scene.routes = scene.routes.filter((route) => !route.id.startsWith("ice-snow-ridge-route-")
     || route.points.every((point) => Math.hypot(point.x / CELL - x, point.z / CELL - z) > 8.5));
+  rerouteParentTrailsAroundBuilding(scene, x, z, 7.2, 6.7, terrainBaseY);
   scene.primitives.push(box(
     "wilderness-building-pad",
     0,
@@ -2202,14 +2304,25 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     { id: "field-laboratory", kind: "laboratory", label: "Field laboratory", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 18, tags: ["field-laboratory", "sample-processing"] },
     { id: "field-observation", kind: "observation", label: "Observation and radio deck", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 14, tags: ["field-observation", "radio-deck"] },
     { id: "field-archive", kind: "archive", label: wantsBunker ? "Underground emergency shelter and specimen archive" : "Underground specimen archive", levelRole: "basement", minimumFootprintCells: 15, tags: ["specimen-archive", "reserve-vault", ...(wantsBunker ? ["bunker", "emergency-shelter"] : [])] },
+  ] : observatory ? [
+    { id: "observatory-dome", kind: "observation", label: "Star dome instrument deck", levelRole: "roof", requiresVerticalLandmark: true, minimumFootprintCells: 20, tags: ["star-dome", "telescope", "astronomy"] },
+    { id: "observatory-darkroom", kind: "laboratory", label: "Darkroom and calibration lab", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 16, tags: ["darkroom", "calibration", "instrument-lab"] },
+    { id: "observatory-archive", kind: "archive", label: "Underground chart archive", levelRole: "basement", minimumFootprintCells: 15, tags: ["chart-archive", "underground", "sealed"] },
+  ] : forge ? [
+    { id: "forge-furnace", kind: "workshop", label: "Black-iron furnace hall", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 22, tags: ["furnace", "smelter", "heat-hazard"] },
+    { id: "forge-ore-store", kind: "archive", label: "Ore and slag store", levelRole: "basement", minimumFootprintCells: 18, tags: ["ore-store", "slag", "underground"] },
+  ] : sanatorium ? [
+    { id: "sanatorium-treatment", kind: "laboratory", label: "Hydrotherapy and treatment wing", levelRole: "ground", requiresExteriorAccess: true, minimumFootprintCells: 22, tags: ["hydrotherapy", "treatment", "medical"] },
+    { id: "sanatorium-ward", kind: "archive", label: "Patient ward gallery", levelRole: "upper", minimumFootprintCells: 20, tags: ["patient-ward", "observation", "medical"] },
+    { id: "sanatorium-boiler", kind: "workshop", label: "Underground boiler room", levelRole: "basement", minimumFootprintCells: 18, tags: ["boiler", "steam-pipes", "underground"] },
   ] : [];
   instantiateBuildingModule(scene, {
     id: "wilderness-core-building",
-    kind: quarantine ? "clinic" : monastery ? "shrine" : weatherStation || researchStation ? "guild" : alchemical ? "guild" : "home",
+    kind: quarantine || sanatorium ? "clinic" : monastery ? "shrine" : forge ? "blacksmith" : weatherStation || researchStation || observatory ? "guild" : alchemical ? "guild" : "home",
     x,
     z,
-    width: alchemical ? 11 : 9,
-    depth: alchemical ? 10 : 8,
+    width: forge ? 12 : observatory ? 11 : sanatorium ? 13 : alchemical ? 11 : 9,
+    depth: forge ? 11 : observatory ? 11 : sanatorium ? 12 : alchemical ? 10 : 8,
     rotation: context.rng.fork("wilderness-building-facing").float(-0.18, 0.18),
     district: `${archetype}-clearing`,
     seed: `${context.request.seed}/wilderness-building/1`,
@@ -2220,7 +2333,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     entrance,
     baseY,
     functionalModules,
-    siteProfile: quarantine ? "quarantine-station" : weatherStation ? "weather-station" : researchStation ? "field-station" : borderOutpost ? "border-outpost" : rangerStation ? "ranger-station" : undefined,
+    siteProfile: quarantine ? "quarantine-station" : weatherStation ? "weather-station" : researchStation ? "field-station" : observatory ? "observatory" : forge ? "forge" : sanatorium ? "sanatorium" : borderOutpost ? "border-outpost" : rangerStation ? "ranger-station" : undefined,
     climateProfile: archetype === "ice" ? "polar" : archetype === "swamp" ? "wetland" : archetype === "volcanic" || archetype === "infernal-waste" ? "volcanic" : archetype === "mountain" || archetype === "rift" || archetype === "impact-crater" ? "alpine" : archetype === "forest" ? "forest" : archetype === "river-valley" ? "coastal" : "temperate",
   }, context.rng.fork("wilderness-building"));
 
@@ -3431,7 +3544,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "infernal-waste") buildInfernalWaste(scene, profile.width, profile.depth, profile.density, context.rng.fork("infernal-waste"));
   else if (archetype === "floating-islands") buildFloatingIslands(scene, profile.width, profile.depth, profile.density, context.rng.fork("floating-islands"));
   else if (archetype === "burial-ground") buildBurialGround(scene, profile.width, profile.depth, profile.density, context.rng.fork("burial-ground"));
-  else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, profile.density, context.rng.fork("rift"));
+  else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, profile.density, context.rng.fork("rift"), ["火山", "熔岩", "volcanic", "lava"].some((term) => context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term)));
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, profile.density, context.rng.fork("ice"), context.request.prompt);
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));

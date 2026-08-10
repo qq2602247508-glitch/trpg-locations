@@ -1,4 +1,4 @@
-export type EmbeddedFacilityProfile = "quarantine" | "weather" | "research" | "ranger" | "border" | "shelter";
+export type EmbeddedFacilityProfile = "quarantine" | "weather" | "research" | "observatory" | "forge" | "sanatorium" | "ranger" | "border" | "shelter";
 export interface EmbeddedFacilityCapabilities {
   communications: boolean;
   generator: boolean;
@@ -28,6 +28,18 @@ const PROFILE_TERMS: Readonly<Record<Exclude<EmbeddedFacilityProfile, "shelter">
     "research station", "observation station", "monitoring station", "field station", "experimental station", "seismic station",
     "hydrology station", "ecological station", "survey station", "radio station",
   ],
+  observatory: [
+    "天文台", "天文观测站", "观星台", "观星塔", "星象台",
+    "observatory", "astronomical station", "stargazing tower", "star platform",
+  ],
+  forge: [
+    "铸造所", "铸造厂", "锻造所", "黑铁铸造所", "熔炉车间", "熔炉工坊", "铁匠铺",
+    "forge", "foundry", "black-iron foundry", "smelter", "forge workshop",
+  ],
+  sanatorium: [
+    "疗养站", "疗养院", "山间疗养院", "康复院", "疗养所",
+    "sanatorium", "convalescent home", "mountain clinic", "retreat hospital",
+  ],
   ranger: ["林务站", "林务所", "巡护站", "护林站", "ranger station", "forestry station", "warden station"],
   border: ["边防站", "边境哨所", "边境岗哨", "border outpost", "frontier outpost"],
 };
@@ -47,6 +59,9 @@ export function hasNaturalParentContext(prompt: string): boolean {
 export function embeddedFacilityProfile(prompt: string): EmbeddedFacilityProfile | undefined {
   const text = normalized(prompt);
   if (includesAny(text, PROFILE_TERMS.quarantine)) return "quarantine";
+  if (includesAny(text, PROFILE_TERMS.sanatorium)) return "sanatorium";
+  if (includesAny(text, PROFILE_TERMS.forge)) return "forge";
+  if (includesAny(text, PROFILE_TERMS.observatory)) return "observatory";
   if (includesAny(text, PROFILE_TERMS.weather)) return "weather";
   if (includesAny(text, PROFILE_TERMS.ranger)) return "ranger";
   if (includesAny(text, PROFILE_TERMS.border)) return "border";

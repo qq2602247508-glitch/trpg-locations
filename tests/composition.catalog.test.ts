@@ -753,6 +753,57 @@ describe("five-layer composition catalog", () => {
     expect(alternateSeed.primitives.some((primitive) => primitive.tags?.includes("room-connector") && primitive.tags?.includes("opening"))).toBe(true);
   });
 
+  it.each([
+    {
+      prompt: "原始森林山脊上的废弃天文台，有观星穹顶、校准室、地下星图档案库和树冠维护栈道",
+      seed: "forest-observatory-contract",
+      archetype: "forest",
+      buildingKind: "guild",
+      variantPrefix: "observatory-",
+      required: ["star-dome", "instrument-lab", "darkroom-archive"],
+      geometryTags: ["telescope", "chart-archive"],
+    },
+    {
+      prompt: "火山裂谷中的黑铁铸造所，有熔炉大厅、淬火池、矿石库和跨越熔岩沟的检修桥",
+      seed: "volcanic-forge-contract",
+      archetype: "rift",
+      buildingKind: "blacksmith",
+      variantPrefix: "forge-",
+      required: ["forge-hall", "smelter", "ore-store"],
+      geometryTags: ["furnace", "quench-bay"],
+    },
+    {
+      prompt: "冰原裂缝边缘的废弃疗养站，有病房、治疗室、地下锅炉房和防风入口",
+      seed: "ice-sanatorium-contract",
+      archetype: "ice",
+      buildingKind: "clinic",
+      variantPrefix: "sanatorium-",
+      required: ["sanatorium-reception", "patient-ward", "boiler-archive"],
+      geometryTags: ["patient-ward", "boiler"],
+    },
+  ] as const)("builds a distinct $variantPrefix profile inside its natural parent", ({ prompt, seed, archetype, buildingKind, variantPrefix, required, geometryTags }) => {
+    const scene = generateScene({ prompt, seed, size: "large", density: 0.76 }, "adaptive");
+    const alternate = generateScene({ prompt, seed: `${seed}-b`, size: "large", density: 0.76 }, "adaptive");
+    const building = scene.buildingInstances?.find((entry) => entry.id === "wilderness-core-building");
+    const tagSet = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    const signature = (candidate: typeof scene) => candidate.primitives
+      .filter((primitive) => primitive.tags?.some((tag) => tag === "terrain" || tag === "building-pad" || tag.startsWith("site-profile:")))
+      .map((primitive) => `${primitive.id}:${primitive.position.x.toFixed(2)}:${primitive.position.z.toFixed(2)}:${primitive.size.x.toFixed(2)}:${primitive.size.z.toFixed(2)}`)
+      .join("|");
+    expect(scene.archetype).toBe(archetype);
+    expect(scene.sceneProgram?.domain).toBe("natural");
+    expect(building?.archetype).toBe(buildingKind);
+    expect(building?.detailLevel).toBe("full-interior");
+    expect(building?.envelopeProgram?.variant.startsWith(variantPrefix)).toBe(true);
+    expect(building?.buildingProgram?.requiredFeatures).toEqual(expect.arrayContaining([...required]));
+    for (const tag of geometryTags) expect(tagSet.has(tag)).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-building-access")).toBe(true);
+    expect(scene.rooms.some((room) => room.id === "wilderness-core-building-room")).toBe(true);
+    expect(scene.diagnostics.warnings, scene.diagnostics.warnings.join("\n")).toHaveLength(0);
+    expect(alternate.diagnostics.warnings, alternate.diagnostics.warnings.join("\n")).toHaveLength(0);
+    expect(signature(alternate)).not.toBe(signature(scene));
+  });
+
   it("keeps polar ice-cap monitoring stations owned by wilderness terrain", () => {
     const prompt = "极地冰盖上的地震监测站，有钻芯实验室、通信桅杆、备用发电棚、防风入口和地下冰芯库";
     const scene = generateScene({ prompt, seed: "polar-site-ownership", size: "medium", density: 0.78 }, "adaptive");

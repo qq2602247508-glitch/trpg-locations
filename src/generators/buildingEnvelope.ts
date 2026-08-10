@@ -3,7 +3,7 @@ import type { SettlementBuildingKind, Vec2 } from "../schema";
 
 export type EnvelopePartShape = "box" | "cylinder";
 export type EnvelopeRoofKind = "gable" | "flat" | "spire" | "hip";
-export type SiteBuildingProfile = "weather-station" | "quarantine-station" | "ranger-station" | "border-outpost" | "field-station" | "wizard-tower";
+export type SiteBuildingProfile = "weather-station" | "quarantine-station" | "ranger-station" | "border-outpost" | "field-station" | "observatory" | "forge" | "sanatorium" | "wizard-tower";
 
 export interface BuildingEnvelopePart {
   id: string;
@@ -122,6 +122,54 @@ export function planBuildingEnvelope(
       part("guard-block", "primary", { x: 0, z: -depth * 0.12 }, { x: width * 0.72, z: depth * 0.5 }, 0.72, "gable"),
       part("bunk-wing", "wing", { x: -width * 0.29, z: depth * 0.2 }, { x: width * 0.34, z: depth * 0.46 }, 0.56, "hip"),
       part("watch-block", "tower", { x: width * 0.31, z: depth * (variation === 1 ? -0.06 : 0.2) }, { x: width * 0.28, z: width * 0.28 }, 1, "flat"),
+    ];
+  } else if (siteProfile === "observatory") {
+    variant = variation === 0 ? "observatory-dome-and-lab" : variation === 1 ? "observatory-offset-tower" : "observatory-courtyard-instruments";
+    parts = variation === 0 ? [
+      part("observation-dome", "tower", { x: -width * 0.08, z: -depth * 0.1 }, { x: Math.min(width, depth) * 0.58, z: Math.min(width, depth) * 0.58 }, 0.95, "flat", "cylinder"),
+      part("darkroom-lab", "primary", { x: width * 0.24, z: depth * 0.18 }, { x: width * 0.46, z: depth * 0.48 }, 0.68, "hip"),
+      part("archive-wing", "service", { x: -width * 0.3, z: depth * 0.24 }, { x: width * 0.3, z: depth * 0.38 }, 0.52, "gable"),
+    ] : variation === 1 ? [
+      part("observation-spine", "primary", { x: 0, z: -depth * 0.12 }, { x: width * 0.72, z: depth * 0.44 }, 0.68, "hip"),
+      part("instrument-tower", "tower", { x: -width * 0.3, z: depth * 0.2 }, { x: width * 0.28, z: width * 0.28 }, 1, "flat", "cylinder"),
+      part("calibration-bay", "service", { x: width * 0.28, z: depth * 0.2 }, { x: width * 0.34, z: depth * 0.4 }, 0.46, "flat"),
+    ] : [
+      part("central-observatory", "primary", { x: 0, z: -depth * 0.08 }, { x: width * 0.54, z: depth * 0.52 }, 0.72, "hip"),
+      part("west-instrument-yard", "service", { x: -width * 0.3, z: depth * 0.18 }, { x: width * 0.3, z: depth * 0.42 }, 0.42, "flat"),
+      part("east-archive-wing", "wing", { x: width * 0.3, z: depth * 0.2 }, { x: width * 0.3, z: depth * 0.44 }, 0.56, "gable"),
+      part("sky-bridge-node", "tower", { x: 0, z: depth * 0.34 }, { x: width * 0.22, z: width * 0.22 }, 0.9, "flat", "cylinder"),
+    ];
+  } else if (siteProfile === "forge") {
+    variant = variation === 0 ? "forge-long-bay-and-stack" : variation === 1 ? "forge-courtyard-furnaces" : "forge-split-workshops";
+    parts = variation === 0 ? [
+      part("forge-bay", "primary", { x: -width * 0.1, z: 0 }, { x: width * 0.72, z: depth * 0.76 }, 0.92, "gable"),
+      part("furnace-wing", "service", { x: width * 0.3, z: depth * 0.2 }, { x: width * 0.32, z: depth * 0.42 }, 0.7, "flat"),
+      part("slag-yard", "wing", { x: -width * 0.3, z: depth * 0.3 }, { x: width * 0.3, z: depth * 0.3 }, 0.32, "flat"),
+    ] : variation === 1 ? [
+      part("forge-hall", "primary", { x: 0, z: -depth * 0.1 }, { x: width * 0.62, z: depth * 0.54 }, 0.88, "gable"),
+      part("west-furnace-court", "service", { x: -width * 0.31, z: depth * 0.18 }, { x: width * 0.28, z: depth * 0.48 }, 0.58, "flat"),
+      part("east-quench-bay", "service", { x: width * 0.31, z: depth * 0.2 }, { x: width * 0.28, z: depth * 0.44 }, 0.54, "flat"),
+    ] : [
+      part("blacksmith-hall", "primary", { x: -width * 0.2, z: -depth * 0.12 }, { x: width * 0.48, z: depth * 0.58 }, 0.76, "gable"),
+      part("smelter-wing", "service", { x: width * 0.24, z: depth * 0.12 }, { x: width * 0.36, z: depth * 0.48 }, 0.82, "flat"),
+      part("ore-store", "service", { x: width * 0.28, z: depth * 0.38 }, { x: width * 0.28, z: depth * 0.24 }, 0.48, "flat"),
+    ];
+  } else if (siteProfile === "sanatorium") {
+    variant = variation === 0 ? "sanatorium-cross-court" : variation === 1 ? "sanatorium-sea-facing-wings" : "sanatorium-pavilion-cluster";
+    parts = variation === 0 ? [
+      part("sanatorium-main", "primary", { x: 0, z: -depth * 0.12 }, { x: width * 0.44, z: depth * 0.58 }, 0.82, "hip"),
+      part("ward-west", "wing", { x: -width * 0.3, z: depth * 0.16 }, { x: width * 0.3, z: depth * 0.48 }, 0.72, "gable"),
+      part("ward-east", "wing", { x: width * 0.3, z: depth * 0.16 }, { x: width * 0.3, z: depth * 0.48 }, 0.72, "gable"),
+      part("treatment-link", "service", { x: 0, z: depth * 0.32 }, { x: width * 0.4, z: depth * 0.2 }, 0.54, "flat"),
+    ] : variation === 1 ? [
+      part("sea-facing-main", "primary", { x: 0, z: -depth * 0.2 }, { x: width * 0.74, z: depth * 0.34 }, 0.76, "hip"),
+      part("ward-wing-left", "wing", { x: -width * 0.3, z: depth * 0.14 }, { x: width * 0.28, z: depth * 0.5 }, 0.68, "gable"),
+      part("ward-wing-right", "wing", { x: width * 0.3, z: depth * 0.14 }, { x: width * 0.28, z: depth * 0.5 }, 0.68, "gable"),
+    ] : [
+      part("central-treatment", "primary", { x: 0, z: -depth * 0.08 }, { x: width * 0.5, z: depth * 0.46 }, 0.86, "hip"),
+      part("pavilion-west", "wing", { x: -width * 0.3, z: depth * 0.18 }, { x: width * 0.3, z: depth * 0.4 }, 0.62, "gable"),
+      part("pavilion-east", "wing", { x: width * 0.3, z: depth * 0.18 }, { x: width * 0.3, z: depth * 0.4 }, 0.62, "gable"),
+      part("hydrotherapy-bay", "service", { x: 0, z: depth * 0.38 }, { x: width * 0.36, z: depth * 0.2 }, 0.5, "flat"),
     ];
   } else if (kind === "tower") {
     variant = variation === 0 ? "round-shaft-with-stair-annex" : "watch-shaft-with-gate-annex";

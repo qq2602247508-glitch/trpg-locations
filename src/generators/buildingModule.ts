@@ -123,7 +123,10 @@ function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], sit
     : siteProfile === "quarantine-station" ? rng.int(1, 2)
       : siteProfile === "ranger-station" ? rng.int(1, 2)
         : siteProfile === "border-outpost" ? 2
-          : kind === "tower" ? rng.int(3, 5)
+          : siteProfile === "observatory" ? rng.int(2, 3)
+            : siteProfile === "forge" ? rng.int(1, 2)
+              : siteProfile === "sanatorium" ? rng.int(2, 3)
+                : kind === "tower" ? rng.int(3, 5)
     : kind === "warehouse" ? rng.int(1, 2)
       : kind === "shrine" ? rng.int(1, 2)
         : kind === "home" ? rng.int(1, 3)
@@ -131,7 +134,9 @@ function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], sit
             : rng.int(2, 3);
   const floors = requestedFloors === undefined ? generatedFloors : Math.max(1, Math.min(6, Math.round(requestedFloors)));
   const range: readonly [number, number] = siteProfile === "wizard-tower" ? [11, 14]
-    : siteProfile ? [9, 12]
+    : siteProfile === "forge" ? [14, 18]
+      : siteProfile === "sanatorium" ? [11, 14]
+        : siteProfile ? [9, 12]
     : kind === "warehouse" ? [14, 18]
     : kind === "shrine" ? [14, 20]
       : kind === "tower" ? [10, 13]
@@ -145,7 +150,10 @@ function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], sit
     : siteProfile === "quarantine-station" ? "wood"
       : siteProfile === "ranger-station" ? "wood"
         : siteProfile === "border-outpost" ? "darkStone"
-          : kind === "warehouse" || kind === "tower" || kind === "factory" ? "darkStone"
+          : siteProfile === "observatory" ? "metal"
+            : siteProfile === "forge" ? "darkStone"
+              : siteProfile === "sanatorium" ? "plaster"
+                : kind === "warehouse" || kind === "tower" || kind === "factory" ? "darkStone"
     : kind === "shrine" ? "stone"
       : kind === "tavern" ? "wood"
         : "plaster";
@@ -159,6 +167,9 @@ function fullInteriorLabels(kind: SettlementBuildingKind, siteProfile?: SiteBuil
   if (siteProfile === "field-station") return { publicName: "Field laboratory and briefing bay", serviceName: "Sample processing wing", upperName: "Observation and radio loft", basementName: "Specimen archive vault", tags: ["field-laboratory", "sample-processing", "observation", "specimen-archive"] };
   if (siteProfile === "ranger-station") return { publicName: "Ranger ready room", serviceName: "Equipment and trail store", upperName: "Watch loft", basementName: "Emergency cache", tags: ["ranger-ready-room", "equipment-store", "watch-loft", "reserve-vault"] };
   if (siteProfile === "border-outpost") return { publicName: "Border inspection room", serviceName: "Guard and equipment wing", upperName: "Watch chamber", basementName: "Secured supply vault", tags: ["inspection-room", "guard-room", "watch-chamber", "supply-vault"] };
+  if (siteProfile === "observatory") return { publicName: "Observation control room", serviceName: "Instrument calibration lab", upperName: "Star dome and chart loft", basementName: "Darkroom and archive vault", tags: ["observation-control", "instrument-lab", "star-dome", "darkroom-archive"] };
+  if (siteProfile === "forge") return { publicName: "Black-iron forge hall", serviceName: "Smelter and quench bay", upperName: "Smiths gallery", basementName: "Ore and slag store", tags: ["forge-hall", "smelter", "quench-bay", "ore-store"] };
+  if (siteProfile === "sanatorium") return { publicName: "Sanatorium reception and day room", serviceName: "Treatment and hydrotherapy wing", upperName: "Patient ward gallery", basementName: "Boiler and medical archive", tags: ["sanatorium-reception", "treatment-wing", "patient-ward", "boiler-archive"] };
   if (kind === "tavern") return { publicName: "Taproom and public hearth", serviceName: "Kitchen and service store", upperName: "Guest rooms", basementName: "Ale cellar", tags: ["taproom", "kitchen", "guest-room", "cellar"] };
   if (kind === "shrine") return { publicName: "Processional chapel", serviceName: "Vestry", upperName: "Bell loft", basementName: "Burial crypt", tags: ["nave", "vestry", "bell-platform", "crypt"] };
   if (kind === "warehouse" || kind === "factory") return { publicName: "Loading and production hall", serviceName: "Secured stores", upperName: "Foreman gallery", basementName: "Service cellar", tags: ["loading-hall", "storage", "catwalk", "underground"] };
@@ -1067,6 +1078,37 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     const sink = point(primaryOffset.x - width * 0.06, primaryOffset.z - depth * 0.34);
     scene.primitives.push(cylinder(`${lot.id}-station-wash-sink`, 0, sink.x, baseY + FLOOR_SLAB_METERS, sink.z, 0.62, feetToMeters(3.4), "metal", [...tags, "wash-sink", "clean-buffer", "laboratory-fixture"]));
   }
+  if (lot.siteProfile === "observatory") {
+    const dome = point(primaryOffset.x, primaryOffset.z - upperDepth * 0.18);
+    scene.primitives.push(
+      cylinder(`${lot.id}-observatory-telescope-pier`, 2, dome.x, upperY + wallHeight * 0.82, dome.z, 0.72, feetToMeters(4.6), "metal", [...tags, "observatory", "telescope", "vertical-landmark", "high-ground"]),
+      box(`${lot.id}-observatory-telescope-tube`, 2, dome.x + 0.72, upperY + wallHeight * 0.82 + feetToMeters(3.2), dome.z, 2.1, 0.3, 0.34, "metal", [...tags, "observatory", "telescope", "instrument"]),
+      primitive(`${lot.id}-observatory-dome`, "sphere", 2, dome.x, upperY + wallHeight * 0.82 + feetToMeters(1.8), dome.z, Math.max(1.9, upperWidth * 0.42), feetToMeters(2.2), Math.max(1.9, upperDepth * 0.42), "metal", [...tags, "observatory", "star-dome", "roof", "high-ground"]),
+    );
+    addRotatedBox("observatory-calibration-table", primaryOffset.x + width * 0.16, primaryOffset.z + depth * 0.18, Math.max(1.4, width * 0.28), feetToMeters(2.8), 1.1, baseY + FLOOR_SLAB_METERS, "metal", ["observatory", "calibration", "instrument-lab", "cover"]);
+    addRotatedBox("observatory-chart-cabinet", primaryOffset.x - width * 0.3, primaryOffset.z + depth * 0.16, 0.7, feetToMeters(5.4), Math.max(1.2, depth * 0.24), baseY + FLOOR_SLAB_METERS, "wood", ["observatory", "chart-archive", "cabinet", "cover"]);
+  }
+  if (lot.siteProfile === "forge") {
+    addRotatedBox("forge-anvil", primaryOffset.x - width * 0.14, primaryOffset.z + depth * 0.08, 1.2, feetToMeters(2.2), 0.82, baseY + FLOOR_SLAB_METERS, "darkStone", ["forge", "anvil", "workshop", "cover"]);
+    for (const [index, offsetX] of [-0.26, 0.04, 0.34].entries()) {
+      const furnace = point(primaryOffset.x + width * offsetX, primaryOffset.z - depth * 0.2);
+      scene.primitives.push(
+        cylinder(`${lot.id}-forge-furnace-${index + 1}`, 0, furnace.x, baseY + FLOOR_SLAB_METERS, furnace.z, 0.72 + index * 0.08, feetToMeters(5.4 + index * 0.5), "hazard", [...tags, "forge", "furnace", "heat-hazard", "cover"]),
+      );
+    }
+    addRotatedBox("forge-quench-trough", primaryOffset.x + width * 0.28, primaryOffset.z + depth * 0.22, Math.max(1.4, width * 0.26), feetToMeters(1.5), 1.2, baseY + FLOOR_SLAB_METERS, "water", ["forge", "quench-bay", "hazard", "cover"]);
+    addRotatedBox("forge-ore-rack", -width * 0.12, depth * 0.18, Math.max(1.2, width * 0.3), feetToMeters(4.8), 0.6, basementY + FLOOR_SLAB_METERS, "wood", ["forge", "ore-store", "underground", "rack", "cover"], 3);
+  }
+  if (lot.siteProfile === "sanatorium") {
+    for (const [index, offsetX, offsetZ] of [[1, -0.25, -0.18], [2, 0.08, -0.18], [3, -0.25, 0.18], [4, 0.08, 0.18]] as const) {
+      addRotatedBox(`sanatorium-bed-${index}`, primaryOffset.x + width * offsetX, primaryOffset.z + depth * offsetZ, 0.76, feetToMeters(2.1), 1.65, baseY + FLOOR_SLAB_METERS, "wood", ["sanatorium", "patient-ward", "bed", "cover"]);
+    }
+    addRotatedBox("sanatorium-treatment-table", primaryOffset.x + width * 0.18, primaryOffset.z + depth * 0.18, Math.max(1.4, width * 0.28), feetToMeters(2.5), 1.1, baseY + FLOOR_SLAB_METERS, "metal", ["sanatorium", "hydrotherapy", "treatment", "cover"]);
+    addRotatedBox("sanatorium-boiler", -width * 0.2, depth * 0.18, 1.5, feetToMeters(5.6), 1.5, basementY + FLOOR_SLAB_METERS, "metal", ["sanatorium", "boiler", "underground", "hazard", "cover"], 3);
+    for (const [index, offsetX] of [-0.08, 0.12].entries()) {
+      addRotatedBox(`sanatorium-steam-pipe-${index + 1}`, offsetX * width, depth * 0.08, 0.22, feetToMeters(7), 0.22, basementY + FLOOR_SLAB_METERS, "metal", ["sanatorium", "steam-pipe", "underground", "vertical-landmark"], 3);
+    }
+  }
   if (lot.siteProfile === "quarantine-station") {
     for (const [cotIndex, offsetX, offsetZ] of [[1, -0.25, -0.16], [2, 0.06, -0.16], [3, -0.25, 0.18], [4, 0.06, 0.18]] as const) {
       addRotatedBox(`quarantine-cot-${cotIndex}`, primaryOffset.x + width * offsetX, primaryOffset.z + depth * offsetZ, 0.72, feetToMeters(2.1), 1.55, baseY + FLOOR_SLAB_METERS, "wood", ["quarantine-cot", "ward-rhythm", "cover"]);
@@ -1075,8 +1117,18 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     addRotatedBox("quarantine-gate-right", primaryOffset.x + width * 0.22, primaryOffset.z - depth * 0.38, 0.1, feetToMeters(7), depth * 0.18, baseY, "metal", ["controlled-threshold", "screening-gate", "opening"]);
     addRotatedBox("quarantine-nurse-counter", primaryOffset.x + width * 0.34, primaryOffset.z + depth * 0.24, 0.72, feetToMeters(3.2), depth * 0.22, baseY + FLOOR_SLAB_METERS, "metal", ["nurse-counter", "quarantine-reception", "cover"]);
   }
-  const extensionRooms: Array<{ id: string; x: number; z: number }> = [];
+  const extensionRooms: Array<{ id: string; x: number; z: number; partId: string }> = [];
   for (const [extensionIndex, extension] of envelope.parts.slice(1).entries()) {
+    const previousParts = envelope.parts.slice(0, extensionIndex + 1);
+    const parentEnvelope = previousParts
+      .map((candidate) => {
+        const gapX = Math.max(0, Math.abs(extension.offset.x - candidate.offset.x) - (extension.size.x + candidate.size.x) / 2);
+        const gapZ = Math.max(0, Math.abs(extension.offset.z - candidate.offset.z) - (extension.size.z + candidate.size.z) / 2);
+        const centerDistance = Math.hypot(extension.offset.x - candidate.offset.x, extension.offset.z - candidate.offset.z);
+        return { candidate, score: gapX + gapZ + centerDistance * 0.025 };
+      })
+      .sort((left, right) => left.score - right.score)[0]?.candidate ?? primaryEnvelope;
+    const parentOffset = parentEnvelope?.offset ?? primaryOffset;
     const extensionHeight = wallHeight * Math.max(0.52, extension.heightRatio);
     addRotatedBox(`envelope-${extension.id}-floor`, extension.offset.x, extension.offset.z, extension.size.x, FLOOR_SLAB_METERS, extension.size.z, baseY, generated.material === "plaster" ? "wood" : "stone", ["floor", "standable", "envelope-part"]);
     if (!lot.siteProfile) {
@@ -1085,8 +1137,8 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       addRotatedBox(`envelope-${extension.id}-west`, extension.offset.x - extension.size.x / 2, extension.offset.z, 0.2, extensionHeight, extension.size.z, baseY, generated.material, ["wall", "building-shell", "envelope-part", "opening"]);
       addRotatedBox(`envelope-${extension.id}-east`, extension.offset.x + extension.size.x / 2, extension.offset.z, 0.2, extensionHeight, extension.size.z, baseY, generated.material, ["wall", "building-shell", "envelope-part", "opening", "focus-cutaway"]);
     } else {
-      const deltaX = extension.offset.x - primaryOffset.x;
-      const deltaZ = extension.offset.z - primaryOffset.z;
+      const deltaX = extension.offset.x - parentOffset.x;
+      const deltaZ = extension.offset.z - parentOffset.z;
       const connectionSide = Math.abs(deltaX) >= Math.abs(deltaZ)
         ? deltaX >= 0 ? "west" : "east"
         : deltaZ >= 0 ? "back" : "front";
@@ -1139,11 +1191,16 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       roomProgram?.sizeCells.z ?? extension.size.z * 0.78,
       baseY,
     ));
-    connectRooms(scene.rooms, publicId, extensionRoomId);
-    extensionRooms.push({ id: extensionRoomId, x: extensionPoint.x, z: extensionPoint.z });
+    const parentExtensionRoom = parentEnvelope && parentEnvelope.id !== primaryEnvelope?.id
+      ? extensionRooms.find((room) => room.partId === parentEnvelope.id)
+      : undefined;
+    const parentRoomId = parentExtensionRoom?.id ?? publicId;
+    const parentWorldPoint = parentExtensionRoom ? { x: parentExtensionRoom.x, z: parentExtensionRoom.z } : publicP;
+    connectRooms(scene.rooms, parentRoomId, extensionRoomId);
+    extensionRooms.push({ id: extensionRoomId, x: extensionPoint.x, z: extensionPoint.z, partId: extension.id });
 
-    const thresholdLocalX = primaryOffset.x + (extension.offset.x - primaryOffset.x) * 0.54;
-    const thresholdLocalZ = primaryOffset.z + (extension.offset.z - primaryOffset.z) * 0.54;
+    const thresholdLocalX = parentOffset.x + (extension.offset.x - parentOffset.x) * 0.54;
+    const thresholdLocalZ = parentOffset.z + (extension.offset.z - parentOffset.z) * 0.54;
     const threshold = point(thresholdLocalX, thresholdLocalZ);
     const connectorRotation = lot.rotation + Math.atan2(extension.offset.z - primaryOffset.z, extension.offset.x - primaryOffset.x);
     scene.primitives.push(box(
@@ -1160,7 +1217,7 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       connectorRotation,
     ));
     scene.routes.push(createRoute(`${lot.id}-envelope-${extension.id}-route`, "alternate", [
-      { x: publicP.x, z: publicP.z, y: baseY },
+      { x: parentWorldPoint.x, z: parentWorldPoint.z, y: baseY },
       { x: threshold.x, z: threshold.z, y: baseY },
       { x: extensionPoint.x, z: extensionPoint.z, y: baseY },
     ], { purpose: "service", traffic: 0.34, schedule: "all" }));

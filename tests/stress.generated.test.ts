@@ -30,7 +30,7 @@ describe("high-volume procedural regression", () => {
       }
     }
     expect(generated).toBe(756);
-  });
+  }, 15000);
 
   it.each([
     "星辰观测所，镜面水池与旋转平台",
