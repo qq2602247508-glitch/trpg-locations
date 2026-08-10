@@ -161,9 +161,34 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
     );
     if (wizardTower) {
       const featureTag = level === 0 ? "alchemy" : level === 1 ? "library" : level === profile.floors - 1 ? "observatory" : "arcane-core";
-      scene.primitives.push(
-        box(`wizard-${featureTag}-${level}`, level, center, baseY + FLOOR_SLAB_METERS, center, Math.max(2.2, profile.footprint * 0.34), level === profile.floors - 1 ? 2.4 : 1.6, Math.max(2.2, profile.footprint * 0.28), featureTag === "alchemy" ? "hazard" : featureTag === "library" ? "wood" : "darkStone", ["wizard-tower", featureTag, "cover"]),
-      );
+      const fixtureX = center + profile.footprint * 0.24;
+      const fixtureZ = center - profile.footprint * 0.14;
+      if (featureTag === "alchemy") {
+        scene.primitives.push(
+          box("wizard-alchemy-bench", level, fixtureX, baseY + FLOOR_SLAB_METERS, fixtureZ, Math.max(2.8, profile.footprint * 0.3), feetToMeters(3.2), 1.4, "wood", ["wizard-tower", "alchemy", "alchemy-laboratory", "workbench", "cover"]),
+          cylinder("wizard-alchemy-vessel-a", level, fixtureX - 0.8, baseY + feetToMeters(3.2), fixtureZ, 0.55, feetToMeters(2.4), "hazard", ["wizard-tower", "alchemy", "vessel", "hazard"]),
+          cylinder("wizard-alchemy-vessel-b", level, fixtureX + 0.75, baseY + feetToMeters(3.2), fixtureZ + 0.25, 0.48, feetToMeters(1.8), "warmLight", ["wizard-tower", "alchemy", "vessel", "hazard"]),
+        );
+      } else if (featureTag === "library") {
+        scene.primitives.push(
+          box("wizard-library-shelf-a", level, center + profile.footprint * 0.3, baseY + FLOOR_SLAB_METERS, center - profile.footprint * 0.22, 1.1, feetToMeters(8), Math.max(3.2, profile.footprint * 0.4), "wood", ["wizard-tower", "library", "bookcase", "cover"]),
+          box("wizard-library-shelf-b", level, center - profile.footprint * 0.28, baseY + FLOOR_SLAB_METERS, center + profile.footprint * 0.24, 1.1, feetToMeters(8), Math.max(2.8, profile.footprint * 0.34), "wood", ["wizard-tower", "library", "bookcase", "cover"]),
+          box("wizard-library-reading-table", level, fixtureX * 0.45 + center * 0.55, baseY + FLOOR_SLAB_METERS, fixtureZ, 2.4, feetToMeters(3), 1.5, "wood", ["wizard-tower", "library", "reading-table", "cover"]),
+        );
+      } else if (featureTag === "observatory") {
+        const telescopeX = center + profile.footprint * 0.22;
+        const telescopeZ = center - profile.footprint * 0.2;
+        scene.primitives.push(
+          cylinder("wizard-observatory-plinth", level, telescopeX, baseY + FLOOR_SLAB_METERS, telescopeZ, 2.2, feetToMeters(2.8), "darkStone", ["wizard-tower", "observatory", "telescope-plinth", "cover"]),
+          box("wizard-observatory-telescope", level, telescopeX, baseY + feetToMeters(3.6), telescopeZ, 0.7, 0.7, Math.max(3, profile.footprint * 0.3), "metal", ["wizard-tower", "observatory", "telescope", "vertical-landmark"], Math.PI / 5),
+          cylinder("wizard-observatory-lens", level, telescopeX + 0.75, baseY + feetToMeters(4.4), telescopeZ - 0.85, 0.8, feetToMeters(1.2), "warmLight", ["wizard-tower", "observatory", "telescope-lens", "landmark"]),
+          box("wizard-observatory-chart-table", level, center - profile.footprint * 0.24, baseY + FLOOR_SLAB_METERS, center + profile.footprint * 0.2, 2.2, feetToMeters(3), 1.6, "wood", ["wizard-tower", "observatory", "star-chart", "cover"]),
+        );
+      } else {
+        scene.primitives.push(
+          cylinder(`wizard-${featureTag}-${level}`, level, fixtureX, baseY + FLOOR_SLAB_METERS, fixtureZ, Math.max(2.2, profile.footprint * 0.24), feetToMeters(5), "darkStone", ["wizard-tower", featureTag, "arcane-focus", "cover"]),
+        );
+      }
       scene.tactical.push(tacticalFeature(`wizard-${featureTag}-tactical-${level}`, featureTag === "observatory" ? "highGround" : featureTag === "alchemy" ? "hazard" : "cover", center, center, baseY, 2, `The ${featureTag} floor gives the wizard tower a distinct tactical purpose.`));
     }
     connectRooms(scene.rooms, roomId, stairsId);
@@ -241,30 +266,45 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
 
   const roofHeight = Math.max(2.4, feetToMeters(floorHeightFeet[profile.floors - 1] ?? 14) * 0.38);
   scene.primitives.push(
-    primitive(
-      "tower-roof",
-      "cone",
-      profile.floors - 1,
-      center,
-      topY,
-      center,
-      (profile.footprint + 1) * 1.524,
-      roofHeight,
-      (profile.footprint + 1) * 1.524,
-      "roof",
-      ["roof", isRound ? "round" : "square"],
-    ),
     box("tower-entry-jamb-north", 0, entranceX, FLOOR_SLAB_METERS, center - 1.15, 0.45, feetToMeters(8), 0.45, "darkStone", ["entrance", "door-frame"]),
     box("tower-entry-jamb-south", 0, entranceX, FLOOR_SLAB_METERS, center + 1.15, 0.45, feetToMeters(8), 0.45, "darkStone", ["entrance", "door-frame"]),
     box("tower-entry-step", 0, entranceX, FLOOR_SLAB_METERS, center, 1.4, 0.45, 2.2, "stone", ["entrance", "stairs"]),
   );
+  if (!wizardTower) {
+    scene.primitives.push(
+      primitive(
+        "tower-roof",
+        "cone",
+        profile.floors - 1,
+        center,
+        topY,
+        center,
+        (profile.footprint + 1) * 1.524,
+        roofHeight,
+        (profile.footprint + 1) * 1.524,
+        "roof",
+        ["roof", isRound ? "round" : "square"],
+      ),
+    );
+  }
   if (wizardTower) {
     scene.rooms.push(createRoom("wizard-roof-duel-room", "Roof duel platform", "combat", profile.floors - 1, center, center, Math.max(5, profile.footprint * 0.7), Math.max(5, profile.footprint * 0.7), topY));
     connectRooms(scene.rooms, `tower-chamber-${profile.floors - 1}`, "wizard-roof-duel-room");
-    scene.primitives.push(
-      cylinder("wizard-roof-duel-platform", profile.floors - 1, center, topY + roofHeight * 0.78, center, profile.footprint * 0.82, FLOOR_SLAB_METERS, "stone", ["roof-platform", "roof-duel", "standable", "high-ground"]),
-      cylinder("wizard-roof-parapet", profile.floors - 1, center, topY + roofHeight * 0.78 + FLOOR_SLAB_METERS, center, profile.footprint * 0.9, feetToMeters(3), "darkStone", ["roof", "parapet", "cover"]),
+    const roofSpiral = spiralFlight(
+      `tower-spiral-${profile.floors - 1}-roof`,
+      profile.floors - 1,
+      center,
+      (floorBaseY[profile.floors - 1] ?? 0) + FLOOR_SLAB_METERS,
+      topY + FLOOR_SLAB_METERS,
+      Math.max(1.65, profile.footprint * 0.2),
     );
+    scene.primitives.push(
+      cylinder("wizard-roof-duel-platform", profile.floors - 1, center, topY, center, profile.footprint * 0.82, FLOOR_SLAB_METERS, "stone", ["floor", "roof-platform", "roof-duel", "standable", "high-ground", "vertical-opening"]),
+      ...roundTowerWalls("wizard-roof-parapet", profile.floors - 1, center, center, topY + FLOOR_SLAB_METERS, profile.footprint * 0.9, feetToMeters(3)),
+      ...roofSpiral.steps,
+    );
+    scene.routes.push(roofSpiral.route);
+    scene.tactical.push(tacticalFeature("wizard-roof-duel-high-ground", "highGround", center, center, topY, 3, "A reachable parapeted roof platform supports the final duel above the observatory."));
   }
   if (lighthouse) {
     const galleryY = topY + feetToMeters(2.5);

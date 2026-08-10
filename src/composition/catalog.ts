@@ -104,6 +104,7 @@ export const DESIGNER_MOTIFS: readonly DesignerMotif[] = [
 ] as const;
 
 export const COMPOSITION_GRAMMARS: readonly CompositionGrammar[] = [
+  { id: "grammar.settlement-compound-v1", label: "聚落父场景与独立子建筑组合语法", domain: "settlement", allowedMotifs: ["motif.embedded-building"], orderingRules: ["parent-site", "districts", "hierarchical-routes", "terrain-ports", "independent-buildings", "specialist-atoms", "tactical", "micro"], topologyChecks: ["parent-site-retains-ownership", "buildings-use-valid-parcels", "specialist-atoms-connect-to-routes"] },
   { id: "grammar.forest-v1", label: "森林生态—战术语法", domain: "forest", allowedMotifs: ["motif.closed-canopy-clearings", "motif.embedded-building"], orderingRules: ["macro-terrain", "clearings", "routes", "ecology", "tactical", "micro"], topologyChecks: ["all-clearings-reachable", "platform-reachable"] },
   { id: "grammar.swamp-v1", label: "沼泽水陆与架高交通语法", domain: "swamp", allowedMotifs: ["motif.wetland-boardwalk-station", "motif.embedded-building"], orderingRules: ["wetland-basin", "dry-islands", "water-pools", "raised-boardwalks", "supported-buildings", "hazards", "micro"], topologyChecks: ["dry-islands-reachable", "boardwalk-supported", "building-foundation-grounded"] },
   { id: "grammar.river-v1", label: "河谷水文语法", domain: "river", allowedMotifs: ["motif.waterfall-valley", "motif.embedded-building"], orderingRules: ["macro-valley", "water-network", "crossings", "ecology", "micro"], topologyChecks: ["downhill-flow", "both-banks-reachable"] },

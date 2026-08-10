@@ -53,7 +53,13 @@ async function planComposition(request: GenerationRequest): Promise<SceneComposi
   const key = `${request.prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}|${request.seed}|${request.density}`;
   const cached = compositionCache.get(key); if (cached) return cached;
   const local = compileSceneComposition(request);
-  const retrieval = local.primaryDomain === "generic" ? await retrieveCapabilitiesWithBge(request.prompt) : undefined;
+  // Generic prompts need retrieval for domain resolution. Settlements also
+  // benefit from capability retrieval, but their parent ownership is already
+  // fixed by compileSceneComposition: BGE may enrich child atoms without
+  // replacing the settlement grammar.
+  const retrieval = local.primaryDomain === "generic" || local.primaryDomain === "settlement"
+    ? await retrieveCapabilitiesWithBge(request.prompt)
+    : undefined;
   const program = retrieval && retrieval.capabilityIds.length > 0 ? compileSceneComposition(request, retrieval.source === "bge" ? "bge" : "local", retrieval.capabilityIds) : local;
   compositionCache.set(key, program); if (compositionCache.size > 32) compositionCache.delete(compositionCache.keys().next().value ?? key);
   return program;

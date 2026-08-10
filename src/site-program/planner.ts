@@ -716,15 +716,60 @@ export function planSettlementSite(input: SitePlanningInput, rng: SeededRandom):
       const t = length2 <= 1e-6 ? 0 : Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.z - a.z) * dz) / length2));
       return Math.hypot(point.x - (a.x + dx * t), point.z - (a.z + dz * t));
     };
-    parcels = parcels.filter((parcel) => {
+    const requested = requestedBuildingKinds(text);
+    const requestedModules = requestedFunctionalModules(text);
+    const requestedParcelIds = new Set([
+      ...parcels.slice(0, requested.length).map((parcel) => parcel.id),
+      ...parcels.filter((parcel) => (parcel.functionalModules?.length ?? 0) > 0).map((parcel) => parcel.id),
+    ]);
+    const clearsCanals = (parcel: ParcelProgram, center = parcel.center): boolean => {
       const buildingClearance = Math.max(0.75, Math.min(parcel.buildingSize.x, parcel.buildingSize.z) * 0.12);
       return canalLines.every((line) => line.points.slice(1).every((point, index) => {
         const previous = line.points[index];
-        return previous ? distanceToSegment(parcel.center, previous, point) > line.width / 2 + buildingClearance : true;
+        return previous ? distanceToSegment(center, previous, point) > line.width / 2 + buildingClearance : true;
       }));
-    });
-    const requested = requestedBuildingKinds(text);
-    const requestedModules = requestedFunctionalModules(text);
+    };
+    const overlaps = (parcel: ParcelProgram, center: SitePoint, other: ParcelProgram): boolean => (
+      Math.abs(center.x - other.center.x) < (parcel.buildingSize.x + other.buildingSize.x) / 2 + 0.8
+      && Math.abs(center.z - other.center.z) < (parcel.buildingSize.z + other.buildingSize.z) / 2 + 0.8
+    );
+    const accepted: ParcelProgram[] = [];
+    for (const parcel of parcels) {
+      const conflictsWithRelocatedLandmark = accepted.some((other) => requestedParcelIds.has(other.id) && overlaps(parcel, parcel.center, other));
+      if (clearsCanals(parcel) && !conflictsWithRelocatedLandmark) {
+        accepted.push(parcel);
+        continue;
+      }
+      if (!requestedParcelIds.has(parcel.id)) continue;
+      let relocated: SitePoint | undefined;
+      const minX = parcel.size.x / 2 + 1;
+      const maxX = width - parcel.size.x / 2 - 1;
+      const minZ = parcel.size.z / 2 + 1;
+      const maxZ = depth - parcel.size.z / 2 - 1;
+      relocationSearch:
+      for (let radius = 1; radius <= 18; radius += 1) {
+        for (let dz = -radius; dz <= radius; dz += 1) {
+          for (let dx = -radius; dx <= radius; dx += 1) {
+            if (Math.abs(dx) !== radius && Math.abs(dz) !== radius) continue;
+            const candidate = {
+              x: Math.max(minX, Math.min(maxX, parcel.center.x + dx * 1.25)),
+              z: Math.max(minZ, Math.min(maxZ, parcel.center.z + dz * 1.25)),
+            };
+            if (!clearsCanals(parcel, candidate) || accepted.some((other) => overlaps(parcel, candidate, other))) continue;
+            relocated = candidate;
+            break relocationSearch;
+          }
+        }
+      }
+      if (!relocated) continue;
+      const deltaX = relocated.x - parcel.center.x;
+      const deltaZ = relocated.z - parcel.center.z;
+      parcel.center = relocated;
+      parcel.entrance = { x: parcel.entrance.x + deltaX, z: parcel.entrance.z + deltaZ };
+      if (parcel.boundary) parcel.boundary = parcel.boundary.map((point) => ({ ...point, x: point.x + deltaX, z: point.z + deltaZ }));
+      accepted.push(parcel);
+    }
+    parcels = accepted;
     const desiredFullBudget = Math.min(parcels.length, Math.max(5, Math.min(8, requested.length + 3)));
     const reRanked = [...parcels].sort((left, right) => {
       const requestedLeft = requested.indexOf(left.buildingKind);

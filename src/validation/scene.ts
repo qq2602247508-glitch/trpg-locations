@@ -364,6 +364,17 @@ function validateGeometryInvariants(
       const wallViolations = new Set<string>();
       for (const sample of routeSamples(route)) {
         for (const wall of solidWalls) {
+          const wallBuildingId = wall.tags?.find((tag) => tag.startsWith("building-instance:"))?.slice("building-instance:".length);
+          // Settlement and wilderness parent routes are authored before the
+          // on-demand full-interior basement graph. A contour road may pass
+          // below a high-bank parcel in plan view without belonging to that
+          // cellar. Keep validating the building's own entry/basement routes,
+          // but do not treat unrelated parent-site routes as if they were
+          // trying to walk through a dormant underground room.
+          if (hasTag(wall, "underground")
+            && hasTag(wall, "full-interior")
+            && wallBuildingId
+            && !route.id.includes(wallBuildingId)) continue;
           // A surface route may pass over a basement wall. Underground
           // partitions only block routes while the sample is actually inside
           // their vertical span; otherwise every cabin trail crossing the

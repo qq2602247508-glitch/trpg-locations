@@ -580,6 +580,72 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
             scene.primitives.push(corridor(`terrain-${side}-bank-${index}`, 0, from.x + offset, from.z, to.x + offset, to.z, feetToMeters(cellAt(mx, mz).elevationFeet) + FLOOR_SLAB_METERS + 0.04, 1.4, saltMarsh ? "wood" : "stone", ["water-city", "bank-route", "quay", "standable", "terrain-program", ...(saltMarsh ? ["boardwalk", "raised-boardwalk", "wetland"] : [])]));
           }
         }
+        if (coastalCanal) {
+          const cliffRoutePoints = route
+            .filter((_, index) => index % 3 === 0 || index === route.length - 1)
+            .map((point) => {
+              const x = Math.max(1.5, Math.min(width - 1.5, point.x + cliffBankSide * 7.2));
+              return { x, z: point.z, y: feetToMeters(cellAt(x, point.z).elevationFeet) + FLOOR_SLAB_METERS + 0.08 };
+            });
+          for (let index = 1; index < cliffRoutePoints.length; index += 1) {
+            const from = cliffRoutePoints[index - 1]!;
+            const to = cliffRoutePoints[index]!;
+            const deckY = Math.max(from.y, to.y);
+            const dx = to.x - from.x;
+            const dz = to.z - from.z;
+            const length = Math.max(1, Math.hypot(dx, dz));
+            const rotation = Math.atan2(dx, dz);
+            const outerOffset = cliffBankSide * 0.92;
+            scene.primitives.push(
+              corridor(`coastal-cliff-upper-road-${index}`, 0, from.x, from.z, to.x, to.z, deckY, 1.8, "stone", ["water-city", "coastal-cliff", "cliff-upper-route", "standable", "high-ground", "terrain-program"]),
+              box(`coastal-cliff-parapet-${index}`, 0, (from.x + to.x) / 2 + outerOffset, deckY + FLOOR_SLAB_METERS, (from.z + to.z) / 2, 0.24, feetToMeters(3.4), length, "stone", ["water-city", "coastal-cliff", "cliff-parapet", "cover", "terrain-program"], rotation),
+            );
+          }
+          const descentRows = [depth * 0.34, depth * 0.71];
+          for (const [index, row] of descentRows.entries()) {
+            const riverX = warpedRiverX(row, width, depth, phase);
+            const lowerX = riverX + cliffBankSide * 4.2;
+            const upperX = riverX + cliffBankSide * 7.2;
+            const lowerY = feetToMeters(cellAt(lowerX, row).elevationFeet) + FLOOR_SLAB_METERS;
+            const upperY = feetToMeters(cellAt(upperX, row).elevationFeet) + FLOOR_SLAB_METERS;
+            const rise = Math.max(feetToMeters(5), upperY - lowerY);
+            const centerX = (lowerX + upperX) / 2;
+            scene.primitives.push(
+              stairs(
+                `coastal-cliff-switchback-${index + 1}`,
+                0,
+                centerX,
+                lowerY,
+                row,
+                1.35,
+                rise,
+                Math.max(4.5, Math.abs(upperX - lowerX) + 2.2),
+                "stone",
+                ["water-city", "coastal-cliff", "cliff-descent", "vertical-route", "standable", "terrain-program"],
+                cliffBankSide > 0 ? Math.PI / 2 : -Math.PI / 2,
+              ),
+              ...[0, 0.5, 1].map((t) => box(
+                `coastal-cliff-switchback-${index + 1}-landing-${Math.round(t * 2) + 1}`,
+                0,
+                lowerX + (upperX - lowerX) * t,
+                lowerY + rise * t - 0.12,
+                row,
+                1.55,
+                0.24,
+                1.55,
+                "stone",
+                ["water-city", "coastal-cliff", "stair-landing", "stair-opening", "vertical-opening", "opening-frame", "standable", "terrain-program"],
+              )),
+            );
+            scene.routes.push(createRoute(`coastal-cliff-access-route-${index + 1}`, "vertical", [
+              { x: lowerX, z: row, y: lowerY },
+              { x: centerX, z: row, y: lowerY + rise / 2 },
+              { x: upperX, z: row, y: upperY },
+            ], { purpose: "movement", traffic: 0.46, schedule: "all" }));
+          }
+          scene.routes.push(createRoute("coastal-cliff-upper-route", "alternate", cliffRoutePoints, { purpose: "movement", traffic: 0.58, schedule: "all" }));
+          scene.tactical.push(tacticalFeature("coastal-cliff-upper-overwatch", "highGround", cliffRoutePoints[Math.floor(cliffRoutePoints.length / 2)]?.x ?? width * 0.2, depth * 0.5, cliffRoutePoints[Math.floor(cliffRoutePoints.length / 2)]?.y ?? feetToMeters(15), 3, "The parapeted upper-bank road overlooks the canal and has two legal descents."));
+        }
         // A water-city needs a functional waterfront node, not only blue
         // channel cells. Keep the market dock on a legal bank beside the
         // middle crossing so it participates in the same route/elevation

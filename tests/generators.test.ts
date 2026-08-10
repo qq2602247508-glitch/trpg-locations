@@ -356,13 +356,30 @@ describe("scene generators", () => {
     expect(wizardTower?.buildingProgram?.requiredFeatures).toContain("alchemy-laboratory");
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("spell-library"))).toBe(true);
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("telescope"))).toBe(true);
+    const spiralSteps = scene.primitives.filter((primitive) => primitive.tags?.includes("spiral-stair"));
+    expect(spiralSteps.length).toBeGreaterThanOrEqual(((wizardTower?.floors ?? 1) - 1) * 18);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("stair-opening")).length).toBeGreaterThanOrEqual((wizardTower?.floors ?? 1) - 1);
+    expect(scene.routes.some((route) => route.id.includes("wizard-spiral-route") && route.points.length >= (wizardTower?.floors ?? 1))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("cliff-upper-route"))).toBe(true);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("cliff-descent")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.routes.some((route) => route.id === "coastal-cliff-upper-route")).toBe(true);
     expect(scene.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(80);
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+    const sparseVariant = generateScene({ ...request("round71-deepwater-cliff-route", "medium", 0.2), prompt }, "adaptive");
+    const sparseWizardTower = sparseVariant.buildingInstances?.find((building) => building.archetype === "tower");
+    expect(sparseWizardTower?.buildingProgram?.requiredFeatures).toContain("alchemy-laboratory");
+    expect(sparseVariant.primitives.filter((primitive) => primitive.tags?.includes("spiral-stair")).length).toBeGreaterThanOrEqual(((sparseWizardTower?.floors ?? 1) - 1) * 18);
+    expect(sparseVariant.diagnostics.valid, sparseVariant.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
   it("composes an unfamiliar mushroom farming village from reusable mine and building atoms", () => {
     const prompt = "建在旧矿井口的蘑菇农夫村庄，有木屋、菌类温室、矿车轨道、地下水井和石桥";
     const scene = generateScene({ ...request("round70-mine-mushroom-village", "medium", 0.62), prompt }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.compositionProgram?.primaryDomain).toBe("settlement");
+    expect(scene.compositionProgram?.grammarId).toBe("grammar.settlement-compound-v1");
+    expect(scene.compositionProgram?.semanticCoverage?.missing).not.toContain("森林");
+    expect(scene.diagnostics.warnings.some((warning) => warning.includes("Semantic geometry missing: 森林"))).toBe(false);
     expect(scene.siteProgram?.siteType).toBe("village");
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("mine-entrance"))).toBe(true);
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("mine-cart-track"))).toBe(true);
@@ -905,6 +922,22 @@ describe("scene generators", () => {
     expect(hasTag(scene, "platform")).toBe(true);
     expect(hasTag(scene, "round") || hasTag(scene, "square")).toBe(true);
     expect(scene.tactical.some((feature) => feature.kind === "highGround")).toBe(true);
+  });
+
+  it("gives a direct wizard tower distinct functional floors and a reachable flat duel roof", () => {
+    const prompt = "D&D 三层法师塔，真正的螺旋楼梯连接三层，底层炼金实验室，中层藏书室，顶层观星台和屋顶决战平台";
+    const scene = generateScene({ ...request("wizard-tower-direct-contract", "medium", 0.62), prompt }, "adaptive");
+    expect(scene.rooms.some((room) => room.name === "Alchemy laboratory")).toBe(true);
+    expect(scene.rooms.some((room) => room.name === "Restricted library")).toBe(true);
+    expect(scene.rooms.some((room) => room.name === "Spell observatory")).toBe(true);
+    expect(hasTag(scene, "alchemy-laboratory")).toBe(true);
+    expect(hasTag(scene, "bookcase")).toBe(true);
+    expect(hasTag(scene, "telescope")).toBe(true);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("spiral-stair")).length).toBeGreaterThanOrEqual(54);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("roof-duel") && primitive.tags?.includes("standable"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.id.includes("wizard-roof-parapet") && primitive.tags?.includes("wall"))).toBe(true);
+    expect(scene.routes.some((route) => route.id.includes("tower-spiral-2-roof-route"))).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
   it("builds a sewer with channels, inspection paths, shafts, and downhill waterflow", () => {

@@ -36,6 +36,7 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
 
 function densityProfile(domain: string, value: number): DomainDensityProfile {
   const density = Math.max(0, Math.min(1, value));
+  if (domain === "settlement") return { domain, normalized: density, structuralComplexity: 0.38 + density * 0.56, routeComplexity: 0.34 + density * 0.54, hazardFrequency: 0.08 + density * 0.26, ecologicalCoverage: 0.08 + density * 0.24, landmarkFrequency: 0.28 + density * 0.6, detailFrequency: 0.3 + density * 0.66 };
   if (domain === "forest") return { domain, normalized: density, structuralComplexity: 0.35 + density * 0.55, routeComplexity: 0.25 + density * 0.35, hazardFrequency: 0.15 + density * 0.35, ecologicalCoverage: 0.22 + density * 0.73, landmarkFrequency: 0.15 + density * 0.45, detailFrequency: 0.2 + density * 0.75 };
   if (domain === "swamp") return { domain, normalized: density, structuralComplexity: 0.32 + density * 0.5, routeComplexity: 0.34 + density * 0.46, hazardFrequency: 0.35 + density * 0.58, ecologicalCoverage: 0.28 + density * 0.62, landmarkFrequency: 0.16 + density * 0.42, detailFrequency: 0.25 + density * 0.7 };
   if (domain === "river") return { domain, normalized: density, structuralComplexity: 0.35 + density * 0.5, routeComplexity: 0.3 + density * 0.45, hazardFrequency: 0.2 + density * 0.55, ecologicalCoverage: 0.2 + density * 0.55, landmarkFrequency: 0.2 + density * 0.45, detailFrequency: 0.15 + density * 0.7 };
@@ -187,14 +188,24 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
 
 export function compileSceneComposition(request: GenerationRequest, source: SceneCompositionProgram["source"] = "local", retrievedCapabilityIds: string[] = []): SceneCompositionProgram {
   const lexicalDomain = domainFor(request.prompt);
+  const text = normalized(request.prompt);
+  const settlementParent = hasSettlementParent(text);
+  const retrievedDomain = resolveCapabilityDomain(retrievedCapabilityIds);
   // A named natural parent with an embedded facility already has deterministic
   // macro ownership in the scene planner. Retrieval may enrich the child, but
   // must not replace a mountain ridge with an unrelated river grammar merely
-  // because a water capability ranked nearby in embedding space.
-  const domain = lexicalDomain === "generic" && !shouldComposeWildernessFacility(request.prompt)
-    ? resolveCapabilityDomain(retrievedCapabilityIds).domain ?? lexicalDomain
+  // because a water capability ranked nearby in embedding space. The same
+  // ownership rule applies to named settlements: retrieval may contribute a
+  // fungal greenhouse, mine, bridge, or water atom, but it cannot turn the
+  // whole village into a forest merely because one child capability is close
+  // in embedding space.
+  const domain = lexicalDomain === "generic"
+    ? settlementParent
+      ? "settlement"
+      : shouldComposeWildernessFacility(request.prompt)
+        ? lexicalDomain
+        : retrievedDomain.domain ?? lexicalDomain
     : lexicalDomain;
-  const text = normalized(request.prompt);
   const isWaterCity = domain === "river" && has(text, ["水城", "河道水城", "水镇", "潮汐水镇", "运河城", "水上市集", "船坞", "泄洪渠", "沿岸街巷", "水轮", "canal city", "water city", "water town", "tidal town", "water market", "dock", "quay", "waterwheel"]);
   const grammarId = isWaterCity ? "grammar.water-city-v1" : COMPOSITION_GRAMMARS.find((entry) => entry.domain === domain)?.id ?? "grammar.generic-v1";
   const motifIds: string[] = [];
