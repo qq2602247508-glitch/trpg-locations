@@ -282,6 +282,10 @@ describe("scene generators", () => {
         const instance = instantiateBuildingModule(scene, { id: `${kind}-${lod}`, kind, x: 10, z: 10, width: 9, depth: 8, rotation: 0.18, district: "test", seed, lod }, new SeededRandom(seed));
         expect(instance.envelopeProgram?.partCount).toBeGreaterThanOrEqual(2);
         expect(scene.primitives.some((primitive) => primitive.tags?.includes("envelope-part"))).toBe(true);
+        if (lod === "mass") {
+          expect(scene.primitives.some((primitive) => primitive.tags?.includes("mass-silhouette"))).toBe(true);
+          expect(scene.primitives.some((primitive) => primitive.tags?.includes("facade-landmark"))).toBe(true);
+        }
         signatures.add(instance.envelopeProgram?.silhouetteSignature ?? "missing");
       }
       expect(signatures.size).toBe(1);

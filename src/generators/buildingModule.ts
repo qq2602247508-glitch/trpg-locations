@@ -53,6 +53,67 @@ function localPoint(lot: BuildingLot, localX: number, localZ: number): { x: numb
   };
 }
 
+/**
+ * Mass proxies are intentionally cheap, but they must still communicate the
+ * building's use and silhouette from a settlement overview.  These landmarks
+ * are structural cues (porches, chimneys, buttresses, monitors), not labels or
+ * decorative noise.  Full/facade LODs keep their richer fixtures below.
+ */
+function addMassSilhouetteLandmarks(
+  scene: GeneratedScene,
+  lot: BuildingLot,
+  envelope: BuildingEnvelopeProgram,
+  baseY: number,
+  totalHeight: number,
+  tags: readonly string[],
+): void {
+  const primary = envelope.parts[0];
+  if (!primary) return;
+  const point = (x: number, z: number) => localPoint(lot, x, z);
+  const landmarkTags = [...tags, "mass-silhouette", "facade-landmark", "non-standable"];
+  const frontZ = primary.offset.z + primary.size.z * 0.5 + 0.08;
+
+  if (lot.kind === "home" || lot.kind === "tavern" || lot.kind === "manor") {
+    const porch = point(primary.offset.x, frontZ + 0.62);
+    scene.primitives.push(
+      box(`${lot.id}-mass-porch`, 0, porch.x, baseY, porch.z, Math.min(primary.size.x * 0.54, 4.2), feetToMeters(1.1), 1.15, "wood", [...landmarkTags, "porch", "entrance-threshold"], lot.rotation),
+    );
+    const chimney = point(primary.offset.x - primary.size.x * 0.28, primary.offset.z - primary.size.z * 0.18);
+    scene.primitives.push(
+      box(`${lot.id}-mass-chimney`, 0, chimney.x, baseY, chimney.z, 0.58, Math.max(feetToMeters(7), totalHeight * 0.9), 0.58, "darkStone", [...landmarkTags, "chimney", "vertical-landmark"], lot.rotation),
+    );
+  }
+
+  if (lot.kind === "shrine") {
+    const nave = envelope.parts.find((part) => part.id === "nave") ?? primary;
+    for (const side of [-1, 1]) {
+      const buttress = point(nave.offset.x + side * nave.size.x * 0.46, nave.offset.z + nave.size.z * 0.06);
+      scene.primitives.push(
+        box(`${lot.id}-mass-buttress-${side < 0 ? "west" : "east"}`, 0, buttress.x, baseY, buttress.z, 0.42, totalHeight * 0.78, 0.72, "stone", [...landmarkTags, "buttress", "cover"], lot.rotation),
+      );
+    }
+  }
+
+  if (lot.kind === "warehouse" || lot.kind === "factory") {
+    const bay = envelope.parts.find((part) => part.id === "main-bay") ?? primary;
+    const monitorCount = lot.kind === "factory" ? 3 : 1;
+    for (let index = 0; index < monitorCount; index += 1) {
+      const t = (index + 1) / (monitorCount + 1);
+      const monitor = point(bay.offset.x + (t - 0.5) * bay.size.x * 0.82, bay.offset.z - bay.size.z * 0.08);
+      scene.primitives.push(
+        primitive(`${lot.id}-mass-monitor-${index + 1}`, "gable", 1, monitor.x, baseY + totalHeight * 0.76, monitor.z, Math.min(3.2, bay.size.z * 0.26) * GRID_METERS, feetToMeters(2.2), Math.min(2.8, bay.size.x * 0.22) * GRID_METERS, "roof", [...landmarkTags, "roof-monitor", "industrial-silhouette"], lot.rotation + Math.PI / 2),
+      );
+    }
+  }
+
+  if (lot.kind === "mill") {
+    const wheel = point(lot.width * 0.46, lot.depth * 0.02);
+    scene.primitives.push(
+      cylinder(`${lot.id}-mass-wheel`, 0, wheel.x, baseY, wheel.z, 2.8, feetToMeters(7), "wood", [...landmarkTags, "mill-wheel", "vertical-landmark"]),
+    );
+  }
+}
+
 function profile(kind: SettlementBuildingKind, rng: GeneratorContext["rng"], siteProfile?: SiteBuildingProfile): { floors: number; floorHeightFeet: number[]; material: MaterialKey } {
   const floors = siteProfile === "wizard-tower" ? rng.int(4, 5)
     : siteProfile === "field-station" ? rng.int(1, 2)
@@ -1212,6 +1273,9 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
     } else {
       scene.primitives.push(box(`${lot.id}-${envelopePart.id}-roof`, 0, point.x, y + height, point.z, envelopePart.size.x * 1.03, 0.24, envelopePart.size.z * 1.03, "roof", [...partTags, "roof", "flat-roof"], lot.rotation));
     }
+  }
+  if (lot.lod === "mass") {
+    addMassSilhouetteLandmarks(scene, lot, envelope, y, totalHeight, tags);
   }
 
   if (lot.lod !== "mass") {
