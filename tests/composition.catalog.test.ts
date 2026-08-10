@@ -92,6 +92,49 @@ describe("five-layer composition catalog", () => {
       expect(entry?.visualFixtures.length, id).toBeGreaterThanOrEqual(4);
       expect(entry?.failureConditions.length, id).toBeGreaterThanOrEqual(3);
     }
+
+    const hangarRequest = {
+      prompt: "高山峡谷中的翼港整备所，有宽阔翼舱、挥发储压舱、驻员休息舱和高空导风台",
+      seed: "functional-atom-exterior-proof",
+      size: "medium" as const,
+      density: 0.64,
+    };
+    const hangarComposition = compileSceneComposition(hangarRequest, "bge", [
+      "structure.embedded-building",
+      "structure.hangar-space",
+      "structure.fuel-space",
+      "structure.quarters-space",
+      "structure.observation-platform",
+    ]);
+    const hangar = generateScene(hangarRequest, "adaptive", undefined, undefined, hangarComposition);
+    const hangarTags = new Set(hangar.primitives.flatMap((primitive) => primitive.tags ?? []));
+    for (const tag of ["roof-truss", "door-track", "ridge-monitor", "apron-rail", "containment-curb", "vent-stack", "fuel-route-opening"]) {
+      expect(hangarTags.has(tag), `missing functional geometry tag ${tag}`).toBe(true);
+    }
+    expect(hangar.routes.some((route) => route.id.endsWith("-fuel-route"))).toBe(true);
+    expect(hangar.diagnostics.warnings, hangar.diagnostics.warnings.join("\n")).toHaveLength(0);
+
+    const reliefRequest = {
+      prompt: "冻土峡湾里的巡礼救护站，有伤员病房、祈祷小堂、地下粮药库和屋顶信号台",
+      seed: "functional-atom-wing-proof",
+      size: "medium" as const,
+      density: 0.64,
+    };
+    const reliefComposition = compileSceneComposition(reliefRequest, "bge", [
+      "structure.embedded-building",
+      "structure.medical-space",
+      "structure.chapel-space",
+      "structure.storage-space",
+      "structure.observation-platform",
+    ]);
+    const relief = generateScene(reliefRequest, "adaptive", undefined, undefined, reliefComposition);
+    const reliefTags = new Set(relief.primitives.flatMap((primitive) => primitive.tags ?? []));
+    for (const tag of ["chapel-floor", "apse", "chapel-roof", "bell-cote", "ward-floor", "nurse-station", "medical-canopy", "medical-roof-monitor"]) {
+      expect(reliefTags.has(tag), `missing functional wing tag ${tag}`).toBe(true);
+    }
+    expect(relief.routes.some((route) => route.id.endsWith("-chapel-route"))).toBe(true);
+    expect(relief.routes.some((route) => route.id.endsWith("-medical-route"))).toBe(true);
+    expect(relief.diagnostics.warnings, relief.diagnostics.warnings.join("\n")).toHaveLength(0);
   });
 
   it("maps forest density into ecology rather than only decoration", () => {

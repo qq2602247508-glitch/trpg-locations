@@ -3331,6 +3331,14 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     "building-instance:wilderness-core-building",
     { minX: x - 7, maxX: x + 7, minZ: z - 6, maxZ: z + 6 },
   );
+  rerouteParentTrailsAroundBuilding(
+    scene,
+    (completeBuildingFootprint.minX + completeBuildingFootprint.maxX) / 2,
+    (completeBuildingFootprint.minZ + completeBuildingFootprint.maxZ) / 2,
+    (completeBuildingFootprint.maxX - completeBuildingFootprint.minX) / 2,
+    (completeBuildingFootprint.maxZ - completeBuildingFootprint.minZ) / 2,
+    terrainBaseY,
+  );
   rerouteServiceRoutesAroundBuildingFootprint(scene, completeBuildingFootprint, terrainBaseY);
   scene.siteProgram = { version: 1, siteType: "wilderness-site", districtCount: 1, roadCount: siteRoadCount, junctionCount: 1, blockCount: 1, parcelCount: 1, fullInteriorCount: 1, facadeCount: 0, massCount: 0, roadLengthCells: siteRoadLength, parcelCoverage: (13 * 12) / (width * depth), buildingCoverage: (9 * 8) / (width * depth), averageParcelArea: 13 * 12, openSpaceRatio: 1 - (13 * 12) / (width * depth), roadPattern: "anchor-web", curvedRoadRatio: siteRoadCount > 0 ? 1 : 0, nonRectangularBlockRatio: 1, terrainKind: archetype === "forest" ? "forest-clearing" : archetype === "mountain" ? "valley" : "rolling" };
   scene.floors = Math.max(scene.floors, 4);

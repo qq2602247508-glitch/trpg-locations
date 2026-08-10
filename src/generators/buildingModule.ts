@@ -378,6 +378,7 @@ function addFunctionalModuleGeometry(
   const undergroundY = authoredUnderground?.y ?? Math.min(baseY - feetToMeters(13), FLOOR_SLAB_METERS - feetToMeters(10));
   const groundHeight = feetToMeters(generated.floorHeightFeet[0] ?? 10);
   const totalHeight = feetToMeters(generated.floorHeightFeet.reduce((sum, height) => sum + height, 0));
+  const exteriorFunctionalWings = lot.id === "wilderness-core-building";
   const point = (x: number, z: number) => localPoint(lot, x, z);
   const common = ["functional-module", `building-instance:${lot.id}`, `building:${lot.kind}`];
   const addBox = (module: BuildingFunctionalModuleProgram, id: string, level: number, x: number, y: number, z: number, width: number, height: number, depth: number, material: MaterialKey, tags: string[] = []) => {
@@ -606,13 +607,23 @@ function addFunctionalModuleGeometry(
       addBox(module, "inner-wall-south", 0, innerX, baseY, hangarZ + innerWallOffset, 0.22, hangarHeight, innerWallSegmentDepth, "metal", ["wall", "hangar-shell", "personnel-door", "opening"]);
       const roofCenter = point(hangarX, hangarZ);
       scene.primitives.push(primitive(`${lot.id}-${module.kind}-roof`, "gable", 2, roofCenter.x, baseY + hangarHeight, roofCenter.z, hangarDepth * 1.06 * GRID_METERS, feetToMeters(4.5), hangarWidth * 1.06 * GRID_METERS, "roof", [...common, `function:${module.kind}`, ...module.tags, "hangar-roof", "pitched-roof"], lot.rotation + Math.PI / 2));
+      for (const [trussIndex, zOffset] of [-0.32, 0, 0.32].entries()) {
+        addBox(module, `roof-truss-${trussIndex + 1}`, 1, hangarX, baseY + feetToMeters(12.2), hangarZ + hangarDepth * zOffset, hangarWidth * 0.9, 0.22, 0.22, "metal", ["roof-truss", "hangar-shell", "structural-support", "overhead"]);
+      }
+      addBox(module, "ridge-monitor", 2, hangarX, baseY + hangarHeight + feetToMeters(1.2), hangarZ, hangarWidth * 0.46, feetToMeters(2.1), 0.72, "metal", ["ridge-monitor", "hangar-shell", "ventilation", "vertical-landmark"]);
       for (const [postIndex, xOffset] of [-0.34, 0, 0.34].entries()) addBox(module, `gantry-post-${postIndex + 1}`, 0, hangarX + hangarWidth * xOffset, baseY, hangarZ - hangarDepth * 0.3, 0.24, feetToMeters(10), 0.24, "metal", ["gantry", "structural-support", "cover"]);
       addBox(module, "gantry-beam", 1, hangarX, baseY + feetToMeters(10), hangarZ - hangarDepth * 0.3, hangarWidth * 0.78, 0.24, 0.3, "metal", ["gantry", "overhead", "maintenance-bay"]);
       addBox(module, "service-cradle", 0, hangarX, baseY + FLOOR_SLAB_METERS, hangarZ + hangarDepth * 0.12, hangarWidth * 0.52, feetToMeters(2.4), 1.6, "wood", ["vehicle-cradle", "maintenance-bay", "cover"]);
+      for (const [trackIndex, zOffset] of [-0.42, 0.42].entries()) {
+        addBox(module, `door-track-${trackIndex + 1}`, 0, outerX + side * 0.18, baseY, hangarZ + wideDoorDepth * zOffset, 0.18, hangarHeight * 0.86, 0.18, "metal", ["door-track", "wide-door", "hangar-shell", "structural-support"]);
+      }
       const apronX = hangarX + side * (hangarWidth / 2 + 2.7);
       const apron = addBox(module, "launch-apron", 0, apronX, baseY, hangarZ, apronWidth, FLOOR_SLAB_METERS, wideDoorDepth * 0.92, "wood", ["floor", "platform", "hangar-apron", "launch-deck", "standable", "exterior-route"]);
       for (const [supportIndex, zOffset] of [-0.34, 0.34].entries()) {
         addCylinder(module, `apron-support-${supportIndex + 1}`, 0, apronX + side * apronWidth * 0.38, Math.min(0, baseY - feetToMeters(8)), hangarZ + wideDoorDepth * zOffset, 0.32, Math.max(feetToMeters(8), baseY), "metal", ["hangar-apron", "structural-support", "supported"]);
+      }
+      for (const [railIndex, zOffset] of [-0.48, 0.48].entries()) {
+        addBox(module, `apron-rail-${railIndex + 1}`, 0, apronX, baseY + feetToMeters(2.8), hangarZ + wideDoorDepth * 0.44 * zOffset / 0.48, apronWidth * 0.82, 0.12, 0.12, "metal", ["apron-rail", "railing", "hangar-apron", "edge-protection"]);
       }
       const threshold = point(side * lot.width * 0.46, hangarZ);
       const hangarDoor = point(hangarX - side * hangarWidth / 2, hangarZ);
@@ -634,12 +645,37 @@ function addFunctionalModuleGeometry(
       const fuelY = underground ? undergroundY : baseY;
       const level = underground ? 3 : 0;
       const fuelX = underground ? localX * 0.28 : side * (lot.width * 0.5 + 2.2);
+      const fuelWidth = 4.8;
+      const fuelDepth = 4.4;
       const center = point(fuelX, localZ);
+      addBox(module, "containment-floor", level, fuelX, fuelY, localZ, fuelWidth, FLOOR_SLAB_METERS, fuelDepth, underground ? "darkStone" : "stone", ["floor", "standable", "fuel-containment", "containment-floor", ...(underground ? ["underground"] : ["exterior-hazard-zone"])]);
+      const entrySide = underground ? -Math.sign(fuelX || 1) : -side;
+      const entryX = fuelX + entrySide * fuelWidth * 0.5;
+      const curbHeight = feetToMeters(1.35);
+      addBox(module, "containment-curb-north", level, fuelX, fuelY, localZ - fuelDepth * 0.5, fuelWidth, curbHeight, 0.18, "stone", ["containment-curb", "hazard-boundary", "cover", ...(underground ? ["underground"] : [])]);
+      addBox(module, "containment-curb-south", level, fuelX, fuelY, localZ + fuelDepth * 0.5, fuelWidth, curbHeight, 0.18, "stone", ["containment-curb", "hazard-boundary", "cover", ...(underground ? ["underground"] : [])]);
+      const curbSegmentDepth = Math.max(0.8, (fuelDepth - 1.3) / 2);
+      const curbOffset = (1.3 + curbSegmentDepth) / 2;
+      addBox(module, "containment-curb-entry-north", level, entryX, fuelY, localZ - curbOffset, 0.18, curbHeight, curbSegmentDepth, "stone", ["containment-curb", "fuel-route-opening", "hazard-boundary", ...(underground ? ["underground"] : [])]);
+      addBox(module, "containment-curb-entry-south", level, entryX, fuelY, localZ + curbOffset, 0.18, curbHeight, curbSegmentDepth, "stone", ["containment-curb", "fuel-route-opening", "hazard-boundary", ...(underground ? ["underground"] : [])]);
+      const farCurbX = fuelX - entrySide * fuelWidth * 0.5;
+      addBox(module, "containment-curb-far", level, farCurbX, fuelY, localZ, 0.18, curbHeight, fuelDepth, "stone", ["containment-curb", "hazard-boundary", "cover", ...(underground ? ["underground"] : [])]);
       for (const [tankIndex, offset] of [-1.25, 0, 1.25].entries()) {
         addCylinder(module, `tank-${tankIndex + 1}`, level, fuelX + offset, fuelY + FLOOR_SLAB_METERS, localZ, 1.05, feetToMeters(5.6), "metal", ["fuel-tank", "hazard", "cover", ...(underground ? ["underground"] : [])]);
       }
       addBox(module, "manifold", level, fuelX, fuelY + feetToMeters(4.6), localZ, 3.8, 0.22, 0.3, "metal", ["fuel-manifold", "pipe", "hazard", ...(underground ? ["underground"] : [])]);
       addBox(module, "control-valve", level, fuelX, fuelY + FLOOR_SLAB_METERS, localZ + 1.45, 1.2, feetToMeters(3.2), 0.72, "metal", ["fuel-control", "restricted", "cover", ...(underground ? ["underground"] : [])]);
+      addCylinder(module, "vent-stack", level, farCurbX + entrySide * 0.38, fuelY, localZ - fuelDepth * 0.3, 0.42, underground ? baseY - fuelY + feetToMeters(7) : feetToMeters(11), "metal", ["vent-stack", "fuel-ventilation", "vertical-landmark", "hazard", ...(underground ? ["underground-to-surface"] : [])]);
+      for (const [bollardIndex, zOffset] of [-0.65, 0.65].entries()) {
+        addCylinder(module, `impact-bollard-${bollardIndex + 1}`, level, entryX + entrySide * 0.35, fuelY, localZ + zOffset, 0.28, feetToMeters(3.1), "metal", ["impact-bollard", "fuel-route-opening", "cover", ...(underground ? ["underground"] : [])]);
+      }
+      const fuelEntry = point(entryX, localZ);
+      const fuelThreshold = point(underground ? localX * 0.12 : side * lot.width * 0.46, localZ);
+      scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "alternate", [
+        { x: fuelThreshold.x, z: fuelThreshold.z, y: fuelY },
+        { x: fuelEntry.x, z: fuelEntry.z, y: fuelY },
+        { x: center.x, z: center.z, y: fuelY },
+      ], { purpose: "service", traffic: 0.24, schedule: "all" }));
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-hazard`, "hazard", center.x, center.z, fuelY, 1.8, "Pressurized fuel tanks turn the store into a high-risk objective."));
     } else if (module.kind === "quarters") {
       const elevated = generated.floors > 1 && module.levelRole === "upper";
@@ -656,26 +692,98 @@ function addFunctionalModuleGeometry(
       addBox(module, "locker-bank", level, quartersX + quartersWidth * 0.34, quartersY + FLOOR_SLAB_METERS, localZ, 0.62, feetToMeters(5.2), quartersDepth * 0.5, "metal", ["locker", "quarters", "cover"]);
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-cover`, "cover", center.x, center.z, quartersY, 1.4, "Bunks, lockers and privacy screens create close interior cover."));
     } else if (module.kind === "chapel") {
-      const chapelX = localX * 0.34;
-      const chapelWidth = Math.max(4, lot.width * 0.44);
-      const chapelDepth = Math.max(3.8, lot.depth * 0.42);
+      const chapelWidth = exteriorFunctionalWings ? Math.max(4.8, lot.width * 0.46) : Math.max(3.8, lot.width * 0.58);
+      const chapelDepth = exteriorFunctionalWings ? Math.max(5.6, lot.depth * 0.52) : Math.max(3.8, lot.depth * 0.68);
+      const chapelX = exteriorFunctionalWings ? side * (lot.width * 0.5 + chapelWidth * 0.3) : localX * 0.28;
+      const chapelHeight = feetToMeters(11.5);
       const center = point(chapelX, localZ);
-      addBox(module, "altar", 0, chapelX, baseY + FLOOR_SLAB_METERS, localZ - chapelDepth * 0.3, Math.max(1.5, chapelWidth * 0.34), feetToMeters(3.2), 0.9, "stone", ["altar", "chapel", "landmark", "cover"]);
-      for (const [pewIndex, zOffset] of [-0.08, 0.14, 0.36].entries()) addBox(module, `pew-${pewIndex + 1}`, 0, chapelX, baseY + FLOOR_SLAB_METERS, localZ + chapelDepth * zOffset, chapelWidth * 0.66, feetToMeters(1.7), 0.46, "wood", ["pew", "chapel", "cover"]);
-      addBox(module, "screen-west", 0, chapelX - chapelWidth * 0.36, baseY, localZ - chapelDepth * 0.08, 0.16, feetToMeters(7), chapelDepth * 0.54, "stone", ["chapel-screen", "wall", "opening"]);
-      addBox(module, "screen-east", 0, chapelX + chapelWidth * 0.36, baseY, localZ - chapelDepth * 0.08, 0.16, feetToMeters(7), chapelDepth * 0.54, "stone", ["chapel-screen", "wall", "opening"]);
+      addBox(module, "floor", 0, chapelX, baseY, localZ, chapelWidth, FLOOR_SLAB_METERS, chapelDepth, "stone", ["floor", "standable", "chapel-floor", "processional-aisle"]);
+      const entryX = chapelX - side * chapelWidth * 0.5;
+      if (exteriorFunctionalWings) {
+        const rearOpeningWidth = Math.min(1.5, chapelWidth * 0.28);
+        const rearSegmentWidth = Math.max(0.8, (chapelWidth - rearOpeningWidth) / 2);
+        const rearOpeningOffset = (rearOpeningWidth + rearSegmentWidth) / 2;
+        addBox(module, "rear-wall-west", 0, chapelX - rearOpeningOffset, baseY, localZ - chapelDepth * 0.5, rearSegmentWidth, chapelHeight, 0.2, "stone", ["wall", "chapel-shell", "apse"]);
+        addBox(module, "rear-wall-east", 0, chapelX + rearOpeningOffset, baseY, localZ - chapelDepth * 0.5, rearSegmentWidth, chapelHeight, 0.2, "stone", ["wall", "chapel-shell", "apse"]);
+        addBox(module, "rear-door-frame", 0, chapelX, baseY, localZ - chapelDepth * 0.5, rearOpeningWidth, feetToMeters(7), 0.22, "stone", ["door-frame", "opening", "chapel-shell", "apse", "alternate-route"]);
+        const outerSideX = chapelX + side * chapelWidth * 0.5;
+        addBox(module, "outer-side-wall", 0, outerSideX, baseY, localZ, 0.2, chapelHeight, chapelDepth, "stone", ["wall", "chapel-shell", "buttress-line"]);
+        const entrySegmentDepth = Math.max(0.85, (chapelDepth - 1.4) / 2);
+        const entryOffset = (1.4 + entrySegmentDepth) / 2;
+        addBox(module, "entry-wall-north", 0, entryX, baseY, localZ - entryOffset, 0.2, chapelHeight, entrySegmentDepth, "stone", ["wall", "chapel-shell", "chapel-entry", "opening"]);
+        addBox(module, "entry-wall-south", 0, entryX, baseY, localZ + entryOffset, 0.2, chapelHeight, entrySegmentDepth, "stone", ["wall", "chapel-shell", "chapel-entry", "opening"]);
+      }
+      const apseX = chapelX + side * chapelWidth * 0.34;
+      addCylinder(module, "apse", 0, apseX, baseY, localZ - chapelDepth * 0.34, Math.max(2.4, chapelWidth * 0.52), chapelHeight * 0.78, "stone", ["apse", "chapel-shell", "sacred-focus", "vertical-landmark"]);
+      addBox(module, "raised-sanctuary", 0, apseX, baseY + feetToMeters(0.8), localZ - chapelDepth * 0.29, chapelWidth * 0.56, FLOOR_SLAB_METERS, chapelDepth * 0.22, "stone", ["raised-sanctuary", "standable", "altar-platform", "high-ground"]);
+      addBox(module, "altar", 0, apseX, baseY + feetToMeters(1), localZ - chapelDepth * 0.34, Math.max(1.5, chapelWidth * 0.34), feetToMeters(3.2), 0.9, "stone", ["altar", "chapel", "landmark", "cover"]);
+      const aisleHalfWidth = Math.max(0.52, chapelWidth * 0.12);
+      const pewHalfWidth = Math.max(0.8, chapelWidth * 0.5 - aisleHalfWidth - 0.42);
+      for (const [pewIndex, zOffset] of [-0.04, 0.17, 0.38].entries()) {
+        for (const pewSide of [-1, 1]) {
+          addBox(module, `pew-${pewIndex + 1}-${pewSide < 0 ? "west" : "east"}`, 0, chapelX + pewSide * (aisleHalfWidth + pewHalfWidth * 0.5), baseY + FLOOR_SLAB_METERS, localZ + chapelDepth * zOffset, pewHalfWidth, feetToMeters(1.7), 0.46, "wood", ["pew", "chapel", "cover", "processional-aisle"]);
+        }
+      }
+      const roofCenter = point(chapelX, localZ);
+      scene.primitives.push(primitive(`${lot.id}-${module.kind}-roof`, "gable", 2, roofCenter.x, baseY + chapelHeight, roofCenter.z, chapelDepth * 1.06 * GRID_METERS, feetToMeters(4.2), chapelWidth * 1.08 * GRID_METERS, "roof", [...common, `function:${module.kind}`, ...module.tags, "chapel-roof", "pitched-roof", "sacred-silhouette"], lot.rotation + Math.PI / 2));
+      const bellX = chapelX - side * chapelWidth * 0.26;
+      for (const bellSide of [-1, 1]) addBox(module, `bell-cote-post-${bellSide < 0 ? "north" : "south"}`, 2, bellX, baseY + chapelHeight, localZ + bellSide * 0.42, 0.2, feetToMeters(5), 0.2, "stone", ["bell-cote", "chapel-roof", "structural-support", "vertical-landmark"]);
+      addBox(module, "bell-cote-cap", 2, bellX, baseY + chapelHeight + feetToMeters(4.7), localZ, 0.55, 0.2, 1.25, "stone", ["bell-cote", "chapel-roof", "vertical-landmark"]);
+      addCylinder(module, "bell", 2, bellX, baseY + chapelHeight + feetToMeters(1.7), localZ, 0.42, feetToMeters(2.2), "metal", ["bell-cote", "bell", "sacred-silhouette"]);
+      const chapelEntry = point(entryX, localZ);
+      const chapelThreshold = point(side * lot.width * 0.46, localZ);
+      scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "alternate", [
+        { x: chapelThreshold.x, z: chapelThreshold.z, y: baseY },
+        { x: chapelEntry.x, z: chapelEntry.z, y: baseY },
+        { x: center.x, z: center.z, y: baseY },
+        { x: point(apseX, localZ - chapelDepth * 0.29).x, z: point(apseX, localZ - chapelDepth * 0.29).z, y: baseY + feetToMeters(0.8) },
+      ], { purpose: "movement", traffic: 0.42, schedule: "all" }));
+      if (moduleRoom) {
+        moduleRoom.center = { x: center.x, y: baseY, z: center.z };
+        moduleRoom.sizeCells = { x: chapelWidth * 0.82, z: chapelDepth * 0.86 };
+      }
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-choke`, "chokepoint", center.x, center.z, baseY, 1.4, "Pew rows and the altar screen create a sacred central bottleneck."));
     } else if (module.kind === "medical") {
-      const medicalX = localX * 0.32;
-      const medicalWidth = Math.max(4.2, lot.width * 0.46);
-      const medicalDepth = Math.max(3.8, lot.depth * 0.42);
+      const medicalWidth = exteriorFunctionalWings ? Math.max(5.4, lot.width * 0.5) : Math.max(4.2, lot.width * 0.6);
+      const medicalDepth = exteriorFunctionalWings ? Math.max(5.2, lot.depth * 0.48) : Math.max(3.8, lot.depth * 0.66);
+      const medicalX = exteriorFunctionalWings ? side * (lot.width * 0.5 + medicalWidth * 0.28) : localX * 0.24;
+      const medicalHeight = feetToMeters(10.5);
       const center = point(medicalX, localZ);
-      for (const [bedIndex, xOffset, zOffset] of [[1, -0.26, -0.22], [2, 0.12, -0.22], [3, -0.26, 0.22], [4, 0.12, 0.22]] as const) {
+      addBox(module, "ward-floor", 0, medicalX, baseY, localZ, medicalWidth, FLOOR_SLAB_METERS, medicalDepth, "stone", ["floor", "standable", "ward-floor", "medical-wing"]);
+      const entryX = medicalX - side * medicalWidth * 0.5;
+      if (exteriorFunctionalWings) {
+        addBox(module, "rear-wall", 0, medicalX, baseY, localZ - medicalDepth * 0.5, medicalWidth, medicalHeight, 0.2, "plaster", ["wall", "medical-shell", "ward-wall"]);
+        const outerSideX = medicalX + side * medicalWidth * 0.5;
+        addBox(module, "outer-side-wall", 0, outerSideX, baseY, localZ, 0.2, medicalHeight, medicalDepth, "plaster", ["wall", "medical-shell", "ward-wall"]);
+        const frontSegmentDepth = Math.max(0.8, (medicalDepth - 1.6) / 2);
+        const frontOffset = (1.6 + frontSegmentDepth) / 2;
+        addBox(module, "entry-wall-north", 0, entryX, baseY, localZ - frontOffset, 0.2, medicalHeight, frontSegmentDepth, "plaster", ["wall", "medical-shell", "stretcher-entry", "opening"]);
+        addBox(module, "entry-wall-south", 0, entryX, baseY, localZ + frontOffset, 0.2, medicalHeight, frontSegmentDepth, "plaster", ["wall", "medical-shell", "stretcher-entry", "opening"]);
+      }
+      for (const [bedIndex, xOffset, zOffset] of [[1, -0.24, -0.25], [2, -0.24, 0.18], [3, 0.08, -0.25], [4, 0.08, 0.18]] as const) {
         addBox(module, `bed-${bedIndex}`, 0, medicalX + medicalWidth * xOffset, baseY + FLOOR_SLAB_METERS, localZ + medicalDepth * zOffset, 0.78, feetToMeters(2.15), 1.62, "wood", ["medical-bed", "ward", "cover"]);
       }
-      addBox(module, "treatment-table", 0, medicalX + medicalWidth * 0.26, baseY + FLOOR_SLAB_METERS, localZ, 1.55, feetToMeters(2.7), 0.92, "metal", ["treatment-table", "medical", "cover"]);
-      addBox(module, "medicine-cabinet", 0, medicalX + medicalWidth * 0.4, baseY + FLOOR_SLAB_METERS, localZ - medicalDepth * 0.26, 0.62, feetToMeters(5.6), 1.2, "metal", ["medicine-cabinet", "medical", "restricted", "cover"]);
-      addBox(module, "screen", 0, medicalX, baseY, localZ + medicalDepth * 0.34, medicalWidth * 0.72, feetToMeters(6.5), 0.14, "plaster", ["medical-screen", "wall", "opening"]);
+      addBox(module, "treatment-table", 0, medicalX + medicalWidth * 0.29, baseY + FLOOR_SLAB_METERS, localZ - medicalDepth * 0.14, 1.55, feetToMeters(2.7), 0.92, "metal", ["treatment-table", "medical", "cover"]);
+      addBox(module, "medicine-cabinet", 0, medicalX + medicalWidth * 0.4, baseY + FLOOR_SLAB_METERS, localZ - medicalDepth * 0.34, 0.62, feetToMeters(5.6), 1.2, "metal", ["medicine-cabinet", "medical", "restricted", "cover"]);
+      addBox(module, "nurse-station", 0, medicalX + medicalWidth * 0.27, baseY + FLOOR_SLAB_METERS, localZ + medicalDepth * 0.27, 1.8, feetToMeters(3.4), 1.05, "wood", ["nurse-station", "medical", "cover", "ward-control"]);
+      addBox(module, "screen", 0, medicalX, baseY, localZ + medicalDepth * 0.34, medicalWidth * 0.58, feetToMeters(6.5), 0.14, "plaster", ["medical-screen", "wall", "opening"]);
+      const roofCenter = point(medicalX, localZ);
+      scene.primitives.push(primitive(`${lot.id}-${module.kind}-roof`, "gable", 2, roofCenter.x, baseY + medicalHeight, roofCenter.z, medicalDepth * 1.06 * GRID_METERS, feetToMeters(3.2), medicalWidth * 1.06 * GRID_METERS, "roof", [...common, `function:${module.kind}`, ...module.tags, "medical-roof", "pitched-roof", "medical-wing"], lot.rotation + Math.PI / 2));
+      const canopyX = medicalX - side * (medicalWidth * 0.5 + 0.75);
+      addBox(module, "medical-canopy", 0, canopyX, baseY + feetToMeters(8), localZ, 1.7, 0.18, 2.3, "metal", ["medical-canopy", "stretcher-entry", "shelter", "medical-wing"]);
+      for (const canopySide of [-1, 1]) addCylinder(module, `canopy-support-${canopySide < 0 ? "north" : "south"}`, 0, canopyX - side * 0.55, baseY, localZ + canopySide * 0.86, 0.18, feetToMeters(8), "metal", ["medical-canopy", "structural-support", "stretcher-entry"]);
+      addBox(module, "roof-monitor", 2, medicalX + side * medicalWidth * 0.16, baseY + medicalHeight + feetToMeters(0.5), localZ, 1.45, feetToMeters(2.2), 1.15, "metal", ["medical-roof-monitor", "ventilation", "medical-wing", "vertical-landmark"]);
+      const medicalEntry = point(entryX, localZ);
+      const medicalThreshold = point(side * lot.width * 0.46, localZ);
+      scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "alternate", [
+        { x: medicalThreshold.x, z: medicalThreshold.z, y: baseY },
+        { x: medicalEntry.x, z: medicalEntry.z, y: baseY },
+        { x: center.x, z: center.z, y: baseY },
+      ], { purpose: "movement", traffic: 0.48, schedule: "all" }));
+      if (moduleRoom) {
+        moduleRoom.center = { x: center.x, y: baseY, z: center.z };
+        moduleRoom.sizeCells = { x: medicalWidth * 0.84, z: medicalDepth * 0.84 };
+      }
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-cover`, "cover", center.x, center.z, baseY, 1.5, "Beds, screens and treatment furniture divide the ward into tactical lanes."));
     } else if (module.kind === "greenhouse") {
       const width = Math.max(4, lot.width * 0.46);
