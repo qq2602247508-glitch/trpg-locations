@@ -602,6 +602,43 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
+  it("keeps a non-salt tidal cave monastery under the cave parent grammar", () => {
+    const prompt = "建在潮汐洞穴群中的古老修道院，退潮时出现石路，涨潮时部分区域被淹，有海蚀礼拜堂、僧侣居室、钟塔、藏经洞、潮池庭院和悬崖逃生梯";
+    const first = generateScene({ ...request("tidal-cave-monastery-76", "large", 0.78), prompt }, "adaptive");
+    const repeat = generateScene({ ...request("tidal-cave-monastery-76", "large", 0.78), prompt }, "adaptive");
+    const variation = generateScene({ ...request("tidal-cave-monastery-76-b", "large", 0.78), prompt }, "adaptive");
+
+    expect(first.sceneProgram?.domain).toBe("natural");
+    expect(first.archetype).toBe("cave");
+    expect(first.compositionProgram?.primaryDomain).toBe("cave");
+    expect(first.compositionProgram?.grammarId).toBe("grammar.cave-network-v1");
+    expect(first.buildingInstances?.map((building) => building.archetype)).toEqual(expect.arrayContaining(["shrine", "home", "tower"]));
+    for (const tag of ["cavern", "cave-passage", "sea-eroded-chapel", "monastic-quarters", "bell-tower", "archive", "cavern-tide-pool", "low-tide-stone", "cliff-escape-ladder"]) {
+      expect(hasTag(first, tag), `missing ${tag}`).toBe(true);
+    }
+    expect(first.routes.some((route) => route.id === "tidal-monastery-low-tide-route")).toBe(true);
+    expect(first.routes.some((route) => route.id === "tidal-monastery-cliff-escape-route" && route.kind === "vertical")).toBe(true);
+    expect(first.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(90);
+    expect(first).toEqual(repeat);
+    expect(variation.buildingInstances?.map((building) => building.positionCells)).not.toEqual(first.buildingInstances?.map((building) => building.positionCells));
+    expect(first.diagnostics.valid, first.diagnostics.warnings.join(" | ")).toBe(true);
+    expect(first.diagnostics.warnings).toEqual([]);
+  });
+
+  it("embeds an unfamiliar cave facility without replacing the cave topology", () => {
+    const prompt = "潮汐海蚀洞中的废弃气象观测站，有潮池、盐风侵蚀的仪器室、地下避难库、岩架维修梯和退潮时可走的石脊";
+    const scene = generateScene({ ...request("strange-cave-weather-station", "large", 0.7), prompt }, "adaptive");
+    expect(scene.archetype).toBe("cave");
+    expect(scene.compositionProgram?.primaryDomain).toBe("cave");
+    expect(scene.buildingInstances?.some((building) => building.archetype === "tower")).toBe(true);
+    expect(hasTag(scene, "embedded-building")).toBe(true);
+    expect(hasTag(scene, "weather-operations")).toBe(true);
+    expect(scene.routes.some((route) => route.id === "cave-embedded-building-route")).toBe(true);
+    expect(scene.floors).toBe(4);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+    expect(scene.diagnostics.warnings).toEqual([]);
+  });
+
   it("keeps a hillside noble district under settlement planning", () => {
     const scene = generateScene({ ...request("r12-hillside-settlement", "large", 0.62), prompt: "山坡贵族区，沿等高线道路、三座不同庄园、公共花园、守卫岗亭、仆从巷、山顶钟楼和下层商业街" }, "adaptive");
     expect(scene.sceneProgram?.domain).toBe("settlement");

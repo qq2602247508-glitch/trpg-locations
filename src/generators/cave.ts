@@ -1,4 +1,5 @@
 import type { GeneratedScene, GeneratorContext } from "../schema";
+import { instantiateBuildingModule, type BuildingLot } from "./buildingModule";
 import {
   FLOOR_SLAB_METERS,
   baseScene,
@@ -151,6 +152,209 @@ function addChamberShells(scene: GeneratedScene, chambers: readonly Chamber[], r
   }
 }
 
+/**
+ * Embed an architectural compound into the natural cave graph.  The cave
+ * remains the parent: its chambers, voids, elevation and routes are generated
+ * first, then independent building modules are anchored to actual chamber
+ * floors.  This is intentionally a grammar (monastery = chapel + quarters +
+ * tower + archive + tidal court), not a scene-specific coordinate dump.
+ */
+function addCavernMonasteryCompound(
+  scene: GeneratedScene,
+  context: GeneratorContext,
+  chambers: readonly Chamber[],
+): void {
+  const text = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const monastery = ["修道院", "寺院", "monastery", "abbey", "cloister"].some((term) => text.includes(term));
+  const tidal = ["潮汐", "涨潮", "退潮", "潮池", "海蚀", "tidal", "tide pool", "sea-eroded"].some((term) => text.includes(term));
+  if (!monastery || !tidal || chambers.length < 3) return;
+
+  const ordered = [...chambers].sort((left, right) => right.diameter - left.diameter);
+  const chapelChamber = ordered[0];
+  const quartersChamber = ordered.find((candidate) => candidate.id !== chapelChamber?.id && candidate.diameter >= 7) ?? ordered[1];
+  const towerChamber = ordered.find((candidate) => candidate.id !== chapelChamber?.id && candidate.id !== quartersChamber?.id && candidate.diameter >= 6) ?? ordered[2];
+  if (!chapelChamber || !quartersChamber || !towerChamber) return;
+
+  const embeddedTags = ["cavern-monastery", "embedded-building", "cave-parent", "tidal-cavern"];
+  const addBuilding = (lot: BuildingLot, chamber: Chamber): void => {
+    const instance = instantiateBuildingModule(scene, lot, context.rng.fork(`cavern-monastery:${lot.id}`));
+    const roleTags = lot.id.includes("chapel")
+      ? ["sea-eroded-chapel", "chapel", "shrine"]
+      : lot.id.includes("quarters")
+        ? ["monastic-quarters", "residential"]
+        : ["bell-tower", "tower", "high-ground"];
+    for (const primitiveEntry of scene.primitives) {
+      if (primitiveEntry.tags?.includes(`building-instance:${instance.id}`)) {
+        primitiveEntry.tags = [...new Set([...(primitiveEntry.tags ?? []), ...embeddedTags, ...roleTags])];
+      }
+    }
+    const instanceRecord = scene.buildingInstances?.find((candidate) => candidate.id === instance.id);
+    if (instanceRecord) instanceRecord.detailLevel = "full-interior";
+    connectRooms(scene.rooms, chamber.id, `${lot.id}-room`);
+  };
+
+  const baseLot = (id: string, chamber: Chamber, kind: BuildingLot["kind"], width: number, depth: number): BuildingLot => ({
+    id,
+    kind,
+    x: chamber.x,
+    z: chamber.z,
+    width,
+    depth,
+    rotation: context.rng.fork(`rotation:${id}`).float(-0.18, 0.18),
+    district: "cavern-monastery",
+    seed: `${context.request.seed}/${id}`,
+    lod: "full-interior",
+    floorCount: kind === "tower" ? 2 : 2,
+    baseY: chamber.y + FLOOR_SLAB_METERS,
+    state: "active",
+    climateProfile: "coastal",
+  });
+
+  addBuilding({
+    ...baseLot("tidal-monastery-chapel", chapelChamber, "shrine", 7.2, 6.6),
+    functionalModules: [
+      { id: "chapel-archive", kind: "archive", label: "藏经洞", levelRole: "basement", minimumFootprintCells: 12, tags: ["archive", "scriptorium", "hidden-knowledge"] },
+    ],
+  }, chapelChamber);
+  addBuilding({
+    ...baseLot("tidal-monastery-quarters", quartersChamber, "home", 6.4, 5.8),
+    functionalModules: [
+      { id: "monk-service", kind: "workshop", label: "僧侣生活与修缮室", levelRole: "ground", minimumFootprintCells: 10, tags: ["monastic-quarters", "service"] },
+    ],
+  }, quartersChamber);
+  addBuilding(baseLot("tidal-monastery-bell-tower", towerChamber, "tower", 4.8, 4.8), towerChamber);
+
+  const court = ordered.find((candidate) => ![chapelChamber.id, quartersChamber.id, towerChamber.id].includes(candidate.id)) ?? chambers[chambers.length - 1];
+  if (court) {
+    const poolX = court.x + court.diameter * 0.16;
+    const poolZ = court.z - court.diameter * 0.08;
+    const poolY = court.y + FLOOR_SLAB_METERS + feetToMeters(0.2);
+    scene.primitives.push(
+      water("tidal-monastery-courtyard-pool", 0, poolX, poolY, poolZ, Math.max(2.4, court.diameter * 0.34), 0.18, Math.max(2.2, court.diameter * 0.26), ["cavern-monastery", "tidal-cavern", "tidal-pool", "cavern-tide-pool", "hazard", "watercourse"]),
+    );
+    const stoneCount = 4;
+    const lowTidePoints = [{ x: court.x, z: court.z, y: poolY + 0.06 }];
+    for (let index = 0; index < stoneCount; index += 1) {
+      const t = (index + 1) / (stoneCount + 1);
+      const x = court.x + (poolX - court.x) * t;
+      const z = court.z + (poolZ - court.z) * t;
+      scene.primitives.push(box(`tidal-monastery-stepping-stone-${index + 1}`, 0, x, poolY + 0.09, z, 1.2, FLOOR_SLAB_METERS * 0.46, 1.1, "stone", ["cavern-monastery", "tidal-cavern", "low-tide-stone", "standable", "route"]));
+      lowTidePoints.push({ x, z, y: poolY + 0.1 });
+    }
+    lowTidePoints.push({ x: poolX, z: poolZ, y: poolY + 0.1 });
+    scene.routes.push(createRoute("tidal-monastery-low-tide-route", "alternate", lowTidePoints, { purpose: "movement", traffic: 0.52, schedule: "all" }));
+    scene.tactical.push(
+      tacticalFeature("tidal-monastery-pool-hazard", "hazard", poolX, poolZ, poolY, 2, "The tidal court is traversable at low tide but floods into a hazardous pool at high tide."),
+      tacticalFeature("tidal-monastery-court-chokepoint", "chokepoint", court.x, court.z, court.y, 2, "A narrow stone approach controls the monastery's tidal courtyard."),
+    );
+  }
+
+  const escapeX = towerChamber.x + towerChamber.diameter * 0.42;
+  const escapeZ = towerChamber.z;
+  const escapeTop = towerChamber.y + feetToMeters(10);
+  scene.primitives.push(
+    stairs("tidal-monastery-cliff-escape-ladder", 0, escapeX, towerChamber.y + FLOOR_SLAB_METERS, escapeZ, 0.9, feetToMeters(10), 4.8, "wood", [...embeddedTags, "cliff-escape-ladder", "vertical-route", "standable"], Math.PI / 2),
+  );
+  scene.routes.push(createRoute("tidal-monastery-cliff-escape-route", "vertical", [
+    { x: towerChamber.x, z: towerChamber.z, y: towerChamber.y + FLOOR_SLAB_METERS },
+    { x: escapeX, z: escapeZ, y: escapeTop },
+  ], { purpose: "escape", traffic: 0.34, schedule: "all" }));
+  scene.tactical.push(tacticalFeature("tidal-monastery-cliff-escape", "secret", escapeX, escapeZ, escapeTop, 1, "A cliffside escape ladder reaches a higher ledge above the tide line."));
+}
+
+function addCaveEmbeddedBuilding(scene: GeneratedScene, context: GeneratorContext, chambers: readonly Chamber[]): void {
+  if (scene.buildingInstances && scene.buildingInstances.length > 0) return;
+  const text = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const hasBuiltStructure = [
+    "医院", "警察局", "警局", "博物馆", "酒店", "旅店", "酒馆", "教堂", "神殿", "礼拜堂", "庄园", "宅邸", "堡垒", "要塞",
+    "发电站", "修道院", "寺院", "学院", "火车站", "灯塔", "木屋", "小屋", "猎人屋", "观测站", "气象站", "研究站", "实验室",
+    "工坊", "工厂", "仓库", "哨所", "钟塔", "hospital", "police station", "museum", "hotel", "inn", "tavern", "church", "chapel",
+    "temple", "manor", "fortress", "power station", "monastery", "abbey", "academy", "railway station", "lighthouse", "cabin", "lodge",
+    "observatory", "weather station", "research station", "laboratory", "workshop", "factory", "warehouse", "outpost", "bell tower",
+  ].some((term) => text.includes(term));
+  if (!hasBuiltStructure || chambers.length === 0) return;
+
+  const kind: BuildingLot["kind"] = ["教堂", "神殿", "礼拜堂", "修道院", "寺院", "church", "chapel", "temple", "monastery", "abbey"].some((term) => text.includes(term))
+    ? "shrine"
+    : ["灯塔", "钟塔", "观测站", "气象站", "observatory", "lighthouse", "bell tower"].some((term) => text.includes(term))
+      ? "tower"
+      : ["工厂", "发电站", "工坊", "仓库", "实验室", "factory", "power station", "workshop", "warehouse", "laboratory"].some((term) => text.includes(term))
+        ? "factory"
+        : ["酒馆", "旅店", "酒店", "tavern", "inn", "hotel"].some((term) => text.includes(term))
+          ? "tavern"
+          : ["庄园", "宅邸", "manor", "mansion"].some((term) => text.includes(term))
+            ? "manor"
+            : "home";
+  const siteProfile = ["气象站", "观测站", "weather station", "observatory"].some((term) => text.includes(term))
+    ? "weather-station" as const
+    : ["研究站", "实验室", "research station", "laboratory"].some((term) => text.includes(term))
+      ? "field-station" as const
+      : undefined;
+  const chamber = [...chambers].sort((left, right) => right.diameter - left.diameter)[0];
+  if (!chamber) return;
+  const lot: BuildingLot = {
+    id: "cave-embedded-building",
+    kind,
+    x: chamber.x,
+    z: chamber.z,
+    width: Math.min(7.2, Math.max(5, chamber.diameter - 1.4)),
+    depth: Math.min(6.6, Math.max(4.8, chamber.diameter - 1.8)),
+    rotation: context.rng.fork("cave-embedded-building-rotation").float(-0.24, 0.24),
+    district: "cave-embedded-site",
+    seed: `${context.request.seed}/cave-embedded-building`,
+    lod: "full-interior",
+    floorCount: kind === "tower" ? 2 : 1,
+    baseY: chamber.y + FLOOR_SLAB_METERS,
+    state: "active",
+    siteProfile,
+    climateProfile: "coastal",
+  };
+  const instance = instantiateBuildingModule(scene, lot, context.rng.fork("cave-embedded-building"));
+  for (const primitiveEntry of scene.primitives) {
+    if (!primitiveEntry.tags?.includes(`building-instance:${instance.id}`)) continue;
+    primitiveEntry.tags = [...new Set([...(primitiveEntry.tags ?? []), "embedded-building", "building", "interior", "foundation", "cave-parent", "cavern-architecture", "cave-access"])];
+  }
+  connectRooms(scene.rooms, chamber.id, `${lot.id}-room`);
+  scene.routes.push(createRoute("cave-embedded-building-route", "alternate", [
+    { x: chamber.x, z: chamber.z + chamber.diameter * 0.58, y: chamber.y + FLOOR_SLAB_METERS },
+    { x: chamber.x, z: chamber.z, y: chamber.y + FLOOR_SLAB_METERS },
+  ], { purpose: "movement", traffic: 0.44, schedule: "all" }));
+  scene.tactical.push(tacticalFeature("cave-embedded-building-entrance", "entrance", chamber.x, chamber.z + chamber.diameter * 0.58, chamber.y, 1, "A cave passage arrives at the independently generated building entrance."));
+}
+
+function addCaveEnvironmentalPromptAtoms(scene: GeneratedScene, context: GeneratorContext, chambers: readonly Chamber[]): void {
+  const text = context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const seaCave = ["海蚀洞", "潮汐洞穴", "潮汐洞", "sea cave", "tidal cavern"].some((term) => text.includes(term));
+  const wantsPool = ["潮池", "潮汐池", "tide pool", "tidal pool"].some((term) => text.includes(term));
+  const wantsLowTideRoute = ["退潮", "低潮", "石路", "low tide", "ebb tide", "stone path"].some((term) => text.includes(term));
+  if (seaCave || wantsPool) {
+    for (const primitiveEntry of scene.primitives) {
+      if (!primitiveEntry.tags?.some((tag) => tag === "cave-wall" || tag === "cavern" || tag === "chamber-shell")) continue;
+      primitiveEntry.tags = [...new Set([...(primitiveEntry.tags ?? []), ...(seaCave ? ["sea-cave"] : []), "tidal-cavern"])];
+    }
+  }
+  if (!wantsPool || chambers.length === 0 || scene.primitives.some((primitiveEntry) => primitiveEntry.tags?.includes("cavern-tide-pool") || primitiveEntry.tags?.includes("tidal-pool"))) return;
+  const chamber = [...chambers].sort((left, right) => right.diameter - left.diameter)[chambers.length > 1 ? 1 : 0];
+  if (!chamber) return;
+  const poolY = chamber.y + FLOOR_SLAB_METERS + 0.04;
+  const poolX = chamber.x + chamber.diameter * 0.16;
+  const poolZ = chamber.z - chamber.diameter * 0.12;
+  scene.primitives.push(water("cave-prompt-tide-pool", 0, poolX, poolY, poolZ, Math.max(2.2, chamber.diameter * 0.3), 0.18, Math.max(2, chamber.diameter * 0.24), ["sea-cave", "tidal-cavern", "tidal-pool", "cavern-tide-pool", "watercourse", "hazard"]));
+  scene.tactical.push(tacticalFeature("cave-prompt-tide-pool-hazard", "hazard", poolX, poolZ, poolY, 2, "A tidal pool fills this cave chamber as the tide rises."));
+  if (wantsLowTideRoute) {
+    const points = [{ x: chamber.x, z: chamber.z, y: poolY + 0.08 }];
+    for (let index = 0; index < 3; index += 1) {
+      const t = (index + 1) / 4;
+      const x = chamber.x + (poolX - chamber.x) * t;
+      const z = chamber.z + (poolZ - chamber.z) * t;
+      scene.primitives.push(box(`cave-prompt-low-tide-stone-${index + 1}`, 0, x, poolY + 0.1, z, 1.15, FLOOR_SLAB_METERS * 0.42, 1.05, "stone", ["sea-cave", "tidal-cavern", "low-tide-stone", "standable", "route"]));
+      points.push({ x, z, y: poolY + 0.1 });
+    }
+    points.push({ x: poolX, z: poolZ, y: poolY + 0.1 });
+    scene.routes.push(createRoute("cave-prompt-low-tide-route", "alternate", points, { purpose: "movement", traffic: 0.4, schedule: "all" }));
+  }
+}
+
 const ANCHORS = [
   { x: 0.15, z: 0.32 },
   { x: 0.34, z: 0.16 },
@@ -279,6 +483,9 @@ export function generateCave(context: GeneratorContext): GeneratedScene {
     }
   }
   addChamberShells(scene, chambers, rng.fork("chamber-shells"));
+  addCavernMonasteryCompound(scene, context, chambers);
+  addCaveEmbeddedBuilding(scene, context, chambers);
+  addCaveEnvironmentalPromptAtoms(scene, context, chambers);
 
   const ledgeCandidates = chambers.slice(1);
   const ledgeCount = Math.min(ledgeCandidates.length, rng.int(1, request.size === "large" ? 3 : 2));
@@ -328,6 +535,16 @@ export function generateCave(context: GeneratorContext): GeneratedScene {
   // Cave "floor height" is a vertical envelope rather than a storey: it must
   // contain the highest shelf plus enough headroom to play on it.
   scene.floorHeightFeet = [Math.ceil((highestWalkableY + feetToMeters(11)) / 0.3048)];
+  const compoundText = request.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const cavernMonastery = ["修道院", "寺院", "monastery", "abbey", "cloister"].some((term) => compoundText.includes(term))
+    && ["潮汐", "涨潮", "退潮", "潮池", "海蚀", "tidal", "tide pool", "sea-eroded"].some((term) => compoundText.includes(term));
+  if (scene.buildingInstances && scene.buildingInstances.length > 0) {
+    scene.floors = 4;
+    scene.floorHeightFeet = [12, 10, 10, 12];
+    scene.floorLabels = cavernMonastery
+      ? ["洞穴与礼拜堂/1F", "钟塔与居室上层", "屋顶与高架", "藏经洞/B1"]
+      : ["洞穴与嵌入建筑/1F", "建筑上层", "屋顶与洞穴高架", "地下储藏/B1"];
+  }
 
   return scene;
 }

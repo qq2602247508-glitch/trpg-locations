@@ -10,10 +10,10 @@ export interface EmbeddedFacilityCapabilities {
 const NATURAL_PARENT_TERMS = [
   "森林", "树林", "林间", "巨树", "树根", "山地", "高山", "山顶", "山脊", "风化岩脊", "峰顶", "山坡", "岩坡", "裸岩", "峭壁", "山谷", "河谷", "峡谷", "高原", "荒原", "草原", "沙漠",
   "沼泽", "湿地", "泥炭", "泥沼", "红树林", "海岸", "海崖", "岛屿", "冻土", "冰原", "冰盖", "冰帽", "雪原", "极地", "冰川", "火山", "熔岩",
-  "裂谷", "地裂", "深渊", "陨石坑", "撞击坑", "流星坑",
+  "裂谷", "地裂", "深渊", "陨石坑", "撞击坑", "流星坑", "洞穴", "洞窟", "岩窟", "溶洞", "海蚀洞", "潮汐洞穴", "洞穴群",
   "forest", "woodland", "tree", "mountain", "mountain top", "ridge", "weathered rock ridge", "summit", "rock slope", "bare rock", "cliff", "valley", "canyon", "plateau", "moor", "steppe", "desert",
   "swamp", "wetland", "bog", "peat", "mangrove", "coast", "cliff", "island", "tundra", "ice", "ice sheet", "ice cap", "snowfield", "polar", "glacier", "volcanic", "lava",
-  "rift", "chasm", "fissure", "impact crater", "meteor crater",
+  "rift", "chasm", "fissure", "impact crater", "meteor crater", "cave", "cavern", "grotto", "sea cave", "tidal cavern", "cave network",
 ] as const;
 
 const SHELTER_TERMS = [

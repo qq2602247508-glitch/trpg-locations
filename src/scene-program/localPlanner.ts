@@ -79,6 +79,11 @@ function inferDomain(text: string, requestedKind: SceneKind): { domain: SceneDom
     "潮汐洞穴", "洞穴群", "洞窟群", "洞穴网络", "海蚀洞群",
     "tidal cavern", "cavern network", "cave network", "sea-cave complex",
   ]) && has(text, ["修道院", "寺院", "monastery", "abbey", "cloister"]);
+  // The mature salt-crystal monastery motif is a true multi-building
+  // settlement compound. Other cave monasteries remain cave-owned sites:
+  // chambers and tide routes are the macro structure, while chapel, quarters
+  // and bell tower are embedded children.
+  if (hasCavernMonasteryCompound && !has(text, ["盐晶", "salt crystal"])) return { domain: "natural", primaryKind: "cave" };
   if (hasCompoundSettlement || hasCavernMonasteryCompound) return { domain: "settlement", primaryKind: "settlement" };
   const hasCompoundRoadSite = has(text, ["驿站", "road station", "coach stop"])
     && has(text, ["主路", "桥", "马厩", "收费岗", "仓库", "main road", "bridge", "stable", "toll", "warehouse"]);

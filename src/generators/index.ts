@@ -275,9 +275,12 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   let program = suppliedProgram ?? planSceneProgramLocally(normalized.prompt, kind);
   let primary = kind === "adaptive" ? program.primaryKind : kind;
   const programText = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
-  const explicitBuildingNouns = ["精神病院", "医院", "警察局", "警局", "博物馆", "酒店", "旅店", "教堂", "神殿", "庄园", "宅邸", "堡垒", "要塞", "发电站", "修道院", "学院", "火车站", "hospital", "sanatorium", "police station", "museum", "hotel", "church", "temple", "manor", "fortress", "power station", "monastery", "academy", "railway station"];
+  const explicitBuildingNouns = [
+    "精神病院", "医院", "警察局", "警局", "博物馆", "酒店", "旅店", "酒馆", "教堂", "神殿", "礼拜堂", "庄园", "宅邸", "堡垒", "要塞", "发电站", "修道院", "寺院", "学院", "火车站", "灯塔", "木屋", "小屋", "猎人屋", "观测站", "气象站", "研究站", "实验室", "工坊", "工厂", "仓库", "哨所", "钟塔",
+    "hospital", "sanatorium", "police station", "museum", "hotel", "inn", "tavern", "church", "chapel", "temple", "manor", "fortress", "power station", "monastery", "abbey", "academy", "railway station", "lighthouse", "cabin", "lodge", "observatory", "weather station", "research station", "laboratory", "workshop", "factory", "warehouse", "outpost", "bell tower",
+  ];
   const hasExplicitBuilding = explicitBuildingNouns.some((term) => programText.includes(term));
-  const strongSettlementNouns = ["城镇", "村镇", "村庄", "村落", "渔猎村", "市场村", "聚居地", "街区", "港区", "港口区", "港镇", "采矿营地", "矿业营地", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇", "town", "village", "market village", "district", "harbor", "port town", "mining camp", "water city", "canal city", "tower city", "megastructure city", "settlement"];
+  const strongSettlementNouns = ["城镇", "村镇", "村庄", "村落", "灯塔村", "海岸村", "海崖村", "渔村", "渔猎村", "市场村", "港村", "走私港村", "聚居地", "街区", "港区", "港口区", "港镇", "采矿营地", "矿业营地", "贵族区", "贫民区", "商业区", "住宅区", "殖民地区", "深水城", "水城", "运河城", "塔楼城市", "巨塔城市", "城市分布在", "聚落", "小镇", "town", "village", "lighthouse village", "coastal village", "harbor village", "market village", "district", "harbor", "port town", "mining camp", "water city", "canal city", "tower city", "megastructure city", "settlement"];
   const hasExplicitCamp = ["营地", "camp"].some((term) => programText.includes(term));
   const hasStrongSettlement = strongSettlementNouns.some((term) => programText.includes(term))
     || (hasExplicitCamp && !hasNaturalParentContext(programText));
@@ -285,6 +288,16 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   // to be a cabin, observatory, shrine, or field station. Composite wilderness
   // ownership applies only when the prompt describes a lone embedded facility.
   const wildernessBuildingOwnsSite = !hasStrongSettlement && shouldComposeWildernessFacility(programText);
+  // A natural parent may contain a substantial child building without
+  // becoming a settlement.  Keep the parent grammar in charge for cave,
+  // rift, glacier, forest, etc.; the child is instantiated through the
+  // parent's embedded-building interface.  The salt-crystal monastery has a
+  // mature settlement-scale compound grammar and remains on that path.
+  const naturalCompoundOwnsSite = kind === "adaptive"
+    && !hasStrongSettlement
+    && !programText.includes("盐晶")
+    && hasExplicitBuilding
+    && ["cave", "forest", "river", "volcanic", "crater", "rift", "ice", "swamp", "floating"].includes(composition.primaryDomain);
   const industrialDistrictOwnsSite = programText.includes("工业区") && !["废弃工业区", "工业遗址", "industrial ruin"].some((term) => programText.includes(term));
   const ownsSite = !wildernessBuildingOwnsSite && (hasStrongSettlement || industrialDistrictOwnsSite || (!hasExplicitBuilding && ["城市", "city"].some((term) => programText.includes(term))));
   // Parent-site ownership is a hard schema constraint, not a model opinion.
@@ -301,10 +314,28 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
     program = planSceneProgramLocally(normalized.prompt, kind);
     primary = "wilderness";
   }
+  if (naturalCompoundOwnsSite && composition.primaryDomain === "cave") {
+    // Cave compounds need chamber shells and vertical voids, not a town
+    // road/parcel planner.  The cave generator will place the child building
+    // on a real chamber floor and preserve all parent routes.
+    program = planSceneProgramLocally(normalized.prompt, kind);
+    primary = "cave";
+  } else if (naturalCompoundOwnsSite && primary !== "dungeon" && primary !== "settlement") {
+    program = planSceneProgramLocally(normalized.prompt, kind);
+    primary = "wilderness";
+  }
   // An explicit child building noun must not steal ownership from a named
   // natural parent. "山顶气象修道院" is a mountain site with a monastery
   // child, not a generic institution floating on a blank slab.
-  if (kind === "adaptive" && primary !== "dungeon" && primary !== "settlement" && !ownsSite && !wildernessBuildingOwnsSite && hasExplicitBuilding) primary = "building";
+  if (kind === "adaptive"
+    && primary !== "dungeon"
+    && primary !== "settlement"
+    && primary !== "tower"
+    && primary !== "tavern"
+    && !ownsSite
+    && !wildernessBuildingOwnsSite
+    && !naturalCompoundOwnsSite
+    && hasExplicitBuilding) primary = "building";
   // Multi-storey hospitality prompts need the same auditable room graph as
   // institutions: cellar, attic, service stair and roof pursuit cannot be
   // represented by the compact encounter-only tavern grammar.

@@ -31,7 +31,7 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   // two-bank rift. The parent material/process owns the composition domain.
   if (has(text, ["冰原", "冰盖", "冰川", "冻土", "雪原", "ice field", "ice sheet", "glacier", "tundra", "permafrost"])) return "ice";
   if (has(text, ["浮空岛", "浮空岩岛", "浮岛", "空岛", "悬空岛", "悬空石盘", "漂浮岩岛", "floating island", "sky island", "levitating island"])) return "floating";
-  if (has(text, ["洞穴", "洞窟", "岩窟", "溶洞", "地底洞室", "cave", "cavern", "grotto"])) return "cave";
+  if (has(text, ["洞穴", "洞窟", "岩窟", "溶洞", "地底洞室", "海蚀洞", "潮汐洞穴", "洞穴群", "cave", "cavern", "grotto", "sea cave", "tidal cavern", "cave network"])) return "cave";
   if (has(text, ["裂谷", "裂缝", "裂隙", "深渊", "rift", "crevasse", "chasm", "ravine"])) return "rift";
   if (has(text, ["火山", "熔岩", "岩浆", "volcano", "volcanic", "caldera", "lava"])) return "volcanic";
   // Mangroves are tidal wetlands. They must not be claimed by the generic
@@ -111,6 +111,20 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
     else add("salt-cavern-route", "洞穴垂直交通", ["vertical-opening"], "critical");
     add("salt-cavern-pool", "洞底潮池", ["cavern-tide-pool", "watercourse"], "major");
     add("bell-tower", "钟塔", ["tower", "high-ground"], "major");
+    return output;
+  }
+  const cavernMonastery = domain === "cave"
+    && has(text, ["修道院", "寺院", "monastery", "abbey", "cloister"])
+    && has(text, ["潮汐", "涨潮", "退潮", "潮池", "海蚀", "tidal", "high tide", "low tide", "sea-eroded"]);
+  if (cavernMonastery) {
+    add("cavern-parent", "潮汐洞穴群", ["cavern", "cave-passage"], "critical");
+    add("cavern-chapel", "海蚀礼拜堂", ["sea-eroded-chapel", "shrine"], "critical");
+    add("monastic-quarters", "僧侣居室", ["monastic-quarters", "residential"], "critical");
+    add("cavern-bell-tower", "钟塔", ["bell-tower", "high-ground"], "critical");
+    add("scripture-cave", "藏经洞", ["archive", "underground"], "critical");
+    add("tidal-court", "潮池庭院", ["cavern-tide-pool", "tidal-pool"], "critical");
+    add("low-tide-route", "退潮石路", ["low-tide-stone", "route"], "critical");
+    add("cliff-escape", "悬崖逃生梯", ["cliff-escape-ladder", "vertical-route"], "critical");
     return output;
   }
   const mountainMonastery = shouldComposeWildernessFacility(text)
@@ -204,6 +218,8 @@ export function compileSceneComposition(request: GenerationRequest, source: Scen
   const lexicalDomain = domainFor(request.prompt);
   const text = normalized(request.prompt);
   const settlementParent = hasSettlementParent(text);
+  const subordinateCaveFeature = settlementParent
+    && has(text, ["地下海蚀洞", "地下洞穴", "秘密洞穴", "洞穴入口", "underground sea cave", "underground cave", "secret cave", "cave entrance"]);
   const retrievedDomain = resolveCapabilityDomain(retrievedCapabilityIds);
   // A named natural parent with an embedded facility already has deterministic
   // macro ownership in the scene planner. Retrieval may enrich the child, but
@@ -213,7 +229,9 @@ export function compileSceneComposition(request: GenerationRequest, source: Scen
   // fungal greenhouse, mine, bridge, or water atom, but it cannot turn the
   // whole village into a forest merely because one child capability is close
   // in embedding space.
-  const domain = lexicalDomain === "generic"
+  const domain = subordinateCaveFeature
+    ? "settlement"
+    : lexicalDomain === "generic"
     ? settlementParent
       ? "settlement"
       : shouldComposeWildernessFacility(request.prompt)
