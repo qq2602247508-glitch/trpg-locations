@@ -981,7 +981,7 @@ describe("scene generators", () => {
   it("builds a salt wasteland parent for an embedded plague oratory", () => {
     const prompt = "盐碱荒原中的瘟疫隔离礼拜所，有露天净化庭、伤员病房、祈祷小堂、地下焚化燃料库和屋顶钟火信号台";
     const scene = generateScene({ ...request("salt-waste-oratory-contract", "medium", 0.71), prompt }, "adaptive");
-    expect(scene.archetype).toBe("dry-riverbed");
+    expect(scene.archetype).toBe("salt-waste");
     expect(scene.title).toBe("SceneProgram · The Saltbound Quarantine Oratory");
     expect(hasTag(scene, "salt-wasteland")).toBe(true);
     expect(hasTag(scene, "brine-basin")).toBe(true);

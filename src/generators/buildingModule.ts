@@ -1634,7 +1634,11 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     addRotatedBox("quarantine-gate-left", primaryOffset.x + width * 0.22, primaryOffset.z, 0.1, feetToMeters(7), depth * 0.32, baseY, "metal", ["controlled-threshold", "screening-gate", "opening"]);
     addRotatedBox("quarantine-gate-right", primaryOffset.x + width * 0.22, primaryOffset.z - depth * 0.38, 0.1, feetToMeters(7), depth * 0.18, baseY, "metal", ["controlled-threshold", "screening-gate", "opening"]);
     addRotatedBox("quarantine-nurse-counter", primaryOffset.x + width * 0.34, primaryOffset.z + depth * 0.24, 0.72, feetToMeters(3.2), depth * 0.22, baseY + FLOOR_SLAB_METERS, "metal", ["nurse-counter", "quarantine-reception", "cover"]);
-    const deconCourtZ = primaryOffset.z + depth * 0.68;
+    const servicePart = envelope.parts.find((part) => part.purpose === "service");
+    const deconCourtZ = Math.max(
+      primaryOffset.z + depth * 0.68,
+      servicePart ? servicePart.offset.z + servicePart.size.z / 2 + Math.max(2, depth * 0.12) : Number.NEGATIVE_INFINITY,
+    );
     const deconCourt = point(primaryOffset.x, deconCourtZ);
     addRotatedBox("quarantine-decontamination-court", primaryOffset.x, deconCourtZ, Math.max(4.4, width * 0.5), FLOOR_SLAB_METERS, Math.max(3.2, depth * 0.34), baseY, "stone", ["floor", "standable", "decontamination-court", "open-air-court", "quarantine"]);
     addRotatedBox("quarantine-drainage-channel", primaryOffset.x, deconCourtZ, Math.max(3.4, width * 0.4), 0.12, 0.42, baseY + 0.04, "water", ["decontamination-court", "drainage-channel", "wash-zone"]);
@@ -1644,8 +1648,14 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     }
     addRotatedBox("quarantine-court-screen-west", primaryOffset.x - Math.max(4.4, width * 0.5) * 0.5, deconCourtZ, 0.16, feetToMeters(5.2), Math.max(2.4, depth * 0.26), baseY, "metal", ["decontamination-court", "screen", "cover", "controlled-threshold"]);
     addRotatedBox("quarantine-court-screen-east", primaryOffset.x + Math.max(4.4, width * 0.5) * 0.5, deconCourtZ, 0.16, feetToMeters(5.2), Math.max(2.4, depth * 0.26), baseY, "metal", ["decontamination-court", "screen", "cover", "controlled-threshold"]);
+    const serviceDoorP = servicePart
+      ? point(servicePart.offset.x, servicePart.offset.z + servicePart.size.z / 2 + 0.18)
+      : deconCourt;
     scene.routes.push(createRoute(`${lot.id}-decontamination-court-route`, "alternate", [
       { x: publicP.x, z: publicP.z, y: baseY },
+      { x: frontDoorP.x, z: frontDoorP.z, y: baseY },
+      { x: approachP.x, z: approachP.z, y: baseY },
+      { x: serviceDoorP.x, z: serviceDoorP.z, y: baseY },
       { x: deconCourt.x, z: deconCourt.z, y: baseY },
     ], { purpose: "movement", traffic: 0.38, schedule: "all" }));
     scene.tactical.push(tacticalFeature(`${lot.id}-decontamination-court-choke`, "chokepoint", deconCourt.x, deconCourt.z, baseY, 1.5, "Screens and wash pillars turn the open-air decontamination court into a controlled tactical threshold."));
@@ -1678,7 +1688,10 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       const doorGap = Math.min(1.35, Math.max(0.9, Math.min(extension.size.x, extension.size.z) * 0.32));
       const horizontalWall = (id: "back" | "front", z: number, cutaway: boolean) => {
         const extra = ["wall", "building-shell", "envelope-part", ...(cutaway ? ["focus-cutaway"] : [])];
-        if (connectionSide !== id) {
+        const authoredServiceDoor = lot.siteProfile === "quarantine-station"
+          && extension.purpose === "service"
+          && id === "front";
+        if (connectionSide !== id && !authoredServiceDoor) {
           addRotatedBox(`envelope-${extension.id}-${id}`, extension.offset.x, z, extension.size.x, extensionHeight, 0.2, baseY, generated.material, extra);
           return;
         }
@@ -1689,7 +1702,15 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
       };
       const verticalWall = (id: "west" | "east", x: number, cutaway: boolean) => {
         const extra = ["wall", "building-shell", "envelope-part", ...(cutaway ? ["focus-cutaway"] : [])];
-        if (connectionSide !== id) {
+        // The quarantine decontamination route enters the screened service
+        // link from the west side. This is an authored service doorway, not a
+        // validator exception: split the wall into two real segments so the
+        // route has a physical opening and the exterior silhouette remains
+        // intact.
+        const authoredServiceDoor = lot.siteProfile === "quarantine-station"
+          && extension.id === "screened-link"
+          && id === "west";
+        if (connectionSide !== id && !authoredServiceDoor) {
           addRotatedBox(`envelope-${extension.id}-${id}`, x, extension.offset.z, 0.2, extensionHeight, extension.size.z, baseY, generated.material, extra);
           return;
         }

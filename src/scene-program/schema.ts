@@ -10,10 +10,10 @@ export const REGION_FUNCTIONS = ["approach", "circulation", "combat", "investiga
 export const ELEVATION_ROLES = ["sunken", "low", "level", "raised", "high", "vertical"] as const;
 export const RELATION_TYPES = ["connects", "contains", "overlooks", "controls", "borders", "crosses", "runs-along", "hidden-from", "above", "below"] as const;
 export const MORPHOLOGY_OPERATORS = [
-  "plain", "basin", "ridge", "terraces", "channel-cut", "dry-channel", "ravine", "rift", "impact-crater", "caldera", "radial-fractures", "lava-flow", "wetland-pools", "burial-field", "crypt-sink", "ruin-grid", "coastline", "urban-blocks", "interior-partitions", "vertical-stack", "floating-islands",
+  "plain", "basin", "ridge", "terraces", "channel-cut", "dry-channel", "salt-crust", "ravine", "rift", "impact-crater", "caldera", "radial-fractures", "lava-flow", "wetland-pools", "burial-field", "crypt-sink", "ruin-grid", "coastline", "urban-blocks", "interior-partitions", "vertical-stack", "floating-islands",
 ] as const;
 export const COVERAGE_OPERATORS = [
-  "woodland", "fungal", "grave-markers", "dragon-bones", "wreck-field", "ash", "snow", "ice", "rubble", "urban-buildings", "industrial-equipment", "institutional-rooms", "residential-rooms", "floating-islands", "evidence", "sparse", "dense",
+  "woodland", "fungal", "grave-markers", "dragon-bones", "wreck-field", "ash", "snow", "ice", "salt-waste", "brine", "rubble", "urban-buildings", "industrial-equipment", "institutional-rooms", "residential-rooms", "floating-islands", "evidence", "sparse", "dense",
 ] as const;
 
 export type SceneDomain = typeof SCENE_DOMAINS[number];

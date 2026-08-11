@@ -83,6 +83,7 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   if (has(text, ["洞穴", "洞窟", "岩窟", "溶洞", "地底洞室", "海蚀洞", "潮汐洞穴", "洞穴群", "cave", "cavern", "grotto", "sea cave", "tidal cavern", "cave network"])) return "cave";
   if (has(text, ["裂谷", "裂缝", "裂隙", "深渊", "rift", "crevasse", "chasm", "ravine"])) return "rift";
   if (has(text, ["火山", "熔岩", "岩浆", "volcano", "volcanic", "caldera", "lava"])) return "volcanic";
+  if (has(text, ["盐碱荒原", "盐碱地", "盐沼荒原", "盐壳荒地", "salt wasteland", "salt flat", "salt flats", "salt desert"])) return "salt-waste";
   // Mangroves are tidal wetlands. They must not be claimed by the generic
   // forest branch merely because the Chinese word contains “树林”.
   if (has(text, ["红树林", "mangrove"])) return "swamp";
@@ -105,6 +106,7 @@ function densityProfile(domain: string, value: number): DomainDensityProfile {
   if (domain === "river") return { domain, normalized: density, structuralComplexity: 0.35 + density * 0.5, routeComplexity: 0.3 + density * 0.45, hazardFrequency: 0.2 + density * 0.55, ecologicalCoverage: 0.2 + density * 0.55, landmarkFrequency: 0.2 + density * 0.45, detailFrequency: 0.15 + density * 0.7 };
   if (domain === "volcanic" || domain === "crater" || domain === "rift") return { domain, normalized: density, structuralComplexity: 0.4 + density * 0.55, routeComplexity: 0.25 + density * 0.45, hazardFrequency: 0.3 + density * 0.65, ecologicalCoverage: 0.02, landmarkFrequency: 0.25 + density * 0.55, detailFrequency: 0.2 + density * 0.75 };
   if (domain === "ice") return { domain, normalized: density, structuralComplexity: 0.34 + density * 0.58, routeComplexity: 0.28 + density * 0.5, hazardFrequency: 0.22 + density * 0.62, ecologicalCoverage: 0.01, landmarkFrequency: 0.18 + density * 0.5, detailFrequency: 0.18 + density * 0.72 };
+  if (domain === "salt-waste") return { domain, normalized: density, structuralComplexity: 0.44 + density * 0.5, routeComplexity: 0.34 + density * 0.48, hazardFrequency: 0.42 + density * 0.5, ecologicalCoverage: 0.04 + density * 0.12, landmarkFrequency: 0.3 + density * 0.52, detailFrequency: 0.24 + density * 0.7 };
   if (domain === "floating") return { domain, normalized: density, structuralComplexity: 0.45 + density * 0.52, routeComplexity: 0.4 + density * 0.52, hazardFrequency: 0.42 + density * 0.5, ecologicalCoverage: 0.04 + density * 0.16, landmarkFrequency: 0.4 + density * 0.5, detailFrequency: 0.22 + density * 0.7 };
   if (domain === "cave") return { domain, normalized: density, structuralComplexity: 0.42 + density * 0.5, routeComplexity: 0.38 + density * 0.5, hazardFrequency: 0.3 + density * 0.58, ecologicalCoverage: 0.05 + density * 0.32, landmarkFrequency: 0.2 + density * 0.48, detailFrequency: 0.2 + density * 0.72 };
   return { domain: "generic", normalized: density, structuralComplexity: 0.25 + density * 0.45, routeComplexity: 0.25 + density * 0.35, hazardFrequency: 0.15 + density * 0.35, ecologicalCoverage: 0.15 + density * 0.45, landmarkFrequency: 0.15 + density * 0.35, detailFrequency: 0.2 + density * 0.65 };
@@ -117,15 +119,15 @@ function styleFor(prompt: string, domain: string): StyleProgram {
     : has(text, ["红树林", "mangrove"]) ? ["mangrove", "wood", "mud", "water"]
       : has(text, ["空心古树", "古树内部", "hollow tree"]) ? ["bark", "wood", "root", "moss"]
         : has(text, ["冻土", "冰原", "冰川", "tundra", "glacier", "ice field"]) ? ["ice", "snow", "weathered-metal", "wood"]
-        : domain === "volcanic" ? ["basalt", "obsidian", "lava"] : domain === "floating" ? ["rock", "dark-stone", "metal", "void"] : domain === "cave" ? ["rock", "mineral", "water", "fungus"] : domain === "swamp" ? ["mud", "water", "reed", "wood", "moss"] : domain === "forest" ? ["wood", "moss", "earth", "stone"] : domain === "river" ? ["water", "rock", "earth", "moss"] : ["rock", "earth"];
+      : domain === "volcanic" ? ["basalt", "obsidian", "lava"] : domain === "salt-waste" ? ["salt-crust", "brine", "stone", "bleached-wood"] : domain === "floating" ? ["rock", "dark-stone", "metal", "void"] : domain === "cave" ? ["rock", "mineral", "water", "fungus"] : domain === "swamp" ? ["mud", "water", "reed", "wood", "moss"] : domain === "forest" ? ["wood", "moss", "earth", "stone"] : domain === "river" ? ["water", "rock", "earth", "moss"] : ["rock", "earth"];
   const climate = has(text, ["盐晶", "salt crystal"]) ? "cold-dry-cavern"
     : has(text, ["红树林", "mangrove"]) ? "tropical-wet"
       : has(text, ["冰", "glacier", "snow"]) ? "cold"
-        : domain === "volcanic" ? "hot-dry" : domain === "floating" ? "exposed-high-altitude" : domain === "cave" ? "subterranean" : domain === "swamp" ? "humid-wetland" : domain === "river" || domain === "forest" ? "temperate-wet" : "neutral";
+      : domain === "volcanic" ? "hot-dry" : domain === "salt-waste" ? "cold-dry-salt" : domain === "floating" ? "exposed-high-altitude" : domain === "cave" ? "subterranean" : domain === "swamp" ? "humid-wetland" : domain === "river" || domain === "forest" ? "temperate-wet" : "neutral";
   const silhouetteTags = has(text, ["盐晶", "salt crystal"]) ? ["three-floating-levels", "crystal-spires", "cavern-void"]
     : has(text, ["红树林", "mangrove"]) ? ["root-canopy", "tidal-channel", "boardwalks"]
       : has(text, ["空心古树", "古树内部", "hollow tree"]) ? ["bark-shell", "spiral-cavity", "canopy-platform"]
-        : domain === "floating" ? ["three-height-bands", "exposed-undersides", "void-gaps"] : domain === "cave" ? ["connected-chambers", "rock-ledges", "dark-passages"] : domain === "swamp" ? ["broken-dry-islands", "water-pools", "raised-boardwalks"] : domain === "forest" ? ["layered-canopy", "irregular-clearings"] : domain === "river" ? ["incised-valley", "descending-water"] : domain === "volcanic" ? ["broken-rim", "radial-fractures"] : ["broken-rim"];
+      : domain === "salt-waste" ? ["broken-salt-crust", "brine-basins", "salt-ridges", "fractured-route"] : domain === "floating" ? ["three-height-bands", "exposed-undersides", "void-gaps"] : domain === "cave" ? ["connected-chambers", "rock-ledges", "dark-passages"] : domain === "swamp" ? ["broken-dry-islands", "water-pools", "raised-boardwalks"] : domain === "forest" ? ["layered-canopy", "irregular-clearings"] : domain === "river" ? ["incised-valley", "descending-water"] : domain === "volcanic" ? ["broken-rim", "radial-fractures"] : ["broken-rim"];
   return { era, climate, materialFamily, paletteTags: materialFamily, silhouetteTags, forbiddenTags: domain === "volcanic" ? ["living-tree", "lush-grass"] : [] };
 }
 
@@ -224,6 +226,11 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
     if (has(text, ["陷阱沟", "壕沟", "trench", "ditch"])) add("wetland-trench", "陷阱沟", ["trench", "hazard"], "major");
     if (has(text, ["倒木防线", "倒木", "fallen-log defense", "log barricade"])) add("wetland-log-defense", "倒木防线", ["fallen-log-defense", "cover"], "major");
   }
+  if (domain === "salt-waste") {
+    add("salt-crust-field", "盐壳高地与破碎盐面", ["salt-wasteland", "salt-crust", "salt-ridge"], "critical");
+    add("brine-basin", "卤水盆地", ["brine-basin", "brine-pool", "hazard"], "critical");
+    add("salt-fracture-route", "盐裂缝与交替路线", ["salt-fracture", "route"], "major");
+  }
   if (domain === "river") {
     const waterCity = hasExplicitWaterCity(text);
     if (waterCity) {
@@ -301,6 +308,7 @@ export function compileSceneComposition(request: GenerationRequest, source: Scen
     ice: "motif.eroded-ice-ridges",
     floating: "motif.three-tier-floating-stack",
     cave: "motif.connected-cavern-graph",
+    "salt-waste": "motif.salt-crust-basin",
   }[domain];
   if (domainMotif) motifIds.push(domainMotif);
   if (isWaterCity) motifIds.push("motif.water-city-quays");

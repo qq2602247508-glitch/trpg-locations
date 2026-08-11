@@ -29,7 +29,7 @@ import {
   water,
 } from "./shared";
 
-export type WildernessArchetype = "river-valley" | "dry-riverbed" | "impact-crater" | "volcanic" | "infernal-waste" | "burial-ground" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp" | "floating-islands" | "industrial-ruin" | "coral-tide";
+export type WildernessArchetype = "river-valley" | "dry-riverbed" | "salt-waste" | "impact-crater" | "volcanic" | "infernal-waste" | "burial-ground" | "rift" | "mountain" | "ice" | "ruin" | "underground-lake" | "underdark" | "forest" | "swamp" | "floating-islands" | "industrial-ruin" | "coral-tide";
 
 interface TerrainMorphology {
   channel: boolean;
@@ -47,7 +47,8 @@ interface TerrainMorphology {
 
 const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>> = {
   "river-valley": ["river", "stream", "creek", "waterfall", "riverbank", "river bend", "河谷", "河流", "河川", "河湾", "溪流", "溪谷", "瀑布", "峡谷", "水湾", "峡谷河"],
-  "dry-riverbed": ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床", "河床", "盐碱荒原", "盐碱地", "盐沼荒原", "盐壳荒地", "salt wasteland", "salt flat", "salt flats", "salt desert"],
+  "dry-riverbed": ["dry riverbed", "dry wash", "wadi", "干河床", "枯河床", "河床"],
+  "salt-waste": ["盐碱荒原", "盐碱地", "盐沼荒原", "盐壳荒地", "salt wasteland", "salt flat", "salt flats", "salt desert"],
   "impact-crater": ["impact crater", "meteor crater", "陨石坑", "撞击坑", "流星坑"],
   volcanic: ["volcano", "volcanic", "caldera", "火山", "火山口", "破火山口"],
   "infernal-waste": ["avernus", "hellscape", "infernal waste", "阿弗纳斯", "地狱荒原", "地狱"],
@@ -161,7 +162,7 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   if (explicitRift && !explicitVolcanicCrater) return "rift";
   if (morphology.crater) return "volcanic";
   if (morphology.burial) return "burial-ground";
-  if (isSaltWastelandPrompt(normalized)) return "dry-riverbed";
+  if (isSaltWastelandPrompt(normalized)) return "salt-waste";
   if (morphology.dryChannel) return "dry-riverbed";
   // Cold wetlands are not ordinary temperate swamps or generic mountains.
   // Their frozen substrate owns the macro terrain while thaw pools and
@@ -210,7 +211,7 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
 
 function bounds(context: GeneratorContext, archetype: WildernessArchetype): { width: number; depth: number; height: number; density: number } {
   const { rng, request } = context;
-  const base: readonly [number, number, number] = archetype === "industrial-ruin" ? [58, 46, 6] : archetype === "coral-tide" ? [56, 44, 5] : archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "dry-riverbed" ? [58, 44, 5] : archetype === "impact-crater" ? [56, 52, 7] : archetype === "volcanic" ? [54, 50, 8] : archetype === "infernal-waste" ? [60, 48, 6] : archetype === "floating-islands" ? [58, 48, 18] : archetype === "burial-ground" ? [46, 38, 4] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
+  const base: readonly [number, number, number] = archetype === "industrial-ruin" ? [58, 46, 6] : archetype === "coral-tide" ? [56, 44, 5] : archetype === "rift" ? [61, 61, 5] : archetype === "river-valley" ? [64, 56, 6] : archetype === "dry-riverbed" ? [58, 44, 5] : archetype === "salt-waste" ? [60, 48, 6] : archetype === "impact-crater" ? [56, 52, 7] : archetype === "volcanic" ? [54, 50, 8] : archetype === "infernal-waste" ? [60, 48, 6] : archetype === "floating-islands" ? [58, 48, 18] : archetype === "burial-ground" ? [46, 38, 4] : archetype === "mountain" ? [48, 46, 7] : archetype === "ice" ? [46, 36, 4] : archetype === "ruin" ? [34, 30, 4] : archetype === "underdark" ? [48, 36, 6] : archetype === "underground-lake" ? [44, 36, 6] : archetype === "forest" ? [52, 44, 3] : archetype === "swamp" ? [48, 40, 3] : [48, 34, 4];
   const scale = request.size === "small" ? 0.62 : request.size === "large" ? 1.55 : 1;
   return { width: Math.round(base[0] * scale) + rng.int(-2, 3), depth: Math.round(base[1] * scale) + rng.int(-2, 3), height: base[2], density: request.density };
 }
@@ -2525,7 +2526,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station", "驿站",
     "quarantine station", "weather station", "meteorological station", "research station", "field station", "radio station",
   ].some((term) => text.includes(term)) || retrievedFacilityContract;
-  if (!wantsBuilding || !["forest", "river-valley", "dry-riverbed", "mountain", "swamp", "ice", "volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype)) return;
+  if (!wantsBuilding || !["forest", "river-valley", "dry-riverbed", "salt-waste", "mountain", "swamp", "ice", "volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype)) return;
   const alchemical = ["炼金", "alchemy", "alchemist"].some((term) => text.includes(term));
   const hunter = ["猎人", "hunter"].some((term) => text.includes(term));
   const quarantine = facilityProfile === "quarantine";
@@ -4010,6 +4011,7 @@ function addStandableProps(scene: GeneratedScene, archetype: WildernessArchetype
   const specs: Partial<Record<WildernessArchetype, StandablePropSpec>> = {
     "river-valley": { material: "rock", label: "river boulder", width: 2.6, depth: 2.2, heightFeet: 5, count: 8 },
     "dry-riverbed": { material: "rock", label: "scoured boulder", width: 2.5, depth: 2.1, heightFeet: 5, count: 8 },
+    "salt-waste": { material: "stone", label: "salt-crust pillar", width: 2.4, depth: 2, heightFeet: 6, count: 9 },
     "impact-crater": { material: "rock", label: "ejecta block", width: 2.7, depth: 2.3, heightFeet: 7, count: 9 },
     volcanic: { material: "darkStone", label: "basalt block", width: 2.5, depth: 2.2, heightFeet: 7, count: 9 },
     "infernal-waste": { material: "metal", label: "war wreck", width: 2.8, depth: 2.1, heightFeet: 6, count: 9 },
@@ -4121,6 +4123,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const titlePool: Record<WildernessArchetype, readonly string[]> = {
     "river-valley": ["Silverfall Valley", "The Two-Bank Reach"],
     "dry-riverbed": ["The Thirsting Wash", "Deadwater Channel"],
+    "salt-waste": ["The White Salt Expanse", "The Brine-Crust Basin"],
     "impact-crater": ["The Fallen Star", "Glass-Rim Impact"],
     volcanic: ["The Cinder Caldera", "Ashmouth Crater"],
     "infernal-waste": ["The Iron Wastes", "War Road of Ash"],
@@ -4153,10 +4156,8 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   if (archetype === "industrial-ruin") buildIndustrialRuin(scene, profile.width, profile.depth, profile.density, context.rng.fork("industrial"));
   else if (archetype === "coral-tide") buildCoralTide(scene, profile.width, profile.depth, context.rng.fork("coral"));
   else if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, profile.density, context.rng.fork("river"));
-  else if (archetype === "dry-riverbed") {
-    if (saltWasteland) buildSaltWasteland(scene, profile.width, profile.depth, profile.density, context.rng.fork("salt-wasteland"));
-    else buildDryRiverbed(scene, profile.width, profile.depth, profile.density, context.rng.fork("dry-riverbed"));
-  }
+  else if (archetype === "dry-riverbed") buildDryRiverbed(scene, profile.width, profile.depth, profile.density, context.rng.fork("dry-riverbed"));
+  else if (archetype === "salt-waste") buildSaltWasteland(scene, profile.width, profile.depth, profile.density, context.rng.fork("salt-wasteland"));
   else if (archetype === "impact-crater") buildImpactCrater(scene, profile.width, profile.depth, profile.density, context.rng.fork("impact-crater"));
   else if (archetype === "volcanic") buildVolcanic(scene, profile.width, profile.depth, profile.density, context.rng.fork("volcanic"));
   else if (archetype === "infernal-waste") buildInfernalWaste(scene, profile.width, profile.depth, profile.density, context.rng.fork("infernal-waste"));

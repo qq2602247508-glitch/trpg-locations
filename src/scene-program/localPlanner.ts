@@ -130,6 +130,10 @@ function inferOperators(text: string): { morphology: MorphologyOperator[]; cover
     morphology.push("vertical-stack");
     coverage.push("ice");
   }
+  if (has(text, ["盐碱荒原", "盐碱地", "盐沼荒原", "盐壳荒地", "salt wasteland", "salt flat", "salt flats", "salt desert"])) {
+    morphology.push("salt-crust", "basin", "radial-fractures");
+    coverage.push("salt-waste", "brine", "sparse");
+  }
   if (has(text, ["陨石", "流星", "撞击坑", "meteor", "impact crater"])) morphology.push("impact-crater", "radial-fractures", "basin");
   if (has(text, ["火山", "caldera", "volcano"])) morphology.push("caldera");
   if (has(text, ["熔岩", "岩浆", "lava", "magma", "阿弗纳斯", "地狱"])) morphology.push("lava-flow");

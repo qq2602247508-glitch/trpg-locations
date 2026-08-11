@@ -375,12 +375,18 @@ export class SceneRenderer {
     // focus camera and its context filter in rendered world coordinates.
     const selectedIdTag = `building-instance:${selected.id}`;
     const viewLevel = typeof view === "number" ? view : 0;
-    const visibleBuildingPrimitives = this.currentScene?.primitives.filter((primitive) => (
+    const buildingLevelPrimitives = this.currentScene?.primitives.filter((primitive) => (
       primitive.tags?.includes(selectedIdTag) === true
       && primitive.level === viewLevel
       && primitive.tags?.includes("focus-cutaway") !== true
       && primitive.tags?.includes("roof") !== true
     )) ?? [];
+    const buildingCluster = typeof view === "number" && isBasement
+      ? this.focusClusterForPrimitives(buildingLevelPrimitives)
+      : undefined;
+    const visibleBuildingPrimitives = buildingCluster
+      ? buildingLevelPrimitives.filter((primitive) => focusClusterTag(primitive) === buildingCluster)
+      : buildingLevelPrimitives;
     const minX = visibleBuildingPrimitives.length > 0 ? Math.min(...visibleBuildingPrimitives.map((primitive) => primitive.position.x - primitive.size.x / 2)) : selected.positionCells.x * GRID_METERS - selected.footprintCells.x * GRID_METERS / 2;
     const maxX = visibleBuildingPrimitives.length > 0 ? Math.max(...visibleBuildingPrimitives.map((primitive) => primitive.position.x + primitive.size.x / 2)) : selected.positionCells.x * GRID_METERS + selected.footprintCells.x * GRID_METERS / 2;
     const minZ = visibleBuildingPrimitives.length > 0 ? Math.min(...visibleBuildingPrimitives.map((primitive) => primitive.position.z - primitive.size.z / 2)) : selected.positionCells.z * GRID_METERS - selected.footprintCells.z * GRID_METERS / 2;
@@ -1133,17 +1139,22 @@ export class SceneRenderer {
    * levels without teaching the renderer their domain names.
    */
   private floorFocusCluster(primitives: ScenePrimitive[]): ScenePrimitive[] {
+    const cluster = this.focusClusterForPrimitives(primitives);
+    if (!cluster) return primitives;
+    return primitives.filter((primitive) => focusClusterTag(primitive) === cluster);
+  }
+
+  private focusClusterForPrimitives(primitives: ScenePrimitive[]): string | undefined {
     const groups = new Map<string, ScenePrimitive[]>();
     for (const primitive of primitives) {
-      for (const tag of primitive.tags ?? []) {
-        if (!tag.startsWith("focus-cluster:")) continue;
-        const group = groups.get(tag) ?? [];
-        group.push(primitive);
-        groups.set(tag, group);
-      }
+      const tag = focusClusterTag(primitive);
+      if (!tag) continue;
+      const group = groups.get(tag) ?? [];
+      group.push(primitive);
+      groups.set(tag, group);
     }
-    if (groups.size === 0) return primitives;
-    return [...groups.values()].sort((left, right) => right.length - left.length)[0] ?? primitives;
+    if (groups.size === 0) return undefined;
+    return [...groups.entries()].sort((left, right) => right[1].length - left[1].length)[0]?.[0];
   }
 
   private activeFloorFocusClusterTag(level: number): string | undefined {
