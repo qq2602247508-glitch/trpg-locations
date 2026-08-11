@@ -242,6 +242,8 @@ export class SceneRenderer {
 
   private readonly tacticalRoot = new THREE.Group();
 
+  private readonly semanticLightRoot = new THREE.Group();
+
   private readonly materialCache = new Map<string, THREE.MeshStandardMaterial>();
 
   private readonly geometryCache = new Map<ScenePrimitive["shape"], THREE.BufferGeometry>();
@@ -332,7 +334,8 @@ export class SceneRenderer {
     this.gridRoot.name = "5 foot tactical grid";
     this.routeRoot.name = "Route diagnostics";
     this.tacticalRoot.name = "Tactical diagnostics";
-    this.scene.add(this.gridRoot, this.modelRoot, this.routeRoot, this.tacticalRoot);
+    this.semanticLightRoot.name = "Semantic light atoms";
+    this.scene.add(this.gridRoot, this.modelRoot, this.routeRoot, this.tacticalRoot, this.semanticLightRoot);
 
     this.addAtmosphere();
     this.addLights();
@@ -355,6 +358,7 @@ export class SceneRenderer {
     this.adaptEnvironmentToBounds();
     this.buildGrid(scene);
     this.buildPrimitiveBatches(scene);
+    this.buildSemanticLights(scene);
     this.buildRoutes(scene);
     this.buildTacticalMarkers(scene);
     this.positionCamera();
@@ -371,6 +375,7 @@ export class SceneRenderer {
     this.primitiveBatches = 0;
     this.buildGrid(this.currentScene);
     this.buildPrimitiveBatches(this.currentScene);
+    this.buildSemanticLights(this.currentScene);
     if (!selected) {
       this.setFloorView("roof");
       this.positionCamera();
@@ -729,6 +734,11 @@ export class SceneRenderer {
     if (this.keyLight) this.keyLight.intensity = time === "night" ? 1.25 : 3.35;
     if (this.rimLight) this.rimLight.intensity = time === "night" ? 2.1 : 1.5;
     if (this.warmFill) this.warmFill.intensity = time === "night" ? 52 : 27;
+    for (const child of this.semanticLightRoot.children) {
+      if (!(child instanceof THREE.PointLight)) continue;
+      const base = typeof child.userData.baseIntensity === "number" ? child.userData.baseIntensity : 12;
+      child.intensity = time === "night" ? base * 1.7 : base;
+    }
     this.applyRouteFilters();
   }
 
@@ -843,6 +853,37 @@ export class SceneRenderer {
     warmFill.position.set(0, 7, 0);
     this.warmFill = warmFill;
     this.scene.add(warmFill);
+  }
+
+  /** Turn authored lanterns, braziers, furnaces and magical fixtures into a
+   * bounded set of real local light pockets. The visible primitive remains the
+   * tactical object; this layer adds atmosphere without handing geometry to a
+   * model or creating an unbounded light-per-prop performance cost. */
+  private buildSemanticLights(scene: GeneratedScene): void {
+    this.semanticLightRoot.clear();
+    const focusedTag = this.focusedBuildingId ? `building-instance:${this.focusedBuildingId}` : undefined;
+    const candidates = scene.primitives.filter((primitive) => {
+      if (focusedTag && primitive.tags?.includes(focusedTag) !== true) return false;
+      return primitive.material === "warmLight"
+        || primitive.tags?.some((tag) => ["lantern", "torch", "brazier", "furnace", "hearth", "magical-light", "street-lamp"].includes(tag)) === true;
+    });
+    const selected: ScenePrimitive[] = [];
+    for (const candidate of candidates) {
+      if (selected.some((existing) => Math.hypot(existing.position.x - candidate.position.x, existing.position.z - candidate.position.z) < GRID_METERS * 4)) continue;
+      selected.push(candidate);
+      if (selected.length >= (this.focusedBuildingId ? 6 : 10)) break;
+    }
+    for (const [index, primitive] of selected.entries()) {
+      const infernal = primitive.tags?.some((tag) => ["lava", "infernal", "furnace", "forge"].includes(tag)) === true;
+      const arcane = primitive.tags?.some((tag) => ["arcane", "magical-light", "crystal"].includes(tag)) === true;
+      const color = arcane ? 0x79bfff : infernal ? 0xff6a32 : 0xffb35f;
+      const baseIntensity = primitive.tags?.includes("street-lamp") ? 9 : infernal ? 18 : 13;
+      const light = new THREE.PointLight(color, this.timeOfDay === "night" ? baseIntensity * 1.7 : baseIntensity, GRID_METERS * (infernal ? 11 : 8), 1.9);
+      light.name = `Semantic light atom ${index + 1}`;
+      light.position.set(primitive.position.x, primitive.position.y + Math.max(0.6, primitive.size.y * 0.72), primitive.position.z);
+      light.userData.baseIntensity = baseIntensity;
+      this.semanticLightRoot.add(light);
+    }
   }
 
   private adaptEnvironmentToBounds(): void {
