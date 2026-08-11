@@ -21,6 +21,9 @@ interface TerrainCell {
   buildable: boolean;
   standable: boolean;
   hazard: boolean;
+  wooded?: boolean;
+  iceEdge?: boolean;
+  secondaryFracture?: boolean;
 }
 
 export interface SettlementTerrain {
@@ -45,6 +48,7 @@ function terrainKind(program: SiteProgram, prompt: string): TerrainProgramSummar
   if (program.requiredFeatures.includes("impact-crater-settlement")) return "impact-crater";
   if (program.requiredFeatures.includes("volcanic-settlement") || includesAny(text, ["火山口村", "火山聚落", "volcanic settlement", "caldera village"])) return "caldera";
   if (program.requiredFeatures.includes("ice-crevasse-settlement") || includesAny(text, ["冰川裂隙", "冰川裂缝", "巨大裂隙", "冰隙聚落", "glacier crevasse", "crevasse settlement"])) return "ice-crevasse";
+  if (program.requiredFeatures.includes("forest-settlement")) return "forest-clearing";
   if (program.requiredFeatures.includes("underdark-settlement") || includesAny(text, ["幽暗地域", "underdark", "地下聚落"])) return "underdark";
   if (program.requiredFeatures.includes("hollow-tree-city") || includesAny(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) return "megastructure";
   if (program.requiredFeatures.includes("mangrove-smuggler-port") || includesAny(text, ["红树林", "走私港", "港村", "mangrove", "smuggler port"])) return "swamp-bone";
@@ -136,6 +140,9 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
   const crevasseCenterX = width * 0.5;
   const crevasseHalfGap = 3.8 + (program.seed.length % 5) * 0.45;
   const crevasseAt = (z: number) => crevasseCenterX + Math.sin(z * 0.17 + phase) * (2.1 + (program.seed.length % 4) * 0.4);
+  const wantsSecondaryCrevasse = kind === "ice-crevasse" && includesAny(normalizedPrompt, ["裂缝", "裂隙", "冰隙", "crevasse", "fissure"]);
+  const secondaryCrevasseFrom = { x: crevasseAt(depth * 0.62) + crevasseHalfGap * 0.7, z: depth * 0.62 };
+  const secondaryCrevasseTo = { x: width - 0.5, z: depth * (0.16 + ((program.seed.length % 5) * 0.035)) };
   const ravineX = width * rng.float(0.46, 0.57);
   const megaCx = width / 2;
   const megaCz = depth / 2;
@@ -143,6 +150,15 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
   const isHollowTree = program.requiredFeatures.includes("hollow-tree-city");
   const isMangrovePort = program.requiredFeatures.includes("mangrove-smuggler-port");
   const isSaltCrystal = program.requiredFeatures.includes("salt-crystal-monastery");
+  const forestRoadDistance = (x: number, z: number): number => Math.min(...program.roads.flatMap((road) => road.points.slice(1).map((point, index) => {
+    const previous = road.points[index];
+    return previous ? distanceToSegment(x, z, previous.x, previous.z, point.x, point.z) : Number.POSITIVE_INFINITY;
+  })), Number.POSITIVE_INFINITY);
+  const forestParcelDistance = (x: number, z: number): number => Math.min(...program.parcels.map((parcel) => {
+    const dx = Math.max(0, Math.abs(x - parcel.center.x) - parcel.size.x * 0.62);
+    const dz = Math.max(0, Math.abs(z - parcel.center.z) - parcel.size.z * 0.62);
+    return Math.hypot(dx, dz);
+  }), Number.POSITIVE_INFINITY);
   const cells: TerrainCell[] = [];
   const indexOf = (x: number, z: number): number => Math.max(0, Math.min(depth - 1, Math.floor(z))) * width + Math.max(0, Math.min(width - 1, Math.floor(x)));
 
@@ -152,6 +168,8 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
     let buildable = true;
     let standable = true;
     let hazard = false;
+    let iceEdge = false;
+    let secondaryFracture = false;
 
     if (kind === "river") {
       const center = warpedRiverX(z, width, depth, phase);
@@ -233,14 +251,31 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
     } else if (kind === "ice-crevasse") {
       const gapCenter = crevasseAt(z + 0.5);
       const distance = Math.abs(x + 0.5 - gapCenter);
+      const secondaryDistance = wantsSecondaryCrevasse
+        ? distanceToSegment(x + 0.5, z + 0.5, secondaryCrevasseFrom.x, secondaryCrevasseFrom.z, secondaryCrevasseTo.x, secondaryCrevasseTo.z)
+        : Number.POSITIVE_INFINITY;
       const edge = Math.min(x, z, width - 1 - x, depth - 1 - z);
       if (edge === 0) {
         surface = "void"; buildable = false; standable = false;
+      } else if (secondaryDistance <= 0.9) {
+        surface = "void";
+        buildable = false;
+        standable = false;
+        hazard = true;
+        secondaryFracture = true;
+      } else if (secondaryDistance <= 2.1) {
+        elevationFeet = x + 0.5 < gapCenter ? 10 : 20;
+        surface = "rock";
+        buildable = false;
+        hazard = true;
+        iceEdge = true;
+        secondaryFracture = true;
       } else if (distance <= 1.4) {
         elevationFeet = -15;
         surface = "rock";
         buildable = false;
         hazard = true;
+        iceEdge = true;
       } else if (distance <= crevasseHalfGap) {
         surface = "void";
         buildable = false;
@@ -250,6 +285,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         elevationFeet = x + 0.5 < gapCenter ? 20 : 30;
         surface = "rock";
         buildable = distance > crevasseHalfGap + 4;
+        iceEdge = distance <= crevasseHalfGap + 2.2;
       }
     } else if (kind === "underdark") {
       const nx = (x + 0.5 - width / 2) / (width * 0.48);
@@ -331,12 +367,26 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         surface = "platform";
         buildable = isHollowTree ? radial > megaRadius * 0.12 : radial > megaRadius * 0.18;
       }
+    } else if (kind === "forest-clearing") {
+      const rolling = Math.sin(x * 0.17 + phase) + Math.cos(z * 0.19 - phase * 0.43) + Math.sin((x + z) * 0.075 + phase) * 0.55;
+      elevationFeet = rolling > 1.05 ? 10 : rolling > -0.22 ? 5 : 0;
+      const routeClearance = forestRoadDistance(x + 0.5, z + 0.5);
+      const parcelClearance = forestParcelDistance(x + 0.5, z + 0.5);
+      const edge = Math.min(x, z, width - 1 - x, depth - 1 - z);
+      const canopyNoise = Math.sin(x * 0.61 + phase) + Math.cos(z * 0.53 - phase * 0.7) + Math.sin((x - z) * 0.27);
+      const wooded = routeClearance > 2.2 && parcelClearance > 1.2 && (edge < 4 + density * 4 || canopyNoise > 0.9 - density * 1.15);
+      surface = "ground";
+      buildable = !wooded && Math.abs(rolling) < 1.55;
+      standable = true;
+      hazard = false;
+      cells.push({ elevationFeet, surface, buildable, standable, hazard, wooded });
+      continue;
     } else {
       const rolling = Math.sin(x * 0.12 + phase) + Math.cos(z * 0.15 - phase * 0.4);
       elevationFeet = kind === "rolling" || kind === "valley" ? (rolling > 0.8 ? 10 : rolling > -0.3 ? 5 : 0) : 0;
       surface = kind === "coast" ? "rock" : "ground";
     }
-    cells.push({ elevationFeet, surface, buildable, standable, hazard });
+    cells.push({ elevationFeet, surface, buildable, standable, hazard, iceEdge, secondaryFracture });
   }
 
   const cellAt = (x: number, z: number): TerrainCell => cells[indexOf(x, z)] ?? { elevationFeet: 0, surface: "ground", buildable: true, standable: true, hazard: false };
@@ -540,7 +590,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           && cell.surface !== "water"
           && cell.elevationFeet >= 15
           && Math.abs(x + 0.5 - warpedRiverX(z + 0.5, width, depth, phase)) < 9;
-        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, riverCliffBank ? "rock" : materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `surface:${cell.surface}`, `elevation:${cell.elevationFeet}`, ...(riverCliffBank ? ["coastal-cliff", "cliff-bank", "vertical-face"] : []), ...(cell.surface === "lava" ? ["lava", "lava-flow"] : []), ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(radialFractureCell ? ["impact-crater", "radial-fracture", "fracture-bottom"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(kind === "ice-crevasse" ? ["ice-crevasse", "rift-bank"] : []), ...(kind === "ice-crevasse" && cell.elevationFeet <= -10 ? ["rift-bottom"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
+        scene.primitives.push(box(`terrain-field-${x}-${z}`, 0, x + 0.5, feetToMeters(bottomFeet), z + 0.5, 0.98, Math.max(FLOOR_SLAB_METERS, height), 0.98, riverCliffBank ? "rock" : materialFor(cell, kind), ["floor", "terrain", "terrain-program", `terrain:${kind}`, `surface:${cell.surface}`, `elevation:${cell.elevationFeet}`, ...(cell.wooded ? ["forest", "woodland", "canopy-support"] : []), ...(riverCliffBank ? ["coastal-cliff", "cliff-bank", "vertical-face"] : []), ...(cell.surface === "lava" ? ["lava", "lava-flow"] : []), ...(kind === "impact-crater" && cell.elevationFeet >= 20 ? ["impact-crater", "crater-rim"] : []), ...(radialFractureCell ? ["impact-crater", "radial-fracture", "fracture-bottom"] : []), ...(kind === "caldera" && cell.elevationFeet >= 20 ? ["caldera-rim"] : []), ...(kind === "ice-crevasse" ? ["ice-crevasse", "rift-bank", "ice-base-plate"] : []), ...(cell.iceEdge ? ["eroded-ice-edge", "vertical-face"] : []), ...(cell.secondaryFracture ? ["secondary-crevasse"] : []), ...(kind === "ice-crevasse" && cell.elevationFeet <= -10 ? ["rift-bottom"] : []), ...(cell.buildable ? ["buildable", "standable"] : []), ...(cell.hazard ? ["hazard"] : [])]));
         if (cell.surface === "lava") {
           scene.primitives.push(box(`terrain-lava-surface-${x}-${z}`, 0, x + 0.5, feetToMeters(cell.elevationFeet) + 0.08, z + 0.5, 0.94, 0.12, 0.94, "warmLight", ["lava", "lava-flow", "lava-surface", "hazard", "terrain-program"]));
         }
@@ -551,6 +601,26 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
             : kind === "underdark" ? ["terrain-program", "watercourse", "underdark", "underground-lake", "hazard"]
               : ["terrain-program", "coastal-cliff", "harbor-basin", "sea", "hazard"]));
         }
+      }
+      if (kind === "forest-clearing") {
+        const spacing = density >= 0.72 ? 2 : density >= 0.42 ? 3 : 4;
+        let treeIndex = 0;
+        for (let z = 1; z < depth - 1; z += spacing) for (let x = 1; x < width - 1; x += spacing) {
+          const cell = cellAt(x, z);
+          if (!cell.wooded || forestRoadDistance(x + 0.5, z + 0.5) < 2.5 || forestParcelDistance(x + 0.5, z + 0.5) < 1.5) continue;
+          const treeRng = rng.fork(`forest-settlement-tree-${x}-${z}`);
+          const trunkHeight = feetToMeters(treeRng.float(14, 28));
+          const trunkRadius = treeRng.float(0.28, 0.58);
+          const px = x + treeRng.float(0.22, 0.78);
+          const pz = z + treeRng.float(0.22, 0.78);
+          const baseY = feetToMeters(cell.elevationFeet) + FLOOR_SLAB_METERS;
+          scene.primitives.push(
+            cylinder(`forest-settlement-trunk-${treeIndex}`, 0, px, baseY, pz, trunkRadius, trunkHeight, "wood", ["forest", "tree", "tree-trunk", "cover", "blocks-sight", "terrain-program"]),
+            primitive(`forest-settlement-canopy-${treeIndex}`, "sphere", 0, px, baseY + trunkHeight * 0.78, pz, treeRng.float(2.1, 3.8), treeRng.float(2.4, 4.3), treeRng.float(2.1, 3.8), "moss", ["forest", "tree", "tree-canopy", "canopy-layer", "blocks-sight", "terrain-program"]),
+          );
+          treeIndex += 1;
+        }
+        scene.tactical.push(tacticalFeature("forest-settlement-canopy-cover", "cover", width * 0.18, depth * 0.2, feetToMeters(5), 4, "Dense forest belts bound the settlement clearings and constrain long sightlines."));
       }
       if (kind === "river") {
         const bridgeRows = [depth * 0.28, depth * 0.56, depth * 0.81];
@@ -662,6 +732,9 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         );
       }
       if (kind === "ice-crevasse") {
+        if (wantsSecondaryCrevasse) {
+          reserveLinearTerrain(scene, "ice-secondary-crevasse-reservation", "void", secondaryCrevasseFrom.x, secondaryCrevasseFrom.z, secondaryCrevasseTo.x, secondaryCrevasseTo.z, 2.2, 1.4, "Preserve the branching ice fracture and keep buildings, roads, and stairs off its unsupported void.");
+        }
         const bridgeRows = [depth * 0.28, depth * 0.57, depth * 0.82];
         for (const [index, row] of bridgeRows.entries()) {
           const gapCenter = crevasseAt(row);

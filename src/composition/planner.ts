@@ -89,7 +89,7 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   // A sea cave named as the destination of a cliff facility is subordinate
   // interior terrain. The explicit coastal cliff owns the macro landform.
   if (has(text, ["海岸悬崖", "海岸崖", "海崖", "coastal cliff", "sea cliff"])) return "mountain";
-  const caveTerms = ["洞穴", "洞窟", "岩窟", "溶洞", "地底洞室", "海蚀洞", "潮汐洞穴", "洞穴群", "cave", "cavern", "grotto", "sea cave", "tidal cavern", "cave network"] as const;
+  const caveTerms = ["幽暗地域", "地底世界", "underdark", "洞穴", "洞窟", "岩窟", "溶洞", "地底洞室", "海蚀洞", "潮汐洞穴", "洞穴群", "cave", "cavern", "grotto", "sea cave", "tidal cavern", "cave network"] as const;
   const riftTerms = ["裂谷", "裂缝", "裂隙", "深渊", "rift", "crevasse", "chasm", "ravine"] as const;
   const caveIndex = firstIndexOf(caveTerms);
   const riftIndex = firstIndexOf(riftTerms);
@@ -105,8 +105,19 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   // the prompt explicitly names a water-city morphology.
   if (hasExplicitWaterCity(text)) return "river";
   if (hasSettlementParent(text)) return "settlement";
-  if (has(text, ["河谷", "河流", "溪流", "瀑布", "river", "stream", "waterfall", "valley"])) return "river";
-  if (has(text, ["森林", "林地", "树林", "雨林", "丛林", "巨树", "树冠", "forest", "woodland", "rainforest", "jungle", "canopy"])) return "forest";
+  const forestTerms = ["森林", "林地", "树林", "雨林", "丛林", "巨树", "树冠", "forest", "woodland", "rainforest", "jungle", "canopy"] as const;
+  const strongRiverTerms = ["河谷", "河流", "瀑布", "河湾", "河岸", "river valley", "river", "waterfall", "riverbank"] as const;
+  const minorStreamTerms = ["溪流", "小溪", "浅溪", "stream", "creek"] as const;
+  if (has(text, strongRiverTerms)) return "river";
+  const forestIndex = firstIndexOf(forestTerms);
+  const riverIndex = firstIndexOf(minorStreamTerms);
+  // A stream inside an explicitly named forest is a child hydrology atom.  It
+  // must not replace the canopy/clearing parent with the full river-valley
+  // grammar.  Conversely, “river valley with forested banks” remains river
+  // owned because the first explicit macro noun is the river.
+  if (forestIndex < riverIndex) return "forest";
+  if (riverIndex < Number.POSITIVE_INFINITY) return "river";
+  if (forestIndex < Number.POSITIVE_INFINITY) return "forest";
   if (has(text, ["沼泽", "湿地", "泥沼", "marsh", "swamp", "bog", "wetland"])) return "swamp";
   return "generic";
 }

@@ -300,6 +300,18 @@ describe("five-layer composition catalog", () => {
     expect(hollowTree.motifIds).not.toContain("motif.mangrove-smuggler-port");
   });
 
+  it("keeps a forest parent ahead of subordinate streams", () => {
+    const forest = compileSceneComposition({
+      prompt: "非常茂密的古老森林，有溪流、林间空地和猎人木屋",
+      seed: "forest-parent-contract",
+      size: "large",
+      density: 0.9,
+    });
+    expect(forest.primaryDomain).toBe("forest");
+    expect(forest.motifIds).toContain("motif.closed-canopy-clearings");
+    expect(forest.motifIds).not.toContain("motif.waterfall-valley");
+  });
+
   it("treats water-city prompts as a dedicated waterfront grammar", () => {
     const request = {
       prompt: "河道水城，弯曲主河、三条支流、石桥、木桥、水上市集、船坞与沿岸不规则街巷",

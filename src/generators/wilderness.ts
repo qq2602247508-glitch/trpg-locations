@@ -4893,7 +4893,23 @@ function buildCoralTide(scene: GeneratedScene, width: number, depth: number, rng
 }
 
 export function generateWilderness(context: GeneratorContext): GeneratedScene {
-  const archetype = classifyWildernessArchetype(context.request.prompt, context.semanticHints, context.compositionProgram?.capabilityIds);
+  const compositionArchetype = ({
+    forest: "forest",
+    swamp: "swamp",
+    river: "river-valley",
+    volcanic: "volcanic",
+    crater: "impact-crater",
+    rift: "rift",
+    ice: "ice",
+    floating: "floating-islands",
+    mountain: "mountain",
+    "salt-waste": "salt-waste",
+  } as Record<string, WildernessArchetype | undefined>)[context.compositionProgram?.primaryDomain ?? ""];
+  // SceneCompositionProgram is the authoritative macro owner. Prompt-derived
+  // topology inside the wilderness generator may add a stream, pool or ravine,
+  // but it may not silently replace a forest parent with a full river valley.
+  const archetype: WildernessArchetype = compositionArchetype
+    ?? classifyWildernessArchetype(context.request.prompt, context.semanticHints, context.compositionProgram?.capabilityIds);
   const profile = bounds(context, archetype);
   const titlePool: Record<WildernessArchetype, readonly string[]> = {
     "river-valley": ["Silverfall Valley", "The Two-Bank Reach"],

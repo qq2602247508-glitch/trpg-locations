@@ -498,6 +498,25 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("preserves flexible ice-rift wording and forest settlement terrain", () => {
+    const forest = generateScene({ ...request("big-perfect-forest-parent", "large", 0.9), prompt: "非常茂密的古老森林，有多层树冠、倒木、巨树根系、溪流、林间空地和树冠战斗平台" }, "adaptive");
+    expect(forest.archetype).toBe("forest");
+    expect(forest.title).toMatch(/Canopy|Mosswood/);
+    expect(forest.primitives.filter((primitive) => primitive.tags?.includes("forest")).length).toBeGreaterThanOrEqual(100);
+
+    const ice = generateScene({ ...request("big-perfect-ice-parent", "large", 0.78), prompt: "建在冰川巨大裂缝两侧的矮人聚落，有完全断开的深裂谷、冰桥、升降货梯和裂缝底部废弃矿道" }, "adaptive");
+    expect(ice.terrainProgram?.kind).toBe("ice-crevasse");
+    expect(ice.primitives.some((primitive) => primitive.tags?.includes("rift-bottom"))).toBe(true);
+    expect(ice.primitives.filter((primitive) => primitive.tags?.includes("rift-crossing")).length).toBeGreaterThanOrEqual(2);
+
+    const forestVillage = generateScene({ ...request("big-perfect-forest-village", "large", 0.82), prompt: "森林村庄，村庄嵌在高低起伏的密林中，有木屋、林间小径和溪桥" }, "adaptive");
+    expect(forestVillage.terrainProgram?.kind).toBe("forest-clearing");
+    expect(forestVillage.primitives.filter((primitive) => primitive.tags?.includes("tree-trunk")).length).toBeGreaterThanOrEqual(20);
+    expect(forestVillage.primitives.filter((primitive) => primitive.tags?.includes("tree-canopy")).length).toBeGreaterThanOrEqual(20);
+    expect(forestVillage.terrainProgram?.maximumElevationFeet).toBeGreaterThanOrEqual(10);
+    expect(forestVillage.diagnostics.valid, forestVillage.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("compiles semantic parent terrain before placing settlement buildings", () => {
     const prompts = [
       { seed: "terrain-parent-river", prompt: "河道水城，弯曲主运河、三条支流、石桥、木桥和两岸街区", kind: "river", minimumRange: 15 },

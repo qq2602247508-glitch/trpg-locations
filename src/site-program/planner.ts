@@ -201,7 +201,10 @@ function requestedSiteFeatures(text: string): string[] {
   add("fantasy-harbor", ["深水城港区", "奇幻港区", "deepwater harbor", "fantasy harbor"]);
   add("impact-crater-settlement", ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"]);
   add("volcanic-settlement", ["火山口村", "火山村", "火山聚落", "破火山口聚落", "火山灰峡谷", "熔岩营地", "volcanic settlement", "volcano village", "caldera village", "volcanic canyon"]);
-  add("ice-crevasse-settlement", ["冰川裂隙", "冰川裂缝", "巨大裂隙", "冰隙聚落", "glacier crevasse", "crevasse settlement"]);
+  add("ice-crevasse-settlement", ["冰川裂隙", "冰川裂缝", "巨大裂隙", "巨大裂缝", "深裂谷", "冰隙聚落", "glacier crevasse", "crevasse settlement"]);
+  if (contains(text, ["冰川", "冰盖", "冰原", "glacier", "ice sheet", "ice field"])
+    && contains(text, ["裂缝", "裂隙", "裂谷", "深渊", "crevasse", "rift", "chasm"])) add("ice-crevasse-settlement", ["冰川", "冰盖", "冰原", "glacier", "ice sheet", "ice field"]);
+  add("forest-settlement", ["森林", "林地", "密林", "雨林", "丛林", "树海", "forest", "woodland", "rainforest", "jungle"]);
   add("underdark-settlement", ["幽暗地域村", "幽暗地域聚落", "地下聚落", "underdark village", "underdark settlement"]);
   add("hollow-tree-city", ["空心古树", "古树内部", "树内城市", "树上城市", "hollow tree", "hollow-tree city"]);
   add("mangrove-smuggler-port", ["红树林", "走私港", "港村", "红树林港", "mangrove", "smuggler port"]);
@@ -842,7 +845,7 @@ export function planSettlementSite(input: SitePlanningInput, rng: SeededRandom):
     siteType,
     morphology,
     bounds: { x: width, z: depth },
-    terrain: { kind: isHarbor ? "coast" : siteType === "mining-settlement" ? "valley" : siteType === "village" ? "rolling" : "urban", buildableRatio: isHarbor ? 0.78 : 0.9, elevationBandsFeet: features.includes("hillside-district") ? [0, 5, 10, 15] : siteType === "village" || siteType === "mining-settlement" ? [0, 5, 10] : [0, 5], ...(isHarbor ? { waterEdge: [{ x: 0, z: depth - 8 }, { x: width * 0.28, z: depth - 9 }, { x: width * 0.58, z: depth - 7 }, { x: width, z: depth - 9 }] } : {}) },
+    terrain: { kind: features.includes("forest-settlement") ? "forest-clearing" : isHarbor ? "coast" : siteType === "mining-settlement" ? "valley" : siteType === "village" ? "rolling" : "urban", buildableRatio: features.includes("forest-settlement") ? 0.58 : isHarbor ? 0.78 : 0.9, elevationBandsFeet: features.includes("hillside-district") ? [0, 5, 10, 15] : siteType === "village" || siteType === "mining-settlement" || features.includes("forest-settlement") ? [0, 5, 10] : [0, 5], ...(isHarbor ? { waterEdge: [{ x: 0, z: depth - 8 }, { x: width * 0.28, z: depth - 9 }, { x: width * 0.58, z: depth - 7 }, { x: width, z: depth - 9 }] } : {}) },
     districts: layout.districts,
     roadNodes,
     roads: layout.roads,
