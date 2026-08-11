@@ -93,7 +93,7 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   if (hasExplicitWaterCity(text)) return "river";
   if (hasSettlementParent(text)) return "settlement";
   if (has(text, ["河谷", "河流", "溪流", "瀑布", "river", "stream", "waterfall", "valley"])) return "river";
-  if (has(text, ["森林", "林地", "树林", "巨树", "树冠", "forest", "woodland", "canopy"])) return "forest";
+  if (has(text, ["森林", "林地", "树林", "雨林", "丛林", "巨树", "树冠", "forest", "woodland", "rainforest", "jungle", "canopy"])) return "forest";
   if (has(text, ["沼泽", "湿地", "泥沼", "marsh", "swamp", "bog", "wetland"])) return "swamp";
   return "generic";
 }
@@ -191,7 +191,22 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
     if (has(text, ["维护栈道", "外部栈道", "维修栈道", "maintenance walkway", "maintenance catwalk"])) add("maintenance-walk", "外部维护栈道", ["external-maintenance-walk", "supported", "standable"], "critical");
     return output;
   }
-  if (domain === "forest") { add("forest-core", "森林", ["forest", "tree", "canopy"], "critical"); if (has(text, ["茂密", "封闭林冠", "dense", "closed canopy"])) add("dense-canopy", "封闭林冠", ["canopy", "tree-cluster"], "critical"); if (has(text, ["灌木", "林下", "undergrowth"])) add("undergrowth", "林下灌木", ["undergrowth"], "major"); if (has(text, ["空地", "clearing"])) add("clearings", "林间空地", ["clearing"], "major"); if (has(text, ["浅溪", "溪流", "stream"])) add("forest-stream", "浅溪", ["stream", "watercourse"], "major"); if (has(text, ["倒木", "fallen log"])) add("fallen-log", "倒木", ["fallen-log"], "major"); if (has(text, ["树冠战斗平台", "树冠平台", "canopy platform"])) add("canopy-platform", "树冠战斗平台", ["canopy-platform", "high-ground"], "critical"); }
+  if (domain === "forest") {
+    add("forest-core", "森林", ["forest", "tree", "canopy"], "critical");
+    if (has(text, ["茂密", "封闭林冠", "dense", "closed canopy"])) add("dense-canopy", "封闭林冠", ["canopy", "tree-cluster"], "critical");
+    if (has(text, ["灌木", "林下", "undergrowth"])) add("undergrowth", "林下灌木", ["undergrowth"], "major");
+    if (has(text, ["空地", "clearing"])) add("clearings", "林间空地", ["clearing"], "major");
+    if (has(text, ["浅溪", "溪流", "小溪", "溪边", "溪畔", "林溪", "stream", "creek", "streamside", "creekside"])) {
+      add("forest-stream", "林间浅溪", ["stream", "watercourse"], "critical");
+    }
+    if (has(text, ["木桥", "溪边木桥", "footbridge", "foot bridge"])) {
+      add("forest-footbridge", "跨溪木桥", ["wood-bridge", "bridge", "stream-crossing"], "critical");
+    }
+    if (has(text, ["根桥", "树根桥", "root bridge", "root-bridge"])) add("forest-root-bridge", "根桥", ["root-bridge", "bridge"], "critical");
+    if (has(text, ["古老石环", "石环", "巨石环", "stone ring", "standing-stone ring"])) add("forest-stone-ring", "古老石环", ["standing-stone-ring", "ancient-stone"], "critical");
+    if (has(text, ["倒木", "fallen log"])) add("fallen-log", "倒木", ["fallen-log"], "major");
+    if (has(text, ["树冠战斗平台", "树冠平台", "树冠观察台", "树冠信号台", "树冠哨台", "树冠瞭望台", "canopy platform", "canopy observatory", "canopy signal platform", "canopy lookout"])) add("canopy-platform", "树冠战斗平台", ["canopy-platform", "high-ground"], "critical");
+  }
   if (domain === "ice") {
     add("ice-eroded-base", "破碎不规则冰盖边缘", ["ice-base-plate", "eroded-ice-edge"], "critical");
     if (has(text, ["雪脊", "snow ridge", "wind ridge"])) add("ice-asymmetric-ridge", "迎风坡与背风坡雪脊", ["snow-ridge", "snow-ridge-leeward"], "critical");

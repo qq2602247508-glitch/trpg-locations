@@ -397,8 +397,21 @@ describe("five-layer composition catalog", () => {
     const clearingSize = (scene: typeof sparse) => scene.rooms.filter((room) => room.id.startsWith("forest-clearing-")).reduce((sum, room) => sum + room.sizeCells.x * room.sizeCells.z, 0);
     expect(clearingSize(sparse)).toBeGreaterThan(clearingSize(dense));
     expect(dense.primitives.filter((primitive) => primitive.tags?.includes("root-buttress")).length).toBeGreaterThan(sparse.primitives.filter((primitive) => primitive.tags?.includes("root-buttress")).length);
-    expect(dense.primitives.filter((primitive) => primitive.tags?.includes("canopy-bridge")).length).toBeGreaterThanOrEqual(sparse.primitives.filter((primitive) => primitive.tags?.includes("canopy-bridge")).length);
-    expect(dense.routes.filter((route) => route.id.startsWith("forest-canopy-bridge-route")).length).toBeGreaterThanOrEqual(1);
+    expect(dense.primitives.filter((primitive) => primitive.tags?.includes("canopy-platform")).length).toBeGreaterThanOrEqual(sparse.primitives.filter((primitive) => primitive.tags?.includes("canopy-platform")).length);
+    expect(dense.primitives.filter((primitive) => primitive.tags?.includes("canopy-platform")).length).toBeGreaterThanOrEqual(1);
+    expect(dense.routes.filter((route) => route.id.startsWith("forest-canopy-bridge-route"))).toHaveLength(0);
+  });
+
+  it("only builds a multi-tree skyway when the prompt explicitly asks for a canopy network", () => {
+    const scene = generateScene({
+      prompt: "古老森林，有三座树冠平台、树冠栈道和树冠桥组成的巡逻路线",
+      seed: "forest-explicit-canopy-network",
+      size: "medium",
+      density: 0.78,
+    }, "adaptive");
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("canopy-platform")).length).toBeGreaterThanOrEqual(3);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("canopy-bridge")).length).toBeGreaterThanOrEqual(1);
+    expect(scene.routes.filter((route) => route.id.startsWith("forest-canopy-bridge-route")).length).toBeGreaterThanOrEqual(1);
   });
 
   it("builds a mixed forest ecology with density-driven relief", () => {

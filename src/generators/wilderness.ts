@@ -62,7 +62,7 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   ruin: ["ruin", "ruined", "wilderness ruin", "遗迹", "废墟", "残垣", "荒野遗迹"],
   "underground-lake": ["underground lake", "dark lake", "subterranean lake", "地下湖", "地底湖"],
   underdark: ["underdark", "幽暗地域", "地底世界", "地下洞窟", "菌林", "发光水晶", "mushroom", "fungal", "蘑菇", "菌类"],
-  forest: ["forest", "woodland", "林地", "森林", "树林", "林间", "巨树", "树冠"],
+  forest: ["forest", "woodland", "rainforest", "jungle", "林地", "森林", "树林", "雨林", "丛林", "林间", "巨树", "树冠"],
   swamp: ["swamp", "marsh", "bog", "沼泽", "湿地"],
   "floating-islands": ["floating island", "sky island", "levitating island", "浮空岛", "浮空岩岛", "浮岛", "空岛", "悬浮岛", "悬空石盘", "漂浮岩岛"],
   "industrial-ruin": ["industrial district", "industrial ruins", "factory district", "废弃工业区", "工业区", "工业遗址", "厂房", "输送桥", "锈蚀管道"],
@@ -1822,7 +1822,10 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
     { x: cols * macro.float(0.58, 0.68), z: rows * macro.float(0.43, 0.54), rx: cols * 0.12 * clearingScale, rz: rows * 0.1 * clearingScale },
     { x: cols * macro.float(0.32, 0.44), z: rows * macro.float(0.7, 0.8), rx: cols * 0.1 * clearingScale, rz: rows * 0.09 * clearingScale },
   ];
-  const streamWanted = ["浅溪", "溪流", "小溪", "stream", "creek"].some((term) => prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term));
+  const streamWanted = [
+    "浅溪", "溪流", "小溪", "溪边", "溪畔", "林溪", "木桥",
+    "stream", "creek", "streamside", "creekside", "footbridge", "foot bridge",
+  ].some((term) => promptText.includes(term));
   const streamAt = (x: number) => rows * 0.61 + Math.sin(x * 0.14 + phaseB) * rows * 0.055 + Math.sin(x * 0.043 - phaseA) * rows * 0.04;
   const clearingAt = (x: number, z: number) => clearings.findIndex((clearing, index) => {
     const warp = Math.sin(x * (0.36 + index * 0.04) + z * 0.21 + phaseA) * 0.16;
@@ -2110,7 +2113,20 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
     const x = micro.float(3, cols - 3); const z = micro.float(3, rows - 3); const length = micro.float(3.5, 7.5); const angle = micro.float(-Math.PI, Math.PI);
     scene.primitives.push(box(`forest-fallen-log-${index}`, 0, x, surfaceY(x, z) + feetToMeters(0.8), z, 0.75, feetToMeters(1.5), length, "wood", ["forest", "fallen-log", "cover", "climbable", "standable"], angle));
   }
-  const ancientCount = 2 + Math.round(density * 2);
+  const canopyPlatformRequested = [
+    "树冠平台", "树冠观察台", "树冠哨台", "树冠瞭望台", "树冠战斗平台",
+    "canopy platform", "canopy observatory", "canopy lookout",
+  ].some((term) => promptText.includes(term));
+  const canopyNetworkRequested = [
+    "树冠路线", "树冠栈道", "树冠桥", "树冠维护栈道", "多个树冠平台",
+    "canopy route", "canopy bridge", "canopy network", "canopy catwalk",
+  ].some((term) => promptText.includes(term));
+  // A forest should not automatically become a timber skyway network. One
+  // landmark tree is the default tactical high point; multiple platforms and
+  // bridges require an explicit canopy-network request.
+  const ancientCount = canopyNetworkRequested
+    ? Math.max(3, Math.round(2 + density * 2))
+    : canopyPlatformRequested || density >= 0.82 ? 2 : 1;
   const ancientPlatforms: Array<{ x: number; z: number; y: number; platformY: number }> = [];
   for (let index = 0; index < ancientCount; index += 1) {
     const anchor = clearings[index % clearings.length]!; const x = anchor.x + anchor.rx * 0.72; const z = anchor.z - anchor.rz * 0.46; const y = surfaceY(x, z); const height = feetToMeters(45 + index * 4); const platformY = y + feetToMeters(15 + index * 3);
@@ -2129,7 +2145,7 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
     scene.primitives.push(stair.primitive); scene.routes.push(stairRoute(`forest-canopy-route-${index}`, stair));
     scene.tactical.push(tacticalFeature(`forest-canopy-highground-${index}`, "highGround", x, z, platformY, 2, "A reachable platform in an ancient tree overlooks the clearing."));
   }
-  for (let index = 1; index < ancientPlatforms.length; index += 1) {
+  for (let index = 1; canopyNetworkRequested && index < ancientPlatforms.length; index += 1) {
     const from = ancientPlatforms[index - 1]!;
     const to = ancientPlatforms[index]!;
     const span = Math.hypot(to.x - from.x, to.z - from.z);
@@ -2522,9 +2538,9 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     );
   const wantsBuilding = facilityProfile !== undefined || [
     "木屋", "小屋", "猎人屋", "炼金师小屋", "林间屋", "林务站", "林务所", "巡护站", "护林站",
-    "检疫站", "气象站", "科研站", "研究站", "观测站", "通信站", "雷达站", "边防站",
+    "检疫站", "气象站", "气象哨站", "气象哨所", "科研站", "研究站", "观测站", "通信站", "雷达站", "边防站",
     "cabin", "lodge", "hut", "cottage", "outpost", "ranger station", "forestry station", "驿站",
-    "quarantine station", "weather station", "meteorological station", "research station", "field station", "radio station",
+    "quarantine station", "weather station", "weather outpost", "weather post", "meteorological station", "meteorological outpost", "research station", "field station", "radio station",
   ].some((term) => text.includes(term)) || retrievedFacilityContract;
   if (!wantsBuilding || !["forest", "river-valley", "dry-riverbed", "salt-waste", "mountain", "swamp", "ice", "volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype)) return;
   const alchemical = ["炼金", "alchemy", "alchemist"].some((term) => text.includes(term));
@@ -2544,10 +2560,12 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     && ["湿地", "水沢", "wetland", "marsh"].some((term) => text.includes(term));
   const wantsTrapLine = ["陷阱线", "陷阱", "绊索", "trap line", "trapline", "snare"].some((term) => text.includes(term));
   const wantsFootbridge = ["木桥", "溪边木桥", "footbridge", "foot bridge"].some((term) => text.includes(term));
-  const wantsCanopyObservatory = ["树冠观察台", "树冠平台", "瞭望台", "观察台", "canopy observatory", "lookout"].some((term) => text.includes(term));
+  const wantsCanopyObservatory = ["树冠观察台", "树冠平台", "树冠信号台", "树冠哨台", "树冠瞭望台", "瞭望台", "观察台", "canopy observatory", "canopy signal platform", "canopy lookout", "lookout"].some((term) => text.includes(term));
   const wantsLookoutTower = ["瞭望塔", "巡逻塔", "观察塔", "lookout tower", "watchtower"].some((term) => text.includes(term));
   const wantsTrench = ["陷阱沟", "壕沟", "沟渠", "trench", "ditch"].some((term) => text.includes(term));
   const wantsLogDefense = ["倒木防线", "倒木", "木桩防线", "fallen-log defense", "log barricade"].some((term) => text.includes(term));
+  const wantsRootBridge = ["根桥", "树根桥", "root bridge", "root-bridge"].some((term) => text.includes(term));
+  const wantsStoneRing = ["古老石环", "石环", "巨石环", "stone ring", "standing-stone ring"].some((term) => text.includes(term));
   const wantsIsolationShed = ["隔离棚", "隔离区", "quarantine shed", "isolation shed"].some((term) => text.includes(term));
   const wantsTidalDock = ["潮汐码头", "潮汐栈桥", "码头", "tidal dock", "tidal pier"].some((term) => text.includes(term));
   const wantsCommunicationsTower = facilityCapabilities.communications;
@@ -2587,7 +2605,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       primitiveEntry.tags = [...new Set([...(primitiveEntry.tags ?? []), "wetland", "cold-wetland"] )];
     }
   }
-  const streamWanted = ["溪", "溪流", "小溪", "stream", "creek"].some((term) => text.includes(term));
+  const streamWanted = ["溪", "溪流", "小溪", "溪边", "溪畔", "林溪", "stream", "creek", "streamside", "creekside"].some((term) => text.includes(term));
   const riverAnchor = archetype === "river-valley"
     ? scene.primitives
       .filter((item) => item.tags?.includes("watercourse") && !item.tags?.includes("tributary"))
@@ -2619,6 +2637,10 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   // rivers, cliffs and routes remain the owner of the surrounding site.
   scene.primitives = scene.primitives.filter((item) => {
     if (item.tags?.includes("floor") || item.tags?.includes("terrain")) return true;
+    // Parent hydrology is structural terrain, not procedural clutter.  The
+    // child building may reroute its own access around the channel, but must
+    // never erase stream segments while clearing trees and brush from its pad.
+    if (item.tags?.includes("watercourse") || item.tags?.includes("stream") || item.tags?.includes("shallow-water")) return true;
     // Tactical tree structures own their support and route geometry. A cabin
     // pad may clear brush and ordinary trees, but must not orphan a retained
     // canopy route by deleting its stair or platform primitive.
@@ -2757,7 +2779,24 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   // of treating the profile as an exclusive fixed template.
   if (!customFacility && customSpaces.size > 0) {
     for (const [index, space] of [...customSpaces].entries()) {
-      if (functionalModules.some((module) => module.kind === space)) continue;
+      const existingModule = functionalModules.find((module) => module.kind === space);
+      if (existingModule) {
+        // A known profile supplies safe defaults, but an explicitly requested
+        // functional room owns the visible label and semantic tags. Otherwise
+        // “half-underground archive” silently degrades into a generic reserve
+        // store even though the correct archive geometry already exists.
+        if (space === "archive") {
+          existingModule.label = ["半地下", "semi-underground", "partially underground"].some((term) => text.includes(term))
+            ? "Half-underground weather archive"
+            : "Prompt-requested underground archive";
+          existingModule.levelRole = "basement";
+          existingModule.tags = [...new Set([...existingModule.tags, "archive", "prompt-derived-space", "restricted"])];
+        } else if (space === "observation") {
+          existingModule.label = "Prompt-requested observation and signal platform";
+          existingModule.tags = [...new Set([...existingModule.tags, "signal-platform", "prompt-derived-space"])];
+        }
+        continue;
+      }
       const levelRole: BuildingFunctionalModuleProgram["levelRole"] = space === "observation" ? "roof"
         : space === "submerged-room" ? "basement"
           : space === "hangar" ? "exterior"
@@ -3356,7 +3395,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     const crossingZ = streamAtForForest(scene, crossingX, depth);
     const bankNorth = { xCells: crossingX, zCells: crossingZ - 2.1, yMeters: terrainSurfaceY(scene, crossingX, crossingZ - 2.1, baseY) };
     const bankSouth = { xCells: crossingX, zCells: crossingZ + 2.1, yMeters: terrainSurfaceY(scene, crossingX, crossingZ + 2.1, baseY) };
-    const bridgeTags = ["forest", "footbridge", "stream-crossing", "standable", "surface-grid", "supported"];
+    const bridgeTags = ["forest", "footbridge", "wood-bridge", "bridge", "stream-crossing", "standable", "surface-grid", "supported"];
     const delta = bankNorth.yMeters - bankSouth.yMeters;
     if (Math.abs(delta) < 0.14) {
       scene.primitives.push(
@@ -3404,6 +3443,77 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       }
       scene.tactical.push(tacticalFeature("wilderness-canopy-observatory-highground", "highGround", platform.x, platform.z, platform.platformY, 2, "A roofed observation post overlooks the clearing from the tree canopy."));
     }
+  }
+  if (archetype === "forest" && wantsStoneRing) {
+    const ringRng = context.rng.fork("forest-standing-stone-ring");
+    const stoneCount = 8;
+    const ringRadiusX = 11.5;
+    const ringRadiusZ = 9.5;
+    for (let index = 0; index < stoneCount; index += 1) {
+      const angle = index / stoneCount * Math.PI * 2 + ringRng.float(-0.08, 0.08);
+      const stoneX = Math.max(2, Math.min(width - 2, x + Math.cos(angle) * ringRadiusX));
+      const stoneZ = Math.max(2, Math.min(depth - 2, z + Math.sin(angle) * ringRadiusZ));
+      const stoneY = terrainSurfaceY(scene, stoneX, stoneZ, terrainBaseY);
+      scene.primitives.push(cylinder(
+        `wilderness-forest-standing-stone-${index + 1}`,
+        0,
+        stoneX,
+        stoneY,
+        stoneZ,
+        ringRng.float(0.7, 1.05),
+        feetToMeters(ringRng.float(5.5, 9.5)),
+        "stone",
+        ["forest", "standing-stone-ring", "ancient-stone", "cover", "landmark"],
+      ));
+    }
+    scene.tactical.push(tacticalFeature("wilderness-forest-stone-ring-objective", "chokepoint", x, z, baseY, 3, "The old standing-stone ring encloses the forest outpost and creates alternating cover lanes."));
+  }
+  if (archetype === "forest" && wantsRootBridge) {
+    const outer = {
+      xCells: Math.max(3, Math.min(width - 3, x + entranceDirection * 10)),
+      zCells: Math.max(3, Math.min(depth - 3, z + 4.5)),
+      yMeters: 0,
+    };
+    outer.yMeters = terrainSurfaceY(scene, outer.xCells, outer.zCells, terrainBaseY);
+    const inner = {
+      xCells: Math.max(3, Math.min(width - 3, x + entranceDirection * 5.3)),
+      zCells: Math.max(3, Math.min(depth - 3, z + 2.2)),
+      yMeters: terrainSurfaceY(scene, x + entranceDirection * 5.3, z + 2.2, baseY),
+    };
+    const bridgeTags = ["forest", "root-bridge", "bridge", "standable", "supported", "alternate-route", "surface-grid"];
+    if (Math.abs(outer.yMeters - inner.yMeters) <= feetToMeters(1.1)) {
+      scene.primitives.push(corridor("wilderness-forest-root-bridge", 0, outer.xCells, outer.zCells, inner.xCells, inner.zCells, (outer.yMeters + inner.yMeters) / 2 + 0.04, 1.55, "wood", bridgeTags));
+    } else {
+      const lower = outer.yMeters <= inner.yMeters ? outer : inner;
+      const upper = outer.yMeters <= inner.yMeters ? inner : outer;
+      scene.primitives.push(stairConnection("wilderness-forest-root-bridge", 0, lower, upper, 1.55, "wood", [...bridgeTags, "vertical-route"]).primitive);
+    }
+    const rootDx = inner.xCells - outer.xCells;
+    const rootDz = inner.zCells - outer.zCells;
+    const rootSpan = Math.hypot(rootDx, rootDz);
+    const rootAngle = Math.atan2(rootDx, rootDz);
+    for (const [index, offset] of [-0.48, 0.48].entries()) {
+      const normalX = rootSpan > 0 ? -rootDz / rootSpan : 0;
+      const normalZ = rootSpan > 0 ? rootDx / rootSpan : 0;
+      scene.primitives.push(box(
+        `wilderness-forest-root-bridge-buttress-${index + 1}`,
+        0,
+        (outer.xCells + inner.xCells) / 2 + normalX * offset,
+        Math.min(outer.yMeters, inner.yMeters) + feetToMeters(0.4),
+        (outer.zCells + inner.zCells) / 2 + normalZ * offset,
+        0.34,
+        feetToMeters(0.8),
+        rootSpan,
+        "wood",
+        ["forest", "root-bridge", "root-buttress", "structural-support", "cover"],
+        rootAngle,
+      ));
+    }
+    scene.routes.push(createRoute("wilderness-forest-root-bridge-route", "alternate", [
+      { x: outer.xCells, z: outer.zCells, y: outer.yMeters },
+      { x: inner.xCells, z: inner.zCells, y: inner.yMeters },
+    ], { purpose: "movement", traffic: 0.24, schedule: "all" }));
+    scene.tactical.push(tacticalFeature("wilderness-forest-root-bridge-choke", "chokepoint", (outer.xCells + inner.xCells) / 2, (outer.zCells + inner.zCells) / 2, (outer.yMeters + inner.yMeters) / 2, 1, "A fused root bridge forms a narrow alternate approach over the uneven forest shelf."));
   }
   if (wantsLookoutTower) {
     const towerX = Math.max(5, Math.min(width - 5, x + 7.5));

@@ -58,10 +58,10 @@ export function embeddedFacilitySpacesFromCapabilities(capabilityIds: readonly s
 }
 
 const NATURAL_PARENT_TERMS = [
-  "森林", "树林", "林间", "巨树", "树根", "山地", "高山", "山顶", "山脊", "风化岩脊", "峰顶", "山坡", "岩坡", "裸岩", "峭壁", "山谷", "河谷", "峡谷", "高原", "荒原", "草原", "沙漠",
+  "森林", "树林", "雨林", "丛林", "林间", "巨树", "树根", "山地", "高山", "山顶", "山脊", "风化岩脊", "峰顶", "山坡", "岩坡", "裸岩", "峭壁", "山谷", "河谷", "峡谷", "高原", "荒原", "草原", "沙漠",
   "沼泽", "湿地", "泥炭", "泥沼", "红树林", "海岸", "海崖", "岛屿", "冻土", "冰原", "冰盖", "冰帽", "雪原", "极地", "冰川", "火山", "熔岩",
   "裂谷", "地裂", "深渊", "陨石坑", "撞击坑", "流星坑", "洞穴", "洞窟", "岩窟", "溶洞", "海蚀洞", "潮汐洞穴", "洞穴群",
-  "forest", "woodland", "tree", "mountain", "mountain top", "ridge", "weathered rock ridge", "summit", "rock slope", "bare rock", "cliff", "valley", "canyon", "plateau", "moor", "steppe", "desert",
+  "forest", "woodland", "rainforest", "jungle", "tree", "mountain", "mountain top", "ridge", "weathered rock ridge", "summit", "rock slope", "bare rock", "cliff", "valley", "canyon", "plateau", "moor", "steppe", "desert",
   "swamp", "wetland", "bog", "peat", "mangrove", "coast", "cliff", "island", "tundra", "ice", "ice sheet", "ice cap", "snowfield", "polar", "glacier", "volcanic", "lava",
   "rift", "chasm", "fissure", "impact crater", "meteor crater", "cave", "cavern", "grotto", "sea cave", "tidal cavern", "cave network",
 ] as const;
@@ -72,7 +72,7 @@ const SHELTER_TERMS = [
 
 const PROFILE_TERMS: Readonly<Record<Exclude<EmbeddedFacilityProfile, "shelter" | "custom">, readonly string[]>> = {
   quarantine: ["检疫站", "检疫所", "隔离站", "隔离所", "隔离院", "净化所", "quarantine station", "quarantine house", "isolation station", "isolation house"],
-  weather: ["气象站", "气象观测站", "测候站", "weather station", "meteorological station"],
+  weather: ["气象站", "气象观测站", "气象哨站", "气象哨所", "测候站", "测候哨站", "weather station", "weather outpost", "weather post", "meteorological station", "meteorological outpost"],
   research: [
     "科研站", "研究站", "观测站", "监测站", "实验站", "地震站", "水文站", "生态站", "测绘站", "通信站", "雷达站",
     "research station", "observation station", "monitoring station", "field station", "experimental station", "seismic station",

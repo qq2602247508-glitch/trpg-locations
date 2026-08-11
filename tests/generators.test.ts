@@ -678,6 +678,35 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("treats a streamside footbridge as a parent-terrain contract instead of a dry decorative slab", () => {
+    const prompt = "深林中的猎人木屋，有林间空地、倒木防线、溪边木桥、树冠观察台和地下储藏室";
+    const scene = generateScene({ ...request("forest-streamside-cabin", "large", 0.78), prompt }, "adaptive");
+    expect(scene.archetype).toBe("forest");
+    expect(hasTag(scene, "stream")).toBe(true);
+    expect(hasTag(scene, "watercourse")).toBe(true);
+    expect(hasTag(scene, "wood-bridge")).toBe(true);
+    expect(hasTag(scene, "stream-crossing")).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-forest-footbridge-route")).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(90);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
+  it("decomposes an unfamiliar rainforest weather outpost into terrain and reusable facility atoms", () => {
+    const prompt = "被古老石环包围的雨林气象哨站，有泥泞上坡路、根桥、半地下档案室和树冠信号台";
+    const scene = generateScene({ ...request("rainforest-weather-outpost", "medium", 0.66), prompt }, "adaptive");
+    expect(scene.archetype).toBe("forest");
+    expect(scene.siteProgram?.siteType).toBe("wilderness-site");
+    expect(scene.buildingInstances?.[0]?.detailLevel).toBe("full-interior");
+    expect(hasTag(scene, "weather-station-interior")).toBe(true);
+    expect(hasTag(scene, "standing-stone-ring")).toBe(true);
+    expect(hasTag(scene, "root-bridge")).toBe(true);
+    expect(hasTag(scene, "archive")).toBe(true);
+    expect(scene.rooms.some((room) => room.level === 3 && room.name.toLocaleLowerCase("en-US").includes("archive"))).toBe(true);
+    expect(hasTag(scene, "canopy-observatory")).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-forest-root-bridge-route")).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("keeps a hunter camp as an embedded forest facility rather than a town", () => {
     const prompt = "非常茂密的古老森林，起伏山脊、林间峡谷、巨石高地、倒木和隐蔽猎人营地";
     const scene = generateScene({ ...request("forest-hunter-camp-domain", "medium", 0.88), prompt }, "adaptive");
