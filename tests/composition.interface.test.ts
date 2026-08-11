@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { compileSceneComposition } from "../src/composition";
 import { generateScene } from "../src/generators";
+import { planSceneProgramLocally } from "../src/scene-program";
 
 const CASES = [
   {
@@ -55,5 +57,27 @@ describe("cross-domain building and natural-terrain interfaces", () => {
     }
     expect(signature(generated[0]!)).not.toBe(signature(generated[1]!));
     expect(signature(generated[1]!)).not.toBe(signature(generated[2]!));
+  });
+
+  it("keeps the glacier rescue building when local retrieval adds its medical space", () => {
+    const prompt = "黑冰川裂缝旁的巡礼无线电救护站，有伤员舱、祷告室、地下燃料库、测风塔和跨冰隙担架桥。";
+    const request = { prompt, seed: "round-88-glacier-pilgrim-radio-b", size: "medium" as const, density: 0.84 };
+    const retrievedCapabilities = [
+      "structure.fuel-space",
+      "structure.chapel-space",
+      "terrain.crevasse",
+      "structure.medical-space",
+      "route.bridge",
+      "state.flood",
+      "structure.monastery-cluster",
+      "structure.storage-space",
+      "water.lava-network",
+    ];
+    const composition = compileSceneComposition(request, "local", retrievedCapabilities);
+    const program = planSceneProgramLocally(prompt, "adaptive");
+    const scene = generateScene(request, "adaptive", undefined, program, composition);
+    expect(scene.buildingInstances?.some((building) => building.id === "wilderness-core-building" && building.detailLevel === "full-interior")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("medical-wing"))).toBe(true);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
   });
 });

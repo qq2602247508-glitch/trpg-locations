@@ -2609,11 +2609,17 @@ function rerouteServiceRoutesAroundBuildingFootprint(
   fallbackY: number,
 ): void {
   const clearance = 1.45;
+  const rawRect = {
+    minX: footprint.minX - clearance,
+    maxX: footprint.maxX + clearance,
+    minZ: footprint.minZ - clearance,
+    maxZ: footprint.maxZ + clearance,
+  };
   const rect = {
-    minX: Math.max(1.25, footprint.minX - clearance),
-    maxX: Math.min(scene.boundsCells.x - 1.25, footprint.maxX + clearance),
-    minZ: Math.max(1.25, footprint.minZ - clearance),
-    maxZ: Math.min(scene.boundsCells.z - 1.25, footprint.maxZ + clearance),
+    minX: Math.max(1.25, rawRect.minX),
+    maxX: Math.min(scene.boundsCells.x - 1.25, rawRect.maxX),
+    minZ: Math.max(1.25, rawRect.minZ),
+    maxZ: Math.min(scene.boundsCells.z - 1.25, rawRect.maxZ),
   };
   const inside = (point: { x: number; z: number }) => (
     point.x > rect.minX && point.x < rect.maxX
@@ -2629,12 +2635,27 @@ function rerouteServiceRoutesAroundBuildingFootprint(
     }
     return false;
   };
-  const perimeterCandidates = [
-    { x: rect.minX, z: rect.minZ },
-    { x: rect.maxX, z: rect.minZ },
-    { x: rect.maxX, z: rect.maxZ },
-    { x: rect.minX, z: rect.maxZ },
-  ];
+  const blockedMinX = rawRect.minX < 1.25;
+  const blockedMaxX = rawRect.maxX > scene.boundsCells.x - 1.25;
+  const blockedMinZ = rawRect.minZ < 1.25;
+  const blockedMaxZ = rawRect.maxZ > scene.boundsCells.z - 1.25;
+  // A clamped edge can sit inside a rotated annex when the building nearly
+  // touches the scene boundary. In that case the only physical service loop
+  // is on the opposite, inland edge; never route through the squeezed strip.
+  const perimeterCandidates = blockedMinX
+    ? [{ x: rect.maxX, z: rect.minZ }, { x: rect.maxX, z: rect.maxZ }]
+    : blockedMaxX
+      ? [{ x: rect.minX, z: rect.minZ }, { x: rect.minX, z: rect.maxZ }]
+      : blockedMinZ
+        ? [{ x: rect.minX, z: rect.maxZ }, { x: rect.maxX, z: rect.maxZ }]
+        : blockedMaxZ
+          ? [{ x: rect.minX, z: rect.minZ }, { x: rect.maxX, z: rect.minZ }]
+          : [
+            { x: rect.minX, z: rect.minZ },
+            { x: rect.maxX, z: rect.minZ },
+            { x: rect.maxX, z: rect.maxZ },
+            { x: rect.minX, z: rect.maxZ },
+          ];
   const nearestPerimeter = (point: { x: number; z: number }) => perimeterCandidates
     .slice()
     .sort((left, right) => (
@@ -4224,12 +4245,12 @@ function findReservedSafePlacement(scene: GeneratedScene, requestedX: number, re
         z: (point.z + (next.z - point.z) * section / sections) / CELL,
       }));
     });
-    const crossingClearanceX = Math.max(halfX + 1.35, 10.5);
-    const crossingClearanceZ = Math.max(halfZ + 1.35, 9.5);
+    const crossingClearanceX = halfX + 1.35;
+    const crossingClearanceZ = halfZ + 1.35;
     return samples.some((sample) => Math.abs(sample.x - x) <= crossingClearanceX && Math.abs(sample.z - z) <= crossingClearanceZ);
   });
   const valid = (x: number, z: number) => withinBounds(x, z)
-    && !overlapsReservedTerrainFootprint(scene, x, z, halfX, halfZ, 0.75)
+    && !overlapsReservedTerrainFootprint(scene, x, z, halfX, halfZ, 0.15)
     && !overlapsParentRoute(x, z)
     && supported(x, z);
   if (valid(requestedX, requestedZ)) return { x: requestedX, z: requestedZ };
@@ -4239,7 +4260,7 @@ function findReservedSafePlacement(scene: GeneratedScene, requestedX: number, re
   // valid terrain cells and falsely report that no support exists.
   const firstX = Math.ceil(halfX + 1) + 0.5;
   const firstZ = Math.ceil(halfZ + 1) + 0.5;
-  for (let z = firstZ; z <= scene.boundsCells.z - halfZ - 1; z += 2) for (let x = firstX; x <= scene.boundsCells.x - halfX - 1; x += 2) {
+  for (let z = firstZ; z <= scene.boundsCells.z - halfZ - 1; z += 1) for (let x = firstX; x <= scene.boundsCells.x - halfX - 1; x += 1) {
     if (!valid(x, z)) continue;
     candidates.push({ x, z, score: Math.hypot(x - requestedX, z - requestedZ) });
   }

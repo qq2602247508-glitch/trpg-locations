@@ -206,7 +206,7 @@ export function embeddedFacilityIntent(prompt: string): EmbeddedFacilityIntent |
   if (has(["燃料库", "油库", "燃料舱", "燃料掩体", "fuel store", "fuel bunker", "fuel bay", "tank farm"])) spaces.add("fuel");
   if (has(["居室", "宿舍", "寝室", "住舱", "船员舱", "僧侣房", "quarters", "dormitory", "bunk room", "crew room", "cells"])) spaces.add("quarters");
   if (has(["礼拜堂", "小圣堂", "祈祷小堂", "祷告小堂", "祭室", "祷告室", "chapel", "oratory", "prayer room"])) spaces.add("chapel");
-  if (has(["治疗室", "医务室", "病房", "伤员病房", "手术室", "急救室", "检伤区", "treatment room", "infirmary", "ward", "operating room", "triage"])) spaces.add("medical");
+  if (has(["治疗室", "医务室", "病房", "伤员病房", "伤员舱", "伤员舱室", "手术室", "急救室", "检伤区", "treatment room", "infirmary", "ward", "casualty bay", "medical bay", "operating room", "triage"])) spaces.add("medical");
   if (has(["工坊", "车间", "修复", "维护", "机械", "锻造", "铸造", "workshop", "repair", "maintenance", "machine shop", "forge", "foundry"])) spaces.add("workshop");
   if (has(["温室", "苗圃", "植物房", "greenhouse", "nursery", "conservatory"])) spaces.add("greenhouse");
   if (has(["蒸馏", "酿造", "炼金", "精炼", "distillation", "distillery", "brewery", "alchemy", "refinery"])) spaces.add("distillation");

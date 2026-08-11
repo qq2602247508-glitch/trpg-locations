@@ -805,6 +805,14 @@ function addFunctionalModuleGeometry(
     } else if (module.kind === "chapel") {
       const chapelWidth = exteriorFunctionalWings ? Math.max(4.8, lot.width * 0.46) : Math.max(3.8, lot.width * 0.58);
       const chapelDepth = exteriorFunctionalWings ? Math.max(5.6, lot.depth * 0.52) : Math.max(3.8, lot.depth * 0.68);
+      if (exteriorFunctionalWings) {
+        const chapelCenterForSide = (candidateSide: number) => candidateSide * (lot.width * 0.5 + chapelWidth * 0.3);
+        const preferredScore = routeCrossingScore(chapelCenterForSide(side), localZ, chapelWidth, chapelDepth)
+          + (side === entranceLocalSide ? 0.25 : 0);
+        const alternateScore = routeCrossingScore(chapelCenterForSide(-side), localZ, chapelWidth, chapelDepth)
+          + (-side === entranceLocalSide ? 0.25 : 0);
+        if (alternateScore < preferredScore) side *= -1;
+      }
       const chapelX = exteriorFunctionalWings ? side * (lot.width * 0.5 + chapelWidth * 0.3) : localX * 0.28;
       const chapelHeight = feetToMeters(11.5);
       const center = point(chapelX, localZ);

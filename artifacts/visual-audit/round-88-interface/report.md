@@ -91,3 +91,20 @@ Automated matrix result: 18/18 scenes retain the expected natural parent, a `ful
 ## Result
 
 The round passes the shared building–terrain interface contract and fixes multiple geometry/topology defects. It does not claim final visual perfection. The remaining visual debt is concentrated in natural cliff surfacing, close-up cave presentation, and a final fresh-Worker browser replay for the glacier alternate Seed.
+
+## Round 89 deterministic follow-up
+
+The failed alternate-Seed browser evidence (`20-glacier-high-density-b.png` and `22-glacier-high-density-b-fresh-worker.png`) was reproduced with the exact lexical-retrieval capability set used by the Worker. The missing building began when the correct `structure.medical-space` capability enlarged the rescue facility from a two-module to a three-module compound; the earlier test had accidentally omitted that required medical bay.
+
+The follow-up keeps the requested function instead of filtering it out:
+
+- `伤员舱` / `casualty bay` now compiles to a medical space.
+- Safe-placement search samples every 5-foot cell rather than every other cell.
+- The glacier reservation's own clearance is no longer double-counted by an extra 0.75-cell building buffer.
+- Fixed crevasse crossings retain footprint-relative clearance without the previous oversized minimum rectangle.
+- Exterior chapel wings choose the side with fewer parent-route conflicts.
+- Boundary-adjacent service loops move to the opposite inland edge instead of being clamped through a rotated annex.
+
+The exact Worker-equivalent capability regression and the previous sanatorium Seed both pass. Full automated result after the follow-up: 13 files, 262 tests passed; production build and `git diff --check` passed.
+
+No replacement success screenshot is claimed here. After restarting Vite to load the new Worker, the Codex browser security reviewer denied further access to `http://127.0.0.1:5241/`. The two failed screenshots remain the last browser-boundary evidence until a later round can re-run the same Seed with browser access restored.
