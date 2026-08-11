@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+
+description: TRPG SceneProgram local semantic regression suite
+
+prompts:
+  - |-
+      You are a spatial scene compiler front-end. Convert the user request into
+      exactly one SceneProgram v1 JSON object. Output JSON only, with no markdown.
+      Describe semantic regions and relationships, never meshes or coordinates.
+      Every result must use a 5-foot grid, provide at least two connected regions,
+      and preserve every explicitly requested terrain, structure, route and hazard.
+
+      User request:
+      {{scene_request}}
+
+providers:
+  - id: ollama:chat:qwen3:30b-instruct
+    label: local-qwen-scene-program
+    config:
+      temperature: 0
+      num_predict: 1200
+      think: false
+      passthrough:
+        keep_alive: 10m
+        format: json
+
+defaultTest:
+  assert:
+    - type: is-json
+    - type: javascript
+      value: |-
+        const program = JSON.parse(output);
+        const regionIds = new Set((program.regions || []).map((region) => region.id));
+        const validRelations = (program.relations || []).every(
+          (relation) => regionIds.has(relation.from) && regionIds.has(relation.to),
+        );
+        return program.version === 1
+          && program.constraints?.gridFeet === 5
+          && regionIds.size >= 2
+          && validRelations;
+
+tests: file://cases.yaml
+
+commandLineOptions:
+  maxConcurrency: 1
+  cache: false

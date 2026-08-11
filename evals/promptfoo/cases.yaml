@@ -1,0 +1,49 @@
+- description: polar whaling station decomposes coast, industry and investigation spaces
+  vars:
+    scene_request: >-
+      1930年代北极捕鲸站，浮冰海岸、滑道、炼油棚、无线电室、宿舍、废弃码头和被冰封的仓库。
+
+- description: sinkhole village preserves karst verticality and route redundancy
+  vars:
+    scene_request: >-
+      喀斯特天坑村落，居民楼沿坑壁分层生长，索桥、螺旋坡道、坑底地下河、集水台和岩缝神龛。
+
+- description: mangrove smuggler port combines wetland movement and built facilities
+  vars:
+    scene_request: >-
+      红树林沼泽中的走私港村，蜥蜴水道、树根栈道、吊脚仓库、伪装酒馆、沉船码头、巡逻塔和水下秘密入口。
+
+- description: salt canyon caravan city combines climate, topography and settlement grammar
+  vars:
+    scene_request: >-
+      盐湖峡谷中的商队城，岩壁阴影街道、阶梯式市场、骆驼院、蒸发池、地下储水窖和城门杀伤区。
+
+- description: flooded opera house preserves architectural identity under state mutation
+  vars:
+    scene_request: >-
+      被洪水淹没的歌剧院，门厅、观众席、舞台、乐池、后台化妆间、半淹道具库和屋顶逃生路线。
+
+- description: giant skeleton monastery uses the skeleton as structure rather than decoration
+  vars:
+    scene_request: >-
+      建在巨兽骸骨内的修道院，肋骨回廊、颅骨礼拜堂、脊柱栈道、骨髓地窖、悬挂钟楼和断裂骨桥。
+
+- description: stepped quarry town preserves industrial excavation topology
+  vars:
+    scene_request: >-
+      阶梯式废弃采石场城镇，采石台阶、齿轨斜坡、起重架、石匠工棚、爆破库、坑底积水和山体逃生隧道。
+
+- description: mist tea mountain town combines agricultural terraces and fortification
+  vars:
+    scene_request: >-
+      雾中茶山上的设防村镇，茶田梯地、晒青院、木楼街巷、石制寨门、山脊烽火台、引水渠和林中绕行路。
+
+- description: underground steam bath combines cave morphology and Victorian infrastructure
+  vars:
+    scene_request: >-
+      维多利亚时代地下蒸汽浴场，建在温泉洞穴中，更衣厅、沉降池、锅炉房、管道夹层、贵宾浴室和通往旧下水道的秘密门。
+
+- description: lightning forest glassworks combines damaged biome and magical industry
+  vars:
+    scene_request: >-
+      被雷火烧过的黑森林玻璃工坊，焦木密林、引雷塔、魔法熔炉、吹制大厅、石英仓、地下冷却池和树冠观测台。

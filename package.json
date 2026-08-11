@@ -8,7 +8,11 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "tsc -b --pretty false && vitest run"
+    "check": "tsc -b --pretty false && vitest run",
+    "context:pack": "repomix",
+    "context:pack:focused": "repomix --config repomix.focused.config.json",
+    "eval:semantic:validate": "PROMPTFOO_DISABLE_TELEMETRY=1 promptfoo validate config -c evals/promptfoo/promptfooconfig.yaml",
+    "eval:semantic": "PROMPTFOO_DISABLE_TELEMETRY=1 OLLAMA_BASE_URL=http://127.0.0.1:11434 promptfoo eval -c evals/promptfoo/promptfooconfig.yaml -j 1"
   },
   "dependencies": {
     "three": "^0.179.1"

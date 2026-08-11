@@ -1,0 +1,51 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "output": {
+    "filePath": "artifacts/context/repomix-focused.xml",
+    "style": "xml",
+    "filePathStyle": "target-relative",
+    "compress": true,
+    "patterns": [
+      {
+        "pattern": "src/**/schema.ts",
+        "compress": false
+      }
+    ],
+    "fileSummary": true,
+    "directoryStructure": true,
+    "removeEmptyLines": true,
+    "truncateBase64": true,
+    "copyToClipboard": false,
+    "topFilesLength": 20,
+    "tokenCountTree": 200,
+    "tokenBudget": 60000,
+    "git": {
+      "sortByChanges": true,
+      "sortByChangesMaxCommits": 100,
+      "includeDiffs": false,
+      "includeLogs": false
+    }
+  },
+  "include": [
+    "src/scene-program/**/*",
+    "src/composition/**/*",
+    "src/semantic/**/*",
+    "src/generators/index.ts"
+  ],
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "artifacts/**",
+      "dist/**",
+      "coverage/**",
+      "node_modules/**"
+    ]
+  },
+  "security": {
+    "enableSecurityCheck": true
+  },
+  "tokenCount": {
+    "encoding": "o200k_base"
+  }
+}
