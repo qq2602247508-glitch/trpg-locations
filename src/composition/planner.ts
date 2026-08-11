@@ -75,13 +75,21 @@ function filterRetrievedCapabilities(prompt: string, ids: readonly string[]): st
 
 function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   const text = normalized(prompt);
+  const firstIndexOf = (terms: readonly string[]): number => terms.reduce((best, term) => {
+    const index = text.indexOf(term);
+    return index >= 0 ? Math.min(best, index) : best;
+  }, Number.POSITIVE_INFINITY);
   if (has(text, ["陨石坑", "撞击坑", "流星坑", "impact crater", "meteor crater"])) return "crater";
   // Ice fields may contain secondary fissures without becoming a generic
   // two-bank rift. The parent material/process owns the composition domain.
   if (has(text, ["冰原", "冰盖", "冰川", "冻土", "雪原", "ice field", "ice sheet", "glacier", "tundra", "permafrost"])) return "ice";
   if (has(text, ["浮空岛", "浮空岩岛", "浮岛", "空岛", "悬空岛", "悬空石盘", "漂浮岩岛", "floating island", "sky island", "levitating island"])) return "floating";
-  if (has(text, ["洞穴", "洞窟", "岩窟", "溶洞", "地底洞室", "海蚀洞", "潮汐洞穴", "洞穴群", "cave", "cavern", "grotto", "sea cave", "tidal cavern", "cave network"])) return "cave";
-  if (has(text, ["裂谷", "裂缝", "裂隙", "深渊", "rift", "crevasse", "chasm", "ravine"])) return "rift";
+  const caveTerms = ["洞穴", "洞窟", "岩窟", "溶洞", "地底洞室", "海蚀洞", "潮汐洞穴", "洞穴群", "cave", "cavern", "grotto", "sea cave", "tidal cavern", "cave network"] as const;
+  const riftTerms = ["裂谷", "裂缝", "裂隙", "深渊", "rift", "crevasse", "chasm", "ravine"] as const;
+  const caveIndex = firstIndexOf(caveTerms);
+  const riftIndex = firstIndexOf(riftTerms);
+  if (riftIndex < caveIndex) return "rift";
+  if (caveIndex < Number.POSITIVE_INFINITY) return "cave";
   if (has(text, ["火山", "熔岩", "岩浆", "volcano", "volcanic", "caldera", "lava"])) return "volcanic";
   if (has(text, ["盐碱荒原", "盐碱地", "盐沼荒原", "盐壳荒地", "salt wasteland", "salt flat", "salt flats", "salt desert"])) return "salt-waste";
   // Mangroves are tidal wetlands. They must not be claimed by the generic

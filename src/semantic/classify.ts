@@ -470,9 +470,26 @@ export function decomposeAdaptiveFeatures(prompt: string): AdaptiveFeatures {
 export function classifyInput(prompt: string): InputClassification {
   const normalizedPrompt = normalizePrompt(prompt);
   const result = categoryScores(normalizedPrompt);
-  const selected = bestKind(result.scores);
+  let selected = bestKind(result.scores);
   const scores = result.scores;
   const traits = decomposeAdaptiveFeatures(prompt);
+
+  // A child landmark must not steal ownership from an explicitly named
+  // outdoor parent.  "裂谷……侧壁洞穴" is a rift with a cave feature, not a
+  // generic cave network.  Compare first occurrences instead of adding ever
+  // larger keyword weights so genuinely cave-first prompts still use caves.
+  const firstIndexOf = (terms: readonly string[]): number => terms.reduce((best, term) => {
+    const index = normalizedPrompt.indexOf(term);
+    return index >= 0 ? Math.min(best, index) : best;
+  }, Number.POSITIVE_INFINITY);
+  const outdoorParentIndex = firstIndexOf([
+    "裂谷", "地裂", "深裂隙", "rift", "chasm", "fissure",
+    "冰川", "冰原", "glacier", "ice field",
+    "火山口", "破火山口", "caldera", "volcanic crater",
+    "森林", "雨林", "forest", "rainforest",
+  ]);
+  const caveIndex = firstIndexOf(["洞穴", "溶洞", "山洞", "cave", "cavern", "grotto"]);
+  if (outdoorParentIndex < caveIndex && selected === "cave") selected = "wilderness";
 
   if (selected === undefined) {
     return {

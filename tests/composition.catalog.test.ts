@@ -157,6 +157,38 @@ describe("five-layer composition catalog", () => {
     const volcanoDense = generateScene({ prompt: volcanoPrompt, seed: "volcano-density", size: "medium", density: 0.95 }, "adaptive");
     expect(volcanoDense.primitives.filter((entry) => entry.tags?.includes("lava-branch")).length).toBeGreaterThan(volcanoSparse.primitives.filter((entry) => entry.tags?.includes("lava-branch")).length);
     expect(volcanoDense.primitives.filter((entry) => entry.tags?.includes("obsidian-ridge")).length).toBeGreaterThan(volcanoSparse.primitives.filter((entry) => entry.tags?.includes("obsidian-ridge")).length);
+    const volcanicForm = (scene: typeof volcanoSparse) => scene.primitives.flatMap((entry) => entry.tags ?? []).find((tag) => tag.startsWith("volcanic-form:"));
+    expect(volcanicForm(volcanoDense)).not.toBe(volcanicForm(volcanoSparse));
+  });
+
+  it("keeps rift and glacier parents ahead of subordinate cave or fissure features", () => {
+    const riftPrompt = "巨大裂谷将地图完全切成两岸，有天然石桥、绳桥、裂谷底路线、侧壁洞穴和断崖哨所";
+    const riftProgram = compileSceneComposition({ prompt: riftPrompt, seed: "rift-parent-contract", size: "large", density: 0.9 });
+    const rift = generateScene({ prompt: riftPrompt, seed: "rift-parent-contract", size: "large", density: 0.9 }, "adaptive");
+    expect(riftProgram.primaryDomain).toBe("rift");
+    expect(rift.archetype).toBe("rift");
+    expect(rift.primitives.some((entry) => entry.tags?.includes("rift-form:forked"))).toBe(true);
+    expect(rift.primitives.some((entry) => entry.tags?.includes("side-cave"))).toBe(true);
+    expect(rift.buildingInstances?.length ?? 0).toBeGreaterThanOrEqual(1);
+    expect(rift.routes.some((route) => route.id === "rift-side-cave-route")).toBe(true);
+    const riftSparse = generateScene({ prompt: riftPrompt, seed: "rift-parent-contract", size: "large", density: 0.2 }, "adaptive");
+    const riftAlternateSeed = generateScene({ prompt: riftPrompt, seed: "rift-parent-contract-alt", size: "large", density: 0.9 }, "adaptive");
+    expect(riftSparse.primitives.some((entry) => entry.tags?.includes("rift-form:forked"))).toBe(false);
+    const riftSignature = (scene: typeof rift) => scene.primitives
+      .filter((entry) => entry.tags?.includes("rift-bank"))
+      .slice(0, 60)
+      .map((entry) => [Math.round(entry.position.x * 10), Math.round(entry.position.z * 10)]);
+    expect(riftSignature(riftAlternateSeed)).not.toEqual(riftSignature(rift));
+
+    const icePrompt = "冰川裂谷，两岸完全分离，有冰桥、雪脊、融水池、裂谷底和废弃测量站";
+    const iceProgram = compileSceneComposition({ prompt: icePrompt, seed: "glacier-parent-contract", size: "large", density: 0.9 });
+    const ice = generateScene({ prompt: icePrompt, seed: "glacier-parent-contract", size: "large", density: 0.9 }, "adaptive");
+    expect(iceProgram.primaryDomain).toBe("ice");
+    expect(ice.archetype).toBe("ice");
+    expect(ice.primitives.some((entry) => entry.tags?.includes("main-crevasse"))).toBe(true);
+    expect(ice.primitives.some((entry) => entry.tags?.includes("crevasse-west-bank"))).toBe(true);
+    expect(ice.primitives.some((entry) => entry.tags?.includes("crevasse-east-bank"))).toBe(true);
+    expect(ice.buildingInstances?.length ?? 0).toBeGreaterThanOrEqual(1);
   });
 
   it("reports prompt requirements that are not physical geometry", () => {

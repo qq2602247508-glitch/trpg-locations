@@ -154,6 +154,12 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   if (morphology.impactCrater) return "impact-crater";
   if (WILDERNESS_TERMS["floating-islands"].some((term) => normalized.includes(term))) return "floating-islands";
   if (morphology.infernal) return "infernal-waste";
+  // Named biomes own their terrain grammar. A glacier with a crevasse uses
+  // the ice generator's split banks, and the Underdark may contain a rift
+  // without collapsing into the generic two-bank rift map.
+  if (includesAny(normalized, WILDERNESS_TERMS.ice)) return "ice";
+  if (WILDERNESS_TERMS["underground-lake"].some((term) => normalized.includes(term))) return "underground-lake";
+  if (WILDERNESS_TERMS.underdark.some((term) => normalized.includes(term))) return "underdark";
   const explicitRift = includesAny(normalized, ["裂谷", "地裂", "深裂隙", "rift", "chasm", "fissure"]);
   const explicitVolcanicCrater = includesAny(normalized, ["火山口", "破火山口", "熔岩湖", "caldera", "volcanic crater", "lava lake"]);
   // In a phrase such as “火山裂谷中的铸造所”, the rift is the parent
@@ -176,8 +182,6 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   // Named biome/domain beats a secondary landmark in the same prompt. For
   // example “幽暗地域，连续裂谷” is an underdark map with a rift feature,
   // not a generic rift map.
-  if (WILDERNESS_TERMS["underground-lake"].some((term) => normalized.includes(term))) return "underground-lake";
-  if (WILDERNESS_TERMS.underdark.some((term) => normalized.includes(term))) return "underdark";
   let selected: WildernessArchetype = "mountain";
   let firstIndex = Number.POSITIVE_INFINITY;
   for (const archetype of Object.keys(WILDERNESS_TERMS) as WildernessArchetype[]) {
@@ -452,31 +456,71 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
   scene.floorHeightFeet = [Math.ceil((yOf(form === "double-canyon" || form === "asymmetric-gorge" ? 6 : 4) + feetToMeters(12)) / 0.3048)];
 }
 
-function buildRift(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"], volcanicTheme = false): void {
+function buildRift(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"], volcanicTheme = false, prompt = ""): void {
   const cols = Math.max(32, Math.floor(width)); const rows = Math.max(28, Math.floor(depth));
-  const phase = rng.float(-Math.PI, Math.PI); const halfGap = 3.4 + density * 3.2; const bottomHalf = 1.15 + density * 0.45;
-  const riftAt = (z: number) => cols * 0.5 + Math.sin(z * (0.12 + density * 0.035) + phase) * (2.4 + density * 3.2) + Math.sin(z * 0.037 - phase) * 2;
+  const macro = rng.fork("macro");
+  const detail = rng.fork("detail");
+  const phase = macro.float(-Math.PI, Math.PI);
+  const baseForm = macro.pick(["sinuous", "cross-map", "diagonal"] as const);
+  const form: "sinuous" | "cross-map" | "diagonal" | "forked" = density >= 0.74 ? "forked" : baseForm;
+  const baseAngle = baseForm === "cross-map" ? Math.PI / 2 : baseForm === "diagonal" ? macro.sign() * macro.float(0.48, 0.78) : 0;
+  const tangent = { x: Math.sin(baseAngle), z: Math.cos(baseAngle) };
+  const normal = { x: Math.cos(baseAngle), z: -Math.sin(baseAngle) };
+  const center = { x: cols * macro.float(0.46, 0.54), z: rows * macro.float(0.46, 0.54) };
+  const tExtent = Math.min(
+    cols * 0.45 / Math.max(0.18, Math.abs(tangent.x)),
+    rows * 0.45 / Math.max(0.18, Math.abs(tangent.z)),
+  );
+  const halfGap = 3.2 + density * 4.4;
+  const bottomHalf = 1.05 + density * 0.72;
+  const curveAt = (t: number) => Math.sin(t * (0.115 + density * 0.028) + phase) * (2.1 + density * 3.7)
+    + Math.sin(t * 0.041 - phase * 0.7) * 1.7;
+  const coordinates = (x: number, z: number) => {
+    const dx = x - center.x; const dz = z - center.z;
+    const longitudinal = dx * tangent.x + dz * tangent.z;
+    const transverse = dx * normal.x + dz * normal.z;
+    return { longitudinal, transverse, signed: transverse - curveAt(longitudinal) };
+  };
+  const pointAt = (t: number, offset = 0) => {
+    const transverse = curveAt(t) + offset;
+    return { x: center.x + tangent.x * t + normal.x * transverse, z: center.z + tangent.z * t + normal.z * transverse };
+  };
+  const forkSign = macro.sign();
+  const forkDistance = (longitudinal: number, transverse: number) => {
+    const progress = Math.max(0, longitudinal / tExtent);
+    const branchOffset = curveAt(longitudinal) + forkSign * (halfGap * 1.2 + progress * (5.5 + density * 5));
+    return Math.abs(transverse - branchOffset);
+  };
   const heights: Array<number | undefined> = [];
   for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
-    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z); const distance = Math.abs(x - riftAt(z));
-    const sideFracture = distance > halfGap + 2 && distance < halfGap + 7 && Math.sin(x * 0.41 + z * 0.27 + phase) > 0.95 - density * 0.08;
-    if (edge === 0 || sideFracture || (distance > bottomHalf && distance < halfGap)) heights.push(undefined);
+    const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
+    const local = coordinates(x, z);
+    const distance = Math.abs(local.signed);
+    const inMainVoid = distance > bottomHalf && distance < halfGap;
+    const inForkVoid = form === "forked" && local.longitudinal > -tExtent * 0.06 && forkDistance(local.longitudinal, local.transverse) < halfGap * 0.72;
+    const sideFracture = distance > halfGap + 2 && distance < halfGap + 8 + density * 3
+      && Math.sin(x * 0.41 + z * 0.27 + phase) > 0.965 - density * 0.12;
+    if (edge === 0 || sideFracture || inMainVoid || inForkVoid) heights.push(undefined);
     else if (distance <= bottomHalf) heights.push(0);
-    else { const high = x < riftAt(z) ? 5 : 4; heights.push(Math.min(6, high + (Math.sin(z * 0.17 + (x < riftAt(z) ? 0 : 1.4)) > 0.72 ? 1 : 0))); }
+    else {
+      const baseLevel = local.signed < 0 ? 5 : 4;
+      const shelf = Math.sin(local.longitudinal * 0.16 + (local.signed < 0 ? 0 : 1.4)) > 0.67 - density * 0.08 ? 1 : 0;
+      heights.push(Math.min(7, baseLevel + shelf));
+    }
   }
-  const rendered = renderMorphologyField(scene, { prefix: "rift", cols, rows, heights, stepFeet: 5, materialFor: (level) => level === 0 ? "darkStone" : level >= 5 ? "rock" : volcanicTheme ? "darkStone" : "earth", tagsFor: (level) => ["rift", "crevasse", ...(volcanicTheme ? ["volcanic-rift", "basalt"] : []), level === 0 ? "rift-bottom" : "rift-bank", level >= 5 ? "high-ground" : "standable"] });
+  const rendered = renderMorphologyField(scene, { prefix: "rift", cols, rows, heights, stepFeet: 5, materialFor: (level) => level === 0 ? "darkStone" : level >= 5 ? "rock" : volcanicTheme ? "darkStone" : "earth", tagsFor: (level) => ["rift", "crevasse", `rift-form:${form}`, ...(volcanicTheme ? ["volcanic-rift", "basalt"] : []), level === 0 ? "rift-bottom" : "rift-bank", level >= 5 ? "high-ground" : "standable"] });
   if (volcanicTheme) {
     const lavaRng = rng.fork("volcanic-rift-lava");
     const lavaPools = Math.max(8, Math.round(8 + density * 9));
     for (let index = 0; index < lavaPools; index += 1) {
-      const lavaZ = rows * (index + 0.65) / (lavaPools + 0.3);
-      const lavaX = riftAt(lavaZ) + lavaRng.float(-bottomHalf * 0.32, bottomHalf * 0.32);
+      const lavaT = -tExtent + tExtent * 2 * (index + 0.65) / (lavaPools + 0.3);
+      const lavaPoint = pointAt(lavaT, lavaRng.float(-bottomHalf * 0.32, bottomHalf * 0.32));
       scene.primitives.push(cylinder(
         `volcanic-rift-lava-pool-${index + 1}`,
         0,
-        lavaX,
+        lavaPoint.x,
         rendered.yOf(0) + 0.03,
-        lavaZ,
+        lavaPoint.z,
         Math.max(0.9, bottomHalf * lavaRng.float(0.75, 1.3)),
         0.18,
         "hazard",
@@ -484,36 +528,59 @@ function buildRift(scene: GeneratedScene, width: number, depth: number, density:
       ));
     }
   }
-  const reservationSegments = Math.max(8, Math.round(rows / 5));
+  const reservationSegments = Math.max(8, Math.round(tExtent * 2 / 5));
   for (let index = 0; index < reservationSegments; index += 1) {
-    const fromZ = (rows * index) / reservationSegments;
-    const toZ = (rows * (index + 1)) / reservationSegments;
+    const fromT = -tExtent + (tExtent * 2 * index) / reservationSegments;
+    const toT = -tExtent + (tExtent * 2 * (index + 1)) / reservationSegments;
+    const from = pointAt(fromT); const to = pointAt(toT);
     reserveLinearTerrain(
       scene,
       `rift-unstable-reservation-${index}`,
       "unstable",
-      riftAt(fromZ),
-      fromZ,
-      riftAt(toZ),
-      toZ,
+      from.x,
+      from.z,
+      to.x,
+      to.z,
       halfGap * 2,
       1.1,
       "The fractured rift corridor owns its void, collapsing walls, and immediate setback; only authored crossings may span it.",
     );
   }
-  const westEdge = (z: number) => riftAt(z) - halfGap - 0.4; const eastEdge = (z: number) => riftAt(z) + halfGap + 0.4;
-  const bridgeRows = [rows * 0.28, rows * 0.72];
-  for (const [index, z] of bridgeRows.entries()) scene.primitives.push(corridor(`rift-bridge-${index}`, 0, westEdge(z), z, eastEdge(z), z, rendered.yOf(index === 0 ? 5 : 4), index === 0 ? 1.8 : 1.35, index === 0 ? "rock" : "wood", ["bridge", index === 0 ? "natural-bridge" : "rope-bridge", "supported", "rift-crossing"]));
-  const descentZ = rows * 0.5; const bottomX = riftAt(descentZ); const descent = stairConnection("rift-bottom-descent", 0, { xCells: bottomX, zCells: descentZ + 2.2, yMeters: rendered.yOf(0) }, { xCells: westEdge(descentZ) - 1, zCells: descentZ, yMeters: rendered.yOf(5) }, 1.4, "rock", ["vertical-route", "vertical-opening", "cliff-descent", "supported", "rift"]);
+  const bridgeTs = [-tExtent * macro.float(0.42, 0.58), tExtent * macro.float(0.36, 0.58)];
+  const bridgePoints = bridgeTs.map((t) => ({ t, a: pointAt(t, -halfGap - 0.4), b: pointAt(t, halfGap + 0.4) }));
+  for (const [index, bridge] of bridgePoints.entries()) scene.primitives.push(corridor(`rift-bridge-${index}`, 0, bridge.a.x, bridge.a.z, bridge.b.x, bridge.b.z, rendered.yOf(index === 0 ? 5 : 4), index === 0 ? 1.8 : 1.35, index === 0 ? "rock" : "wood", ["bridge", index === 0 ? "natural-bridge" : "rope-bridge", "supported", "rift-crossing", `rift-form:${form}`]));
+  const descentT = detail.float(-tExtent * 0.18, tExtent * 0.18); const bottom = pointAt(descentT); const bank = pointAt(descentT, -halfGap - 1.2);
+  const descent = stairConnection("rift-bottom-descent", 0, { xCells: bottom.x, zCells: bottom.z, yMeters: rendered.yOf(0) }, { xCells: bank.x, zCells: bank.z, yMeters: rendered.yOf(5) }, 1.4, "rock", ["vertical-route", "vertical-opening", "cliff-descent", "supported", "rift"]);
   scene.primitives.push(descent.primitive); scene.routes.push(stairRoute("rift-bottom-route", descent));
-  const westRoom = createRoom("rift-west-room", "Western broken bank", "natural", 0, cols * 0.23, rows * 0.5, cols * 0.34, rows - 5, rendered.yOf(5));
-  const eastRoom = createRoom("rift-east-room", "Eastern high bank", "natural", 0, cols * 0.77, rows * 0.5, cols * 0.34, rows - 5, rendered.yOf(4));
-  const bottomRoom = createRoom("rift-bottom-room", "Deep rift floor", "combat", 0, bottomX, rows * 0.5, bottomHalf * 2, rows - 6, rendered.yOf(0));
-  const bridgeRoom = createRoom("rift-bridge-room", "Two-bank crossings", "circulation", 0, cols * 0.5, rows * 0.5, halfGap * 2 + 4, rows * 0.52, rendered.yOf(5));
+  const bankA = pointAt(0, -Math.min(cols, rows) * 0.23); const bankB = pointAt(0, Math.min(cols, rows) * 0.23);
+  const bottomRoomCenter = pointAt(0);
+  const westRoom = createRoom("rift-west-room", "Western broken bank", "natural", 0, bankA.x, bankA.z, cols * 0.3, rows * 0.42, rendered.yOf(5));
+  const eastRoom = createRoom("rift-east-room", "Eastern high bank", "natural", 0, bankB.x, bankB.z, cols * 0.3, rows * 0.42, rendered.yOf(4));
+  const bottomRoom = createRoom("rift-bottom-room", "Deep rift floor", "combat", 0, bottomRoomCenter.x, bottomRoomCenter.z, bottomHalf * 2, Math.min(rows, cols) * 0.7, rendered.yOf(0));
+  const bridgeRoom = createRoom("rift-bridge-room", "Two-bank crossings", "circulation", 0, center.x, center.z, halfGap * 2 + 4, Math.min(rows, cols) * 0.52, rendered.yOf(5));
   scene.rooms.push(westRoom, eastRoom, bottomRoom, bridgeRoom); connectRooms(scene.rooms, westRoom.id, bridgeRoom.id); connectRooms(scene.rooms, eastRoom.id, bridgeRoom.id); connectRooms(scene.rooms, westRoom.id, bottomRoom.id);
-  scene.routes.push(createRoute("rift-primary-route", "primary", [{ x: 2, z: bridgeRows[0]!, y: rendered.yOf(5) }, { x: westEdge(bridgeRows[0]!), z: bridgeRows[0]!, y: rendered.yOf(5) }, { x: eastEdge(bridgeRows[0]!), z: bridgeRows[0]!, y: rendered.yOf(5) }, { x: cols - 2, z: bridgeRows[0]!, y: rendered.yOf(4) }]), createRoute("rift-alternate-route", "alternate", [{ x: 2, z: bridgeRows[1]!, y: rendered.yOf(5) }, { x: westEdge(bridgeRows[1]!), z: bridgeRows[1]!, y: rendered.yOf(4) }, { x: eastEdge(bridgeRows[1]!), z: bridgeRows[1]!, y: rendered.yOf(4) }, { x: cols - 2, z: bridgeRows[1]!, y: rendered.yOf(4) }]));
-  scene.tactical.push(tacticalFeature("rift-entrance", "entrance", 2, bridgeRows[0]!, rendered.yOf(5), 2, "A fractured shelf approaches the upper natural bridge."), tacticalFeature("rift-bridge-choke", "chokepoint", riftAt(bridgeRows[0]!), bridgeRows[0]!, rendered.yOf(5), 2, "The upper bridge is exposed to both banks."), tacticalFeature("rift-void-hazard", "hazard", riftAt(rows * 0.5), rows * 0.5, rendered.yOf(0), Math.ceil(halfGap), "The winding void separates both banks and exposes a deep playable floor."), tacticalFeature("rift-bank-highground", "highGround", cols * 0.24, rows * 0.48, rendered.yOf(6), 3, "The western bank overlooks both crossings and the rift bottom."));
-  scene.description = `${volcanicTheme ? "Volcanic " : ""}rift grammar with a winding ${Math.round(halfGap * 2)}-cell fracture, explicit cliff faces, two distinct bank crossings, a deep ${volcanicTheme ? "lava-streaked basalt" : "playable"} floor, and a supported descent route.`;
+  scene.routes.push(
+    createRoute("rift-primary-route", "primary", [{ ...bridgePoints[0]!.a, y: rendered.yOf(5) }, { ...bridgePoints[0]!.b, y: rendered.yOf(5) }]),
+    createRoute("rift-alternate-route", "alternate", [{ ...bridgePoints[1]!.a, y: rendered.yOf(4) }, { ...bridgePoints[1]!.b, y: rendered.yOf(4) }]),
+  );
+  const choke = pointAt(bridgeTs[0]!);
+  scene.tactical.push(tacticalFeature("rift-entrance", "entrance", bridgePoints[0]!.a.x, bridgePoints[0]!.a.z, rendered.yOf(5), 2, "A fractured shelf approaches the upper natural bridge."), tacticalFeature("rift-bridge-choke", "chokepoint", choke.x, choke.z, rendered.yOf(5), 2, "The upper bridge is exposed to both banks."), tacticalFeature("rift-void-hazard", "hazard", bottomRoomCenter.x, bottomRoomCenter.z, rendered.yOf(0), Math.ceil(halfGap), "The winding void separates both banks and exposes a deep playable floor."), tacticalFeature("rift-bank-highground", "highGround", bankA.x, bankA.z, rendered.yOf(6), 3, "The high bank overlooks both crossings and the rift bottom."));
+  const promptText = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  if (includesAny(promptText, ["侧壁洞穴", "侧壁洞窟", "崖壁洞穴", "cliff cave", "side cave"])) {
+    const caveT = tExtent * 0.18;
+    const caveMouth = pointAt(caveT, halfGap + 0.25);
+    const caveApproach = pointAt(caveT, halfGap + 4.2);
+    scene.primitives.push(
+      box("rift-side-cave-mouth", 0, caveMouth.x, rendered.yOf(2), caveMouth.z, 3.4, feetToMeters(11), 1.35, "darkStone", ["rift", "side-cave", "cave-mouth", "portal", "vertical-face"], baseAngle),
+      corridor("rift-side-cave-ledge", 0, caveApproach.x, caveApproach.z, caveMouth.x, caveMouth.z, rendered.yOf(3), 1.45, "rock", ["rift", "side-cave", "ledge", "standable", "alternate-route"]),
+    );
+    scene.routes.push(createRoute("rift-side-cave-route", "alternate", [
+      { x: caveApproach.x, z: caveApproach.z, y: rendered.yOf(4) },
+      { x: caveMouth.x, z: caveMouth.z, y: rendered.yOf(3) },
+    ]));
+    scene.tactical.push(tacticalFeature("rift-side-cave-ambush", "secret", caveMouth.x, caveMouth.z, rendered.yOf(3), 1, "A cave mouth cut into the rift wall overlooks the lower route."));
+  }
+  scene.description = `${volcanicTheme ? "Volcanic " : ""}${form} rift grammar with a ${Math.round(halfGap * 2)}-cell fracture, explicit cliff faces, two distinct bank crossings, a deep ${volcanicTheme ? "lava-streaked basalt" : "playable"} floor, and a supported descent route.`;
   scene.floorHeightFeet = [48];
 }
 
@@ -1182,25 +1249,52 @@ function addFloatingIslandsOverlay(scene: GeneratedScene, width: number, depth: 
 function buildVolcanic(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
   const cols = Math.max(30, Math.floor(width));
   const rows = Math.max(28, Math.floor(depth));
-  const cx = cols * rng.float(0.43, 0.57);
-  const cz = rows * rng.float(0.42, 0.54);
-  const radius = Math.min(cols, rows) * rng.float(0.3, 0.36);
-  const outletAngle = rng.float(-0.45, 0.45);
+  const macro = rng.fork("macro");
+  const detail = rng.fork("detail");
+  const baseForm = macro.pick(["breached-caldera", "eccentric-crater", "broken-ring"] as const);
+  const form: "breached-caldera" | "eccentric-crater" | "broken-ring" | "twin-vent" | "collapsed-flank" = density >= 0.74
+    ? macro.pick(["twin-vent", "collapsed-flank"] as const)
+    : baseForm;
+  const cx = cols * macro.float(form === "eccentric-crater" ? 0.36 : 0.43, form === "eccentric-crater" ? 0.52 : 0.57);
+  const cz = rows * macro.float(0.4, 0.56);
+  const radius = Math.min(cols, rows) * macro.float(0.29, 0.37);
+  const outletAngle = macro.float(-Math.PI, Math.PI);
+  const outletDirection = { x: Math.cos(outletAngle), z: Math.sin(outletAngle) };
+  const outletNormal = { x: -outletDirection.z, z: outletDirection.x };
+  const secondaryVent = {
+    x: cx + Math.cos(outletAngle + Math.PI * 0.62) * radius * 0.48,
+    z: cz + Math.sin(outletAngle + Math.PI * 0.62) * radius * 0.48,
+    radius: radius * macro.float(0.34, 0.46),
+  };
+  const ellipseAngle = macro.float(-Math.PI, Math.PI);
+  const ellipseAspect = macro.float(0.76, 1.24);
+  const rimPhase = macro.float(-Math.PI, Math.PI);
   const lavaBranchCount = 2 + Math.round(density * 3);
-  const lavaAngles = Array.from({ length: lavaBranchCount }, (_, index) => outletAngle + (index - (lavaBranchCount - 1) / 2) * rng.float(0.32, 0.55));
+  const lavaAngles = Array.from({ length: lavaBranchCount }, (_, index) => outletAngle + (index - (lavaBranchCount - 1) / 2) * detail.float(0.32, 0.55));
   const heights: Array<number | undefined> = [];
   for (let z = 0; z < rows; z += 1) for (let x = 0; x < cols; x += 1) {
     const dx = x - cx;
     const dz = z - cz;
-    const distance = Math.hypot(dx, dz);
+    const rotatedX = dx * Math.cos(ellipseAngle) - dz * Math.sin(ellipseAngle);
+    const rotatedZ = dx * Math.sin(ellipseAngle) + dz * Math.cos(ellipseAngle);
+    const distance = Math.hypot(rotatedX / ellipseAspect, rotatedZ * ellipseAspect);
     const angle = Math.atan2(dz, dx);
-    const warped = distance / (radius * (1 + Math.sin(angle * 3 + 0.8) * 0.1 + Math.sin(angle * 5) * 0.05));
+    const warped = distance / (radius * (1
+      + Math.sin(angle * 3 + rimPhase) * 0.19
+      + Math.sin(angle * 5 - rimPhase * 0.7) * 0.1
+      + Math.sin(angle * 9 + rimPhase * 1.7) * 0.035));
+    const secondaryDistance = Math.hypot(x - secondaryVent.x, z - secondaryVent.z) / secondaryVent.radius;
     const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
-    const outlet = Math.abs(angle - outletAngle) < 0.12 + density * 0.04 && dx > 0 && warped < 1.45;
+    const outletDelta = Math.abs(Math.atan2(Math.sin(angle - outletAngle), Math.cos(angle - outletAngle)));
+    const outlet = outletDelta < (form === "collapsed-flank" ? 0.34 : 0.13 + density * 0.04)
+      && dx * outletDirection.x + dz * outletDirection.z > 0
+      && warped < 1.48;
     const lavaBranch = lavaAngles.some((branchAngle) => Math.abs(Math.atan2(Math.sin(angle - branchAngle), Math.cos(angle - branchAngle))) < 0.045 + density * 0.026) && warped > 0.14 && warped < 1.38;
     const brokenRim = warped > 0.72 && warped < 1.06 && Math.sin(x * 0.43 + z * 0.29) > 0.94 - density * 0.08;
-    if (edge === 0 || warped < 0.2 || outlet || lavaBranch || brokenRim) heights.push(undefined);
+    const secondaryCrater = form === "twin-vent" && secondaryDistance < 0.26;
+    if (edge === 0 || warped < 0.2 || secondaryCrater || outlet || lavaBranch || brokenRim) heights.push(undefined);
     else if (warped < 0.36) heights.push(1);
+    else if (form === "twin-vent" && secondaryDistance < 0.58) heights.push(1);
     else if (warped < 0.58) heights.push(6);
     else if (warped < 0.8) heights.push(5);
     else if (warped < 1.05) heights.push(4);
@@ -1212,25 +1306,35 @@ function buildVolcanic(scene: GeneratedScene, width: number, depth: number, dens
     rows,
     heights,
     materialFor: (level, x, z) => Math.hypot(x - cx, z - cz) < radius * 0.38 ? "hazard" : level >= 5 ? "darkStone" : "rock",
-    tagsFor: (level) => ["caldera", "volcanic", level >= 5 ? "caldera-rim" : level <= 1 ? "crater-floor" : "volcanic-slope"],
+    tagsFor: (level) => ["caldera", "volcanic", `volcanic-form:${form}`, level >= 5 ? "caldera-rim" : level <= 1 ? "crater-floor" : "volcanic-slope"],
     stepFeet: 5,
   });
   const levelAt = (x: number, z: number) => heights[Math.max(0, Math.min(rows - 1, Math.round(z))) * cols + Math.max(0, Math.min(cols - 1, Math.round(x)))] ?? 0;
-  const outletFromX = cx + radius * 0.15;
-  const outletFromZ = cz;
-  const outletToX = cols - 1;
-  const outletToZ = cz + Math.tan(outletAngle) * (cols - cx);
+  const outletFromX = cx + outletDirection.x * radius * 0.15;
+  const outletFromZ = cz + outletDirection.z * radius * 0.15;
+  const outletDistanceX = Math.abs(outletDirection.x) < 0.001 ? Number.POSITIVE_INFINITY : (outletDirection.x > 0 ? cols - 1 - cx : cx - 1) / Math.abs(outletDirection.x);
+  const outletDistanceZ = Math.abs(outletDirection.z) < 0.001 ? Number.POSITIVE_INFINITY : (outletDirection.z > 0 ? rows - 1 - cz : cz - 1) / Math.abs(outletDirection.z);
+  const outletDistance = Math.max(radius * 1.1, Math.min(outletDistanceX, outletDistanceZ));
+  const outletToX = cx + outletDirection.x * outletDistance;
+  const outletToZ = cz + outletDirection.z * outletDistance;
   const outletWidth = 2.8 + density * 2.2;
+  const bridgeCenter = { x: cx + outletDirection.x * radius * 0.7, z: cz + outletDirection.z * radius * 0.7 };
+  const bridgeA = { x: bridgeCenter.x - outletNormal.x * (outletWidth * 0.72), z: bridgeCenter.z - outletNormal.z * (outletWidth * 0.72) };
+  const bridgeB = { x: bridgeCenter.x + outletNormal.x * (outletWidth * 0.72), z: bridgeCenter.z + outletNormal.z * (outletWidth * 0.72) };
   scene.primitives.push(
     primitive("volcanic-crater-lava", "cylinder", 0, cx, -0.35, cz, radius * 0.32 * CELL, 0.45, radius * 0.32 * CELL, "hazard", ["lava", "crater", "hazard", "morphology-operator"]),
     corridor("volcanic-lava-outlet", 0, outletFromX, outletFromZ, outletToX, outletToZ, -0.28, outletWidth, "hazard", ["lava", "lava-flow", "hazard", "morphology-operator"]),
-    corridor("volcanic-basalt-bridge", 0, cx + radius * 0.54, cz - 3.5, cx + radius * 0.54, cz + 3.5, rendered.yOf(5), 1.8, "darkStone", ["bridge", "basalt-bridge", "semantic-grid"]),
+    corridor("volcanic-basalt-bridge", 0, bridgeA.x, bridgeA.z, bridgeB.x, bridgeB.z, rendered.yOf(5), 1.8, "darkStone", ["bridge", "basalt-bridge", "semantic-grid", `volcanic-form:${form}`]),
   );
+  if (form === "twin-vent") {
+    scene.primitives.push(primitive("volcanic-secondary-vent-lava", "cylinder", 0, secondaryVent.x, -0.28, secondaryVent.z, secondaryVent.radius * 0.55 * CELL, 0.38, secondaryVent.radius * 0.55 * CELL, "hazard", ["lava", "secondary-vent", "hazard", "morphology-operator", `volcanic-form:${form}`]));
+    reserveRadialTerrain(scene, "volcanic-secondary-vent-reservation", "lava", secondaryVent.x, secondaryVent.z, secondaryVent.radius * 0.56, 0.9, "The secondary vent owns its heat and collapse zone.");
+  }
   reserveRadialTerrain(scene, "volcanic-crater-lava-reservation", "lava", cx, cz, radius * 0.32, 1.2, "The active crater lake owns its heat and collapse zone.");
   reserveLinearTerrain(scene, "volcanic-lava-outlet-reservation", "lava", outletFromX, outletFromZ, outletToX, outletToZ, outletWidth, 1.1, "The main lava outlet is a no-foundation hazard except at authored basalt crossings.");
   for (let index = 0; index < lavaBranchCount; index += 1) {
     const angle = lavaAngles[index]!;
-    const inner = radius * rng.float(0.12, 0.24); const outer = radius * rng.float(1.05, 1.45);
+    const inner = radius * detail.float(0.12, 0.24); const outer = radius * detail.float(1.05, 1.45);
     const branchFromX = cx + Math.cos(angle) * inner;
     const branchFromZ = cz + Math.sin(angle) * inner;
     const branchToX = cx + Math.cos(angle) * outer;
@@ -1241,30 +1345,45 @@ function buildVolcanic(scene: GeneratedScene, width: number, depth: number, dens
   }
   const obsidianRidges = 2 + Math.round(density * 4);
   for (let index = 0; index < obsidianRidges; index += 1) {
-    const angle = outletAngle + Math.PI * (0.55 + index / Math.max(1, obsidianRidges - 1) * 0.9) + rng.float(-0.18, 0.18);
-    const distance = radius * rng.float(0.72, 1.18); const x = cx + Math.cos(angle) * distance; const z = cz + Math.sin(angle) * distance;
-    scene.primitives.push(box(`volcanic-obsidian-ridge-${index}`, 0, x, rendered.yOf(levelAt(x, z)), z, rng.float(1.1, 2.2), feetToMeters(rng.float(6, 14)), rng.float(4, 8), "darkStone", ["volcanic", "obsidian-ridge", "cover", "vertical-face", "supported"], angle));
+    const angle = outletAngle + Math.PI * (0.55 + index / Math.max(1, obsidianRidges - 1) * 0.9) + detail.float(-0.18, 0.18);
+    const distance = radius * detail.float(0.72, 1.18); const x = cx + Math.cos(angle) * distance; const z = cz + Math.sin(angle) * distance;
+    scene.primitives.push(box(`volcanic-obsidian-ridge-${index}`, 0, x, rendered.yOf(levelAt(x, z)), z, detail.float(1.1, 2.2), feetToMeters(detail.float(6, 14)), detail.float(4, 8), "darkStone", ["volcanic", "obsidian-ridge", "cover", "vertical-face", "supported"], angle));
   }
   const basaltPlatforms = 2 + Math.round(density * 2);
   for (let index = 0; index < basaltPlatforms; index += 1) {
-    const angle = outletAngle + Math.PI * (0.85 + index * 0.38); const distance = radius * rng.float(0.48, 0.72); const x = cx + Math.cos(angle) * distance; const z = cz + Math.sin(angle) * distance; const y = rendered.yOf(levelAt(x, z));
-    scene.primitives.push(cylinder(`volcanic-basalt-platform-${index}`, 0, x, y, z, rng.float(2.4, 3.8), feetToMeters(rng.float(2, 5)), "darkStone", ["volcanic", "basalt-platform", "platform", "high-ground", "standable"]));
+    const angle = outletAngle + Math.PI * (0.85 + index * 0.38); const distance = radius * detail.float(0.48, 0.72); const x = cx + Math.cos(angle) * distance; const z = cz + Math.sin(angle) * distance; const y = rendered.yOf(levelAt(x, z));
+    scene.primitives.push(cylinder(`volcanic-basalt-platform-${index}`, 0, x, y, z, detail.float(2.4, 3.8), feetToMeters(detail.float(2, 5)), "darkStone", ["volcanic", "basalt-platform", "platform", "high-ground", "standable"]));
     scene.tactical.push(tacticalFeature(`volcanic-platform-highground-${index}`, "highGround", x, z, y, 2, "A basalt shelf provides a reachable firing position above branching lava."));
   }
   const fumaroles = Math.round(5 + density * 12);
   for (let index = 0; index < fumaroles; index += 1) {
-    const angle = rng.float(0, Math.PI * 2);
-    const distance = radius * rng.float(0.55, 1.18);
+    const angle = detail.float(0, Math.PI * 2);
+    const distance = radius * detail.float(0.55, 1.18);
     const x = cx + Math.cos(angle) * distance;
     const z = cz + Math.sin(angle) * distance;
-    scene.primitives.push(primitive(`volcanic-fumarole-${index}`, "cone", 0, x, rendered.yOf(3), z, feetToMeters(rng.float(1, 2.5)), feetToMeters(rng.float(3, 9)), feetToMeters(rng.float(1, 2.5)), index % 3 === 0 ? "warmLight" : "darkStone", ["fumarole", "volcanic", "cover"]));
+    scene.primitives.push(primitive(`volcanic-fumarole-${index}`, "cone", 0, x, rendered.yOf(3), z, feetToMeters(detail.float(1, 2.5)), feetToMeters(detail.float(3, 9)), feetToMeters(detail.float(1, 2.5)), index % 3 === 0 ? "warmLight" : "darkStone", ["fumarole", "volcanic", "cover"]));
   }
   scene.rooms.push(createRoom("volcanic-outer-slope", "Ashen outer slope", "natural", 0, cols * 0.2, rows * 0.68, cols * 0.28, rows * 0.3, rendered.yOf(2)), createRoom("volcanic-rim", "Broken caldera rim", "combat", 0, cx, cz, radius * 2, radius * 2, rendered.yOf(5)), createRoom("volcanic-crater", "Lava crater", "natural", 0, cx, cz, radius * 0.5, radius * 0.5, rendered.yOf(1)));
   connectRooms(scene.rooms, "volcanic-outer-slope", "volcanic-rim");
   connectRooms(scene.rooms, "volcanic-rim", "volcanic-crater");
-  scene.routes.push(createRoute("volcanic-switchback", "primary", [{ x: 2, z: rows * 0.72, y: rendered.yOf(1) }, { x: cols * 0.28, z: rows * 0.64, y: rendered.yOf(3) }, { x: cx - radius * 0.65, z: cz + radius * 0.35, y: rendered.yOf(5) }, { x: cx + radius * 0.54, z: cz, y: rendered.yOf(5) }]), createRoute("volcanic-rim-escape", "alternate", [{ x: cx - radius * 0.65, z: cz + radius * 0.35, y: rendered.yOf(5) }, { x: cx, z: cz - radius * 0.7, y: rendered.yOf(6) }, { x: cx + radius * 0.62, z: cz - radius * 0.2, y: rendered.yOf(5) }]));
+  const snapToHighRim = (requested: { x: number; z: number }) => {
+    let best: { x: number; z: number; level: number; distance: number } | undefined;
+    for (let dz = -7; dz <= 7; dz += 1) for (let dx = -7; dx <= 7; dx += 1) {
+      const x = Math.max(1, Math.min(cols - 2, Math.round(requested.x + dx)));
+      const z = Math.max(1, Math.min(rows - 2, Math.round(requested.z + dz)));
+      const level = levelAt(x, z);
+      if (level < 4) continue;
+      const distance = Math.hypot(x - requested.x, z - requested.z);
+      if (!best || distance < best.distance) best = { x, z, level, distance };
+    }
+    return best ?? { ...requested, level: Math.max(1, levelAt(requested.x, requested.z)), distance: 0 };
+  };
+  const approach = { x: cx - outletDirection.x * radius * 1.32, z: cz - outletDirection.z * radius * 1.32 };
+  const rimA = snapToHighRim({ x: cx + outletNormal.x * radius * 0.72, z: cz + outletNormal.z * radius * 0.72 });
+  const rimB = snapToHighRim({ x: cx - outletNormal.x * radius * 0.72, z: cz - outletNormal.z * radius * 0.72 });
+  scene.routes.push(createRoute("volcanic-switchback", "primary", [{ x: approach.x, z: approach.z, y: rendered.yOf(Math.max(1, levelAt(approach.x, approach.z))) }, { x: rimA.x, z: rimA.z, y: rendered.yOf(rimA.level) }, { x: bridgeA.x, z: bridgeA.z, y: rendered.yOf(5) }, { x: bridgeB.x, z: bridgeB.z, y: rendered.yOf(5) }]), createRoute("volcanic-rim-escape", "alternate", [{ x: rimA.x, z: rimA.z, y: rendered.yOf(rimA.level) }, { x: rimB.x, z: rimB.z, y: rendered.yOf(rimB.level) }, { x: bridgeB.x, z: bridgeB.z, y: rendered.yOf(5) }]));
   scene.tactical.push(tacticalFeature("volcanic-entrance", "entrance", 2, rows * 0.72, rendered.yOf(1), 2, "An ash-choked switchback climbs toward the caldera."), tacticalFeature("volcanic-crater-hazard", "hazard", cx, cz, -0.2, Math.ceil(radius * 0.25), "The crater and its lava outlet divide the battlefield."), tacticalFeature("volcanic-rim-highground", "highGround", cx - radius * 0.55, cz, rendered.yOf(6), 4, "The irregular caldera rim dominates the crater floor and basalt crossing."));
-  scene.description = `Volcanic grammar with an irregular broken caldera, ${rendered.cliffs} exposed faces, ${lavaBranchCount} lava branches, ${obsidianRidges} obsidian ridges, ${basaltPlatforms} tactical basalt shelves, fumaroles, and a rim combat route.`;
+  scene.description = `Volcanic ${form} grammar with ${rendered.cliffs} exposed faces, ${lavaBranchCount} lava branches, ${obsidianRidges} obsidian ridges, ${basaltPlatforms} tactical basalt shelves, fumaroles, and a rim combat route.`;
   scene.floorHeightFeet = [48];
 }
 
@@ -1611,7 +1730,7 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
   const meso = rng.fork("meso");
   const tactical = rng.fork("tactical");
   const normalizedPrompt = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
-  const crevasseWanted = includesAny(normalizedPrompt, ["crevasse", "fissure", "ice crack", "冰缝", "冰隙", "冰裂", "裂缝", "裂隙"]);
+  const crevasseWanted = includesAny(normalizedPrompt, ["crevasse", "fissure", "glacial rift", "ice crack", "冰缝", "冰隙", "冰裂", "裂缝", "裂隙", "裂谷"]);
   const phase = macro.float(-Math.PI, Math.PI);
   const lakeX = width * macro.float(0.42, 0.58);
   const lakeZ = depth * macro.float(0.48, 0.64);
@@ -1694,7 +1813,9 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
       rotation,
     ));
   }
-  const ridgeCount = 2 + Math.round(density * 5);
+  // Density changes ridge systems, but each ridge remains a readable landform
+  // rather than dissolving the glacier into dozens of overlapping white bars.
+  const ridgeCount = 2 + Math.round(density * 3);
   let ridgeSegments = 0;
   let ridgeFocus = { x: width * 0.5, z: depth * 0.5 };
   for (let index = 0; index < ridgeCount; index += 1) {
@@ -1718,7 +1839,7 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
       }
     }
     const rise = feetToMeters(meso.float(2.5, 6.5 + density * 4));
-    const segmentCount = 4 + Math.round(density * 3) + meso.int(0, 2);
+    const segmentCount = 3 + Math.round(density * 2) + meso.int(0, 1);
     const ridgePhase = meso.float(-Math.PI, Math.PI);
     const waveCount = meso.float(1.1, 1.8);
     const waveAmplitude = meso.float(1.4, 3.6);
@@ -1764,7 +1885,7 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
         to.x + offsetX,
         to.z + offsetZ,
         rise * 0.46,
-        crestWidth * (1.45 + density * 0.28),
+        crestWidth * (1.18 + density * 0.18),
         "ice",
         ["ice", "ice-meso", "snow-ridge", "snow-ridge-leeward", `snow-ridge-system:${index}`, "terrain", "standable", "asymmetric-slope"],
       ));
@@ -1776,7 +1897,7 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
     scene.routes.push(createRoute(`ice-snow-ridge-route-${index}`, "alternate", points.map((point) => ({ ...point, y: rise })), { purpose: "movement", traffic: 0.18 + density * 0.22, schedule: "all" }));
     scene.tactical.push(tacticalFeature(`ice-ridge-crest-${index}`, "cover", crest.x, crest.z, rise, 1.5, "The sinuous crest creates a continuous windbreak instead of an isolated snow bar."));
   }
-  const thawPoolCount = 1 + Math.round(density * 5);
+  const thawPoolCount = 1 + Math.round(density * 3);
   for (let index = 0; index < thawPoolCount; index += 1) {
     const z = meso.float(depth * 0.18, depth * 0.86);
     const poolWidth = meso.float(2.5, 5.5 + density * 3);
@@ -1803,7 +1924,7 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
     }
     scene.tactical.push(tacticalFeature(`ice-thaw-hazard-${index}`, "hazard", x, z, -0.14, Math.max(1, Math.min(poolWidth, poolDepth) / 2), "A dark thaw pool weakens the surrounding ice and interrupts direct movement."));
   }
-  const islands = 4 + Math.round(density * 9);
+  const islands = 3 + Math.round(density * 5);
   for (let index = 0; index < islands; index += 1) {
     const z = tactical.float(4, depth - 4);
     const rise = feetToMeters(tactical.float(1.5, 5.5));
@@ -2772,8 +2893,21 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   // A child building invalidates any optional parent-terrain crest route that
   // ran through its footprint. Keeping the route after clearing its supporting
   // ridge produced a formally connected but physically impossible composite.
-  scene.routes = scene.routes.filter((route) => !route.id.startsWith("ice-snow-ridge-route-")
-    || route.points.every((point) => Math.hypot(point.x / CELL - x, point.z / CELL - z) > 8.5));
+  const routeCrossesBuildingPad = (route: GeneratedScene["routes"][number]) => {
+    const points = route.points.map((point) => ({ x: point.x / CELL, z: point.z / CELL }));
+    const insidePad = (point: { x: number; z: number }) => Math.abs(point.x - x) < 8.5 && Math.abs(point.z - z) < 7.8;
+    if (points.some(insidePad)) return true;
+    return points.some((from, index) => {
+      const to = points[index + 1];
+      if (!to) return false;
+      for (let sample = 1; sample < 16; sample += 1) {
+        const ratio = sample / 16;
+        if (insidePad({ x: from.x + (to.x - from.x) * ratio, z: from.z + (to.z - from.z) * ratio })) return true;
+      }
+      return false;
+    });
+  };
+  scene.routes = scene.routes.filter((route) => !route.id.startsWith("ice-snow-ridge-route-") || !routeCrossesBuildingPad(route));
   rerouteParentTrailsAroundBuilding(scene, x, z, 7.2, 6.7, terrainBaseY);
   scene.primitives.push(box(
     "wilderness-building-pad",
@@ -4431,7 +4565,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "infernal-waste") buildInfernalWaste(scene, profile.width, profile.depth, profile.density, context.rng.fork("infernal-waste"));
   else if (archetype === "floating-islands") buildFloatingIslands(scene, profile.width, profile.depth, profile.density, context.rng.fork("floating-islands"));
   else if (archetype === "burial-ground") buildBurialGround(scene, profile.width, profile.depth, profile.density, context.rng.fork("burial-ground"));
-  else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, profile.density, context.rng.fork("rift"), ["火山", "熔岩", "volcanic", "lava"].some((term) => context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term)));
+  else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, profile.density, context.rng.fork("rift"), ["火山", "熔岩", "volcanic", "lava"].some((term) => context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term)), context.request.prompt);
   else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, profile.density, context.rng.fork("ice"), context.request.prompt);
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));

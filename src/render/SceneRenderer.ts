@@ -550,6 +550,45 @@ export class SceneRenderer {
         return;
       }
     }
+    if (this.currentScene?.archetype === "volcanic") {
+      const crater = this.currentScene.primitives.find((primitive) => primitive.id === "volcanic-crater-lava");
+      const outlet = this.currentScene.primitives.find((primitive) => primitive.id === "volcanic-lava-outlet");
+      if (crater && outlet) {
+        const directionX = Math.sin(outlet.rotationY ?? 0);
+        const directionZ = Math.cos(outlet.rotationY ?? 0);
+        const crossX = -directionZ;
+        const crossZ = directionX;
+        const span = Math.max(this.worldBounds.maxX - this.worldBounds.minX, this.worldBounds.maxZ - this.worldBounds.minZ, 18 * GRID_METERS);
+        const target = new THREE.Vector3(crater.position.x, crater.position.y + Math.max(2.8, span * 0.08), crater.position.z);
+        this.controls.target.copy(target);
+        this.camera.position.set(
+          target.x + directionX * span * 0.62 + crossX * span * 0.22,
+          target.y + Math.max(8, span * 0.3),
+          target.z + directionZ * span * 0.62 + crossZ * span * 0.22,
+        );
+        this.camera.lookAt(target);
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+        return;
+      }
+    }
+    if (this.currentScene?.archetype === "ice") {
+      const walls = this.currentScene.primitives.filter((primitive) => primitive.tags?.includes("main-crevasse") && primitive.tags?.includes("crevasse-wall"));
+      if (walls.length > 0) {
+        const centerX = walls.reduce((sum, primitive) => sum + primitive.position.x, 0) / walls.length;
+        const centerZ = walls.reduce((sum, primitive) => sum + primitive.position.z, 0) / walls.length;
+        const minY = Math.min(...walls.map((primitive) => primitive.position.y));
+        const maxY = Math.max(...walls.map((primitive) => primitive.position.y + primitive.size.y));
+        const span = Math.max(this.worldBounds.maxX - this.worldBounds.minX, this.worldBounds.maxZ - this.worldBounds.minZ, 18 * GRID_METERS);
+        const target = new THREE.Vector3(centerX, minY + (maxY - minY) * 0.42, centerZ);
+        this.controls.target.copy(target);
+        this.camera.position.set(target.x + span * 0.66, target.y + Math.max(8, span * 0.32), target.z + span * 0.18);
+        this.camera.lookAt(target);
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+        return;
+      }
+    }
     if (typeof this.activeFloorView === "number" && this.currentScene) {
       const visible = this.floorInspectionPrimitives(this.activeFloorView);
       if (visible.length > 0) {

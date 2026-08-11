@@ -276,7 +276,7 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   let primary = kind === "adaptive" ? program.primaryKind : kind;
   const programText = normalized.prompt.normalize("NFKC").toLocaleLowerCase("en-US");
   const explicitBuildingNouns = [
-    "精神病院", "医院", "警察局", "警局", "博物馆", "酒店", "旅店", "酒馆", "教堂", "神殿", "礼拜堂", "庄园", "宅邸", "堡垒", "要塞", "发电站", "修道院", "寺院", "学院", "火车站", "灯塔", "木屋", "小屋", "猎人屋", "观测站", "气象站", "研究站", "实验室", "工坊", "工厂", "仓库", "哨所", "钟塔",
+    "精神病院", "医院", "警察局", "警局", "博物馆", "酒店", "旅店", "酒馆", "教堂", "神殿", "礼拜堂", "庄园", "宅邸", "堡垒", "要塞", "发电站", "修道院", "寺院", "学院", "火车站", "灯塔", "木屋", "小屋", "猎人屋", "观测站", "气象站", "研究站", "测量站", "实验室", "工坊", "工厂", "仓库", "哨所", "钟塔",
     "hospital", "sanatorium", "police station", "museum", "hotel", "inn", "tavern", "church", "chapel", "temple", "manor", "fortress", "power station", "monastery", "abbey", "academy", "railway station", "lighthouse", "cabin", "lodge", "observatory", "weather station", "research station", "laboratory", "workshop", "factory", "warehouse", "outpost", "bell tower",
   ];
   const hasExplicitBuilding = explicitBuildingNouns.some((term) => programText.includes(term));

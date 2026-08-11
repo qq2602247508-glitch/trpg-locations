@@ -67,14 +67,14 @@ const NATURAL_PARENT_TERMS = [
 ] as const;
 
 const SHELTER_TERMS = [
-  "木屋", "小屋", "猎人屋", "猎人营地", "林间屋", "野外营房", "野外哨所", "猎人小站", "cabin", "lodge", "hut", "cottage", "hunter camp", "ranger camp", "outpost",
+  "木屋", "小屋", "猎人屋", "猎人营地", "林间屋", "野外营房", "野外哨所", "哨所", "岗哨", "猎人小站", "cabin", "lodge", "hut", "cottage", "hunter camp", "ranger camp", "outpost", "watch post",
 ] as const;
 
 const PROFILE_TERMS: Readonly<Record<Exclude<EmbeddedFacilityProfile, "shelter" | "custom">, readonly string[]>> = {
   quarantine: ["检疫站", "检疫所", "隔离站", "隔离所", "隔离院", "净化所", "quarantine station", "quarantine house", "isolation station", "isolation house"],
   weather: ["气象站", "气象观测站", "气象哨站", "气象哨所", "测候站", "测候哨站", "weather station", "weather outpost", "weather post", "meteorological station", "meteorological outpost"],
   research: [
-    "科研站", "研究站", "观测站", "监测站", "实验站", "地震站", "水文站", "生态站", "测绘站", "通信站", "雷达站",
+    "科研站", "研究站", "观测站", "监测站", "实验站", "地震站", "水文站", "生态站", "测绘站", "测量站", "通信站", "雷达站",
     "research station", "observation station", "monitoring station", "field station", "experimental station", "seismic station",
     "hydrology station", "ecological station", "survey station", "radio station",
   ],
