@@ -95,8 +95,10 @@ describe("cross-domain building and natural-terrain interfaces", () => {
     expect(caveFloor?.level).toBe(3);
     expect(caveFloor?.tags).toContain("focus-cluster:sea-cave-interface");
     const linkedContext = scene.primitives.filter((primitive) => primitive.tags?.includes("floor-context:3"));
-    expect(linkedContext.length).toBeGreaterThanOrEqual(4);
+    expect(linkedContext.length).toBeGreaterThanOrEqual(2);
     expect(linkedContext.every((primitive) => primitive.tags?.includes("focus-cluster:sea-cave-interface"))).toBe(true);
+    expect(linkedContext.some((primitive) => primitive.tags?.includes("interface-tail"))).toBe(true);
+    expect(linkedContext.some((primitive) => primitive.tags?.includes("structural-support"))).toBe(true);
     expect(scene.diagnostics.warnings).toHaveLength(0);
   });
 });

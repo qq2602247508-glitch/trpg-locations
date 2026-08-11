@@ -848,6 +848,26 @@ function addCoastalCliffLayer(scene: GeneratedScene, width: number, depth: numbe
       index % 3 === 0 ? "darkStone" : "rock",
       ["coastal-cliff", "cliff-face", "vertical-face", "sea-cliff", "terrain"],
     ));
+    // Keep a thin continuous structural face, then break its visible seaward
+    // side into overlapping rock lobes. The cliff therefore remains a real
+    // blocking vertical boundary without reading as eleven retaining-wall
+    // boxes from the overview camera.
+    for (let lobe = 0; lobe < 2; lobe += 1) {
+      const lobeHeight = height * rng.float(0.72, 0.94);
+      scene.primitives.push(primitive(
+        `coastal-cliff-surface-${index + 1}-${lobe + 1}`,
+        "sphere",
+        0,
+        wallX - rng.float(0.34, 0.72),
+        seaY + rng.float(0, feetToMeters(1.4)),
+        fromZ + (toZ - fromZ) * (0.3 + lobe * 0.43) + rng.float(-0.28, 0.28),
+        rng.float(1.45, 2.35),
+        lobeHeight,
+        Math.max(1.4, (toZ - fromZ) * rng.float(0.62, 0.9)),
+        lobe === 0 && index % 3 === 0 ? "darkStone" : "rock",
+        ["coastal-cliff", "cliff-face", "natural-cliff-surface", "vertical-face", "sea-cliff", "terrain"],
+      ));
+    }
     if (index % 2 === 0) {
       scene.primitives.push(cylinder(
         `coastal-cliff-toe-rock-${index + 1}`,
@@ -3250,14 +3270,27 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     const caveContextTags = wantsSeaCave
       ? ["building-instance:wilderness-core-building", "floor-context:3", "focus-cluster:sea-cave-interface"]
       : [];
-    scene.primitives.push(
-      corridor("wilderness-exterior-maintenance-walk", 0, walkStart.x, walkStart.z, walkEnd.x, walkEnd.z, walkY, 1.35, "metal", ["site-program", "external-maintenance-walk", "maintenance-catwalk", "standable", "supported", "high-ground", ...caveContextTags]),
-    );
+    const maintenanceOwnerTags = ["building-instance:wilderness-core-building"];
+    if (wantsSeaCave) {
+      const contextJoin = {
+        x: walkStart.x + (walkEnd.x - walkStart.x) * 0.72,
+        z: walkStart.z + (walkEnd.z - walkStart.z) * 0.72,
+      };
+      scene.primitives.push(
+        corridor("wilderness-exterior-maintenance-walk-main", 0, walkStart.x, walkStart.z, contextJoin.x, contextJoin.z, walkY, 1.35, "metal", ["site-program", "external-maintenance-walk", "maintenance-catwalk", "standable", "supported", "high-ground", ...maintenanceOwnerTags]),
+        corridor("wilderness-exterior-maintenance-walk", 0, contextJoin.x, contextJoin.z, walkEnd.x, walkEnd.z, walkY, 1.35, "metal", ["site-program", "external-maintenance-walk", "maintenance-catwalk", "interface-tail", "standable", "supported", "high-ground", ...caveContextTags]),
+      );
+    } else {
+      scene.primitives.push(
+        corridor("wilderness-exterior-maintenance-walk", 0, walkStart.x, walkStart.z, walkEnd.x, walkEnd.z, walkY, 1.35, "metal", ["site-program", "external-maintenance-walk", "maintenance-catwalk", "standable", "supported", "high-ground", ...maintenanceOwnerTags]),
+      );
+    }
     for (const [index, ratio] of [0.22, 0.5, 0.78].entries()) {
       const supportX = walkStart.x + (walkEnd.x - walkStart.x) * ratio;
       const supportZ = walkStart.z + (walkEnd.z - walkStart.z) * ratio;
       const supportSurfaceY = terrainSurfaceY(scene, supportX, supportZ, terrainBaseY);
-      scene.primitives.push(cylinder(`wilderness-exterior-maintenance-support-${index + 1}`, 0, supportX, supportSurfaceY - feetToMeters(0.4), supportZ, 0.18, Math.max(FLOOR_SLAB_METERS, walkY - supportSurfaceY), "metal", ["site-program", "external-maintenance-walk", "structural-support", "supported", ...caveContextTags]));
+      const supportContextTags = wantsSeaCave && ratio >= 0.72 ? caveContextTags : maintenanceOwnerTags;
+      scene.primitives.push(cylinder(`wilderness-exterior-maintenance-support-${index + 1}`, 0, supportX, supportSurfaceY - feetToMeters(0.4), supportZ, 0.18, Math.max(FLOOR_SLAB_METERS, walkY - supportSurfaceY), "metal", ["site-program", "external-maintenance-walk", "structural-support", "supported", ...supportContextTags]));
     }
     scene.routes.push(createRoute("wilderness-exterior-maintenance-route", "alternate", [
       { x: walkStart.x, z: walkStart.z, y: walkY },
@@ -3280,9 +3313,11 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       );
       scene.primitives.push(
         box("wilderness-sea-cave-floor", 3, caveX, caveFloorY, caveZ, 8.5, FLOOR_SLAB_METERS, 6.8, "darkStone", [...caveInterfaceTags, "floor", "standable"]),
-        primitive("wilderness-sea-cave-wall-north", "sphere", 3, caveX, caveFloorY, caveZ - 4.1, 10.5, feetToMeters(9), 4.4, "rock", [...caveInterfaceTags, "cave-wall", "cover", "vertical-face"]),
-        primitive("wilderness-sea-cave-wall-south", "sphere", 3, caveX - 0.8, caveFloorY, caveZ + 4.1, 10.2, feetToMeters(8), 4.2, "rock", [...caveInterfaceTags, "cave-wall", "cover", "vertical-face"]),
-        primitive("wilderness-sea-cave-back-wall", "sphere", 3, caveX + 4.6, caveFloorY, caveZ - 0.4, 4.8, feetToMeters(10), 8.8, "darkStone", [...caveInterfaceTags, "cave-wall", "vertical-face"]),
+        primitive("wilderness-sea-cave-wall-north", "sphere", 3, caveX + 0.25, caveFloorY, caveZ - 3.55, 8.1, feetToMeters(10), 3.1, "rock", [...caveInterfaceTags, "cave-wall", "cover", "vertical-face", "natural-cave-shell"]),
+        primitive("wilderness-sea-cave-wall-south", "sphere", 3, caveX - 0.2, caveFloorY, caveZ + 3.55, 7.8, feetToMeters(9), 3, "rock", [...caveInterfaceTags, "cave-wall", "cover", "vertical-face", "natural-cave-shell"]),
+        primitive("wilderness-sea-cave-back-wall", "sphere", 3, caveX + 3.85, caveFloorY, caveZ - 0.15, 3.4, feetToMeters(11), 6.5, "darkStone", [...caveInterfaceTags, "cave-wall", "vertical-face", "natural-cave-shell"]),
+        cylinder("wilderness-sea-cave-mouth-north", 3, caveX - 3.65, caveFloorY, caveZ - 2.45, 1.55, feetToMeters(12), "rock", [...caveInterfaceTags, "cave-mouth", "natural-cave-shell", "cover", "vertical-face"]),
+        cylinder("wilderness-sea-cave-mouth-south", 3, caveX - 3.65, caveFloorY, caveZ + 2.45, 1.75, feetToMeters(10.5), "darkStone", [...caveInterfaceTags, "cave-mouth", "natural-cave-shell", "cover", "vertical-face"]),
         water("wilderness-sea-cave-tidal-pool", 3, caveX + 1.8, caveFloorY + 0.08, caveZ + 0.6, 3.2, 0.12, 2.8, [...caveInterfaceTags, "tidal-pool", "hazard"]),
         caveAccess.primitive,
       );
@@ -4465,7 +4500,7 @@ function addSemanticThemeStructure(
   if (travertine && archetype === "mountain") addTravertineTerraces(scene, width, depth, density, rng.fork("travertine"));
   if (tafoni && archetype === "mountain") addTafoniWeathering(scene, width, depth, density, rng.fork("tafoni"));
   const coastalCliff = ["海岸悬崖", "海崖", "coastal cliff", "sea cliff"].some((term) => text.includes(term));
-  if (coastalCliff && archetype === "mountain") {
+  if (coastalCliff && archetype === "mountain" && !scene.primitives.some((primitiveEntry) => primitiveEntry.tags?.includes("open-sea"))) {
     const coastY = -feetToMeters(8);
     const cliffHeight = feetToMeters(26);
     const segmentWidth = width / 3;

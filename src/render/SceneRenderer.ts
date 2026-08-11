@@ -537,6 +537,36 @@ export class SceneRenderer {
         return;
       }
     }
+    // Coastal sites must be judged from the waterline toward the cliff. The
+    // generic diagonal low preset approached from the inland plateau, hiding
+    // the sea, the cliff face and every natural surface lobe behind one flat
+    // foreground shelf.
+    if (this.currentScene) {
+      const openSea = this.currentScene.primitives.find((primitive) => primitive.tags?.includes("open-sea"));
+      const cliffFaces = this.currentScene.primitives.filter((primitive) => primitive.tags?.includes("cliff-face") && primitive.tags?.includes("coastal-cliff"));
+      if (openSea && cliffFaces.length > 0) {
+        const cliffBounds = this.boundsForPrimitives(cliffFaces, GRID_METERS * 0.4);
+        const cliffX = (cliffBounds.minX + cliffBounds.maxX) / 2;
+        const cliffZ = (cliffBounds.minZ + cliffBounds.maxZ) / 2;
+        const minY = Math.min(...cliffFaces.map((primitive) => primitive.position.y));
+        const maxY = Math.max(...cliffFaces.map((primitive) => primitive.position.y + primitive.size.y));
+        const span = Math.max(cliffBounds.maxZ - cliffBounds.minZ, cliffBounds.maxX - cliffBounds.minX, 18 * GRID_METERS);
+        const seaDirection = Math.sign(openSea.position.x - cliffX) || -1;
+        const target = new THREE.Vector3(cliffX, minY + (maxY - minY) * 0.48, cliffZ);
+        this.controls.target.copy(target);
+        this.camera.position.set(
+          cliffX + seaDirection * span * 0.72,
+          target.y + Math.max(4.8, span * 0.22),
+          cliffZ + span * 0.34,
+        );
+        this.camera.near = 0.1;
+        this.camera.far = Math.max(300, span * 18);
+        this.camera.lookAt(target);
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+        return;
+      }
+    }
     // Reusable micro-landforms can occupy only one tactical quarter of a much
     // larger mountain scene. A generic whole-map low camera makes their actual
     // vertical contracts unreadable, so frame the authored atom for the audit
