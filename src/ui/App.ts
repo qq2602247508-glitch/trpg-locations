@@ -27,6 +27,7 @@ interface AppElements {
   size: HTMLSelectElement;
   density: HTMLInputElement;
   densityValue: HTMLElement;
+  forceLocalModel: HTMLButtonElement;
   generate: HTMLButtonElement;
   status: HTMLElement;
   statusDetail: HTMLElement;
@@ -131,6 +132,9 @@ export async function mountApp(root: HTMLElement): Promise<void> {
               <span class="button-orbit" aria-hidden="true"></span>
               <span>生成战术场景</span>
               <kbd>⌘ ↵</kbd>
+            </button>
+            <button data-role="force-local-model" class="model-assist-button" type="button" aria-pressed="false">
+              <span>本地模型语义增强</span><small>关闭 · 默认优先使用确定性规则与 BGE</small>
             </button>
           </form>
 
@@ -263,6 +267,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   let tacticalDebug = false;
   let lastStats: RenderStats = renderer.getStats();
   let planningView: "all" | "roads" | "parcels" | "buildings" = "all";
+  let forceLocalModel = false;
 
   const auditParams = new URLSearchParams(window.location.search);
   const requestedDensity = Number(auditParams.get("density"));
@@ -299,6 +304,13 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   });
   elements.density.addEventListener("input", () => updateDensityLabel(elements));
   elements.density.addEventListener("change", () => updateDensityLabel(elements));
+  elements.forceLocalModel.addEventListener("click", () => {
+    forceLocalModel = !forceLocalModel;
+    elements.forceLocalModel.setAttribute("aria-pressed", String(forceLocalModel));
+    const detail = elements.forceLocalModel.querySelector("small");
+    if (detail) detail.textContent = forceLocalModel ? "开启 · 强制调用受 Schema 约束的本地 Qwen 规划" : "关闭 · 默认优先使用确定性规则与 BGE";
+    setStatus(elements, forceLocalModel ? "本地模型增强已开启" : "本地优先自动策略", "ok");
+  });
   elements.floor.addEventListener("change", () => {
     const raw = elements.floor.value;
     renderer.setFloorView(raw === "cut" || raw === "roof" ? raw : Number(raw));
@@ -392,6 +404,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       seed: elements.seed.value.trim() || createSeed(),
       size: elements.size.value as GenerationRequest["size"],
       density: Number(elements.density.value) / 100,
+      ...(forceLocalModel ? { forceLocalModel: true } : {}),
     };
     // Keep the visible control synchronized even when an accessibility
     // client changes the range value before submitting the form.
@@ -401,7 +414,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     elements.generate.disabled = true;
     elements.generate.classList.add("is-generating");
     setStatus(elements, "生成布局中", "working");
-    elements.statusDetail.textContent = "正在布置房间、路线与战术节点…";
+    elements.statusDetail.textContent = forceLocalModel ? "正在请求本地语义规划，再由确定性生成器构筑几何…" : "正在布置房间、路线与战术节点…";
 
     try {
       const generationStartedAt = performance.now();
@@ -461,6 +474,7 @@ function getElements(root: HTMLElement): AppElements {
     size: query(root, '[data-role="size"]'),
     density: query(root, '[data-role="density"]'),
     densityValue: query(root, '[data-role="density-value"]'),
+    forceLocalModel: query(root, '[data-role="force-local-model"]'),
     generate: query(root, '[data-role="generate"]'),
     status: query(root, '[data-role="status"]'),
     statusDetail: query(root, '[data-role="status-detail"]'),

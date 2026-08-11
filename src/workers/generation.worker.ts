@@ -27,8 +27,8 @@ const scope = globalThis as unknown as WorkerScope;
 const sceneProgramCache = new Map<string, SceneProgram>();
 const compositionCache = new Map<string, SceneCompositionProgram>();
 
-async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean): Promise<SceneProgram> {
-  const key = `${kind}|${prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}`;
+async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean, forceLocalModel = false): Promise<SceneProgram> {
+  const key = `${kind}|${forceLocalModel ? "forced-model" : "auto"}|${prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}`;
   const cached = sceneProgramCache.get(key);
   if (cached) return cached;
   const localProgram = planSceneProgramLocally(prompt, kind);
@@ -39,8 +39,8 @@ async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean
     && localProgram.morphology[0] === "plain"
     && localProgram.coverage.length === 1
     && localProgram.coverage[0] === "sparse";
-  const shouldUseOllama = allowOllama && unresolved
-    && !shouldComposeWildernessFacility(prompt)
+  const shouldUseOllama = (forceLocalModel || (allowOllama && unresolved))
+    && (forceLocalModel || !shouldComposeWildernessFacility(prompt))
     && (localProgram.primaryKind === "wilderness" || localProgram.primaryKind === "building")
     && (kind === "adaptive" || kind === "wilderness" || kind === "building" || kind === "settlement");
   const program = shouldUseOllama
@@ -77,7 +77,7 @@ scope.addEventListener("message", async (event: MessageEvent<GenerationWorkerReq
     // A successful BGE/lexical capability retrieval is sufficient for the
     // deterministic compiler. Qwen is the final ambiguity fallback, not a
     // mandatory step in every unknown prompt.
-    const program = await planProgram(request.prompt, kind, composition.capabilityIds.length === 0);
+    const program = await planProgram(request.prompt, kind, composition.capabilityIds.length === 0, request.forceLocalModel === true);
     const scene = generateScene(request, kind, undefined, program, composition);
     scope.postMessage({ id, scene } satisfies GenerationWorkerResponse);
   } catch (error) {

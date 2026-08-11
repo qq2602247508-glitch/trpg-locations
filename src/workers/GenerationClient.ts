@@ -15,6 +15,7 @@ interface PendingGeneration {
 }
 
 const WORKER_TIMEOUT_MS = 10_000;
+const FORCED_LOCAL_MODEL_TIMEOUT_MS = 75_000;
 
 /** Runs deterministic planning off the render thread, with a lazy local fallback. */
 export class GenerationClient {
@@ -48,7 +49,7 @@ export class GenerationClient {
     return new Promise<GeneratedScene>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         void this.fallbackPending(id);
-      }, WORKER_TIMEOUT_MS);
+      }, request.forceLocalModel ? FORCED_LOCAL_MODEL_TIMEOUT_MS : WORKER_TIMEOUT_MS);
       this.pending.set(id, { resolve, reject, request, kind, timeoutId });
       this.worker?.postMessage({ id, request, kind });
     });

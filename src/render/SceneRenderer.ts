@@ -939,8 +939,11 @@ export class SceneRenderer {
 
     const surfaceTags = new Set(["floor", "platform", "ledge", "terrain", "bridge", "boardwalk", "ice-island", "road", "plaza", "quay", "clearing"]);
     const surfaceLinesByKey = new Map<string, { levels: number[]; focusCluster?: string; positions: number[] }>();
+    const focusedBuilding = this.focusedBuildingId ? scene.buildingInstances?.find((building) => building.id === this.focusedBuildingId) : undefined;
+    const blueprintFocus = focusedBuilding !== undefined && focusedBuilding.detailLevel !== "full-interior";
     const belongsToFocus = (primitive: ScenePrimitive): boolean => !this.focusedBuildingId
-      || primitive.tags?.includes(`building-instance:${this.focusedBuildingId}`) === true;
+      || (primitive.tags?.includes(`building-instance:${this.focusedBuildingId}`) === true
+        && (!blueprintFocus || primitive.tags?.includes("focus-interior") === true));
     const addSurfaceGrid = (surface: ScenePrimitive): void => {
       if (!belongsToFocus(surface)) return;
       if (surface.shape !== "box" || !surface.tags?.some((tag) => surfaceTags.has(tag))) return;
@@ -1040,6 +1043,7 @@ export class SceneRenderer {
       0,
     );
     const focusedBuilding = this.focusedBuildingId ? scene.buildingInstances?.find((building) => building.id === this.focusedBuildingId) : undefined;
+    const blueprintFocus = focusedBuilding !== undefined && focusedBuilding.detailLevel !== "full-interior";
     const focusCenter = focusedBuilding ? new THREE.Vector2(focusedBuilding.positionCells.x * GRID_METERS, focusedBuilding.positionCells.z * GRID_METERS) : undefined;
     const focusRadius = focusedBuilding ? Math.max(focusedBuilding.footprintCells.x, focusedBuilding.footprintCells.z, 7) * GRID_METERS * 2.4 : Number.POSITIVE_INFINITY;
     const focusedParcelTag = focusedBuilding?.parcelId ? `parcel:${focusedBuilding.parcelId}` : undefined;
@@ -1052,6 +1056,7 @@ export class SceneRenderer {
       if (!this.focusedBuildingId && focusInterior) continue;
       if (this.focusedBuildingId) {
         if (primitiveBuildingId && primitiveBuildingId !== this.focusedBuildingId) continue;
+        if (primitiveBuildingId === this.focusedBuildingId && blueprintFocus && !focusInterior) continue;
         if (primitiveBuildingId === this.focusedBuildingId && primitive.tags?.includes("focus-cutaway")) continue;
         if (primitiveBuildingId === this.focusedBuildingId
           && !focusInterior
@@ -1507,8 +1512,11 @@ export class SceneRenderer {
   private topCameraBounds(): WorldBounds {
     if (!this.currentScene) return this.worldBounds;
     const focusedIdTag = this.focusedBuildingId ? `building-instance:${this.focusedBuildingId}` : undefined;
+    const focusedBuilding = this.focusedBuildingId ? this.currentScene.buildingInstances?.find((building) => building.id === this.focusedBuildingId) : undefined;
+    const blueprintFocus = focusedBuilding !== undefined && focusedBuilding.detailLevel !== "full-interior";
     const focusedVisible = focusedIdTag
       ? this.currentScene.primitives.filter((primitive) => primitive.tags?.includes(focusedIdTag) === true
+        && (!blueprintFocus || primitive.tags?.includes("focus-interior") === true)
         && (typeof this.activeFloorView !== "number" || primitiveTouchesFloorContext(primitive, this.activeFloorView))
         && primitive.tags?.includes("focus-cutaway") !== true
         && (this.activeFloorView === "roof" || (primitive.material !== "roof" && !primitive.tags?.includes("roof"))))

@@ -214,6 +214,9 @@ export interface GenerationRequest {
   seed: string;
   size: "small" | "medium" | "large";
   density: number;
+  /** Ask the constrained local semantic planner to run even when deterministic
+   * parsing already found a usable program. Geometry remains rule-generated. */
+  forceLocalModel?: boolean;
 }
 
 export interface SemanticGenerationHints {

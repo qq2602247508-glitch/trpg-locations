@@ -1882,28 +1882,41 @@ function addFocusInteriorBlueprint(scene: GeneratedScene, lot: BuildingLot, gene
   let y = baseY;
   for (let level = 0; level < Math.min(generated.floors, 3); level += 1) {
     const floorHeight = feetToMeters(generated.floorHeightFeet[level] ?? 10);
-    const shrink = Math.max(0.62, 1 - level * 0.1);
-    const width = Math.max(3.8, primary.size.x * shrink);
-    const depth = Math.max(3.8, primary.size.z * shrink);
-    const center = point(primary.offset.x + level * 0.08, primary.offset.z - level * 0.06);
-    const add = (id: string, lx: number, lz: number, w: number, h: number, d: number, material: MaterialKey, extra: string[] = []) => {
-      const position = point(primary.offset.x + level * 0.08 + lx, primary.offset.z - level * 0.06 + lz);
-      scene.primitives.push(box(`${lot.id}-focus-${level}-${id}`, level, position.x, y, position.z, w, h, d, material, [...tags, ...extra], lot.rotation));
-    };
-    const authoredRoom = interiorProgram.rooms.find((room) => room.level === level);
-    add("floor", 0, 0, width, FLOOR_SLAB_METERS, depth, "wood", ["floor", "standable", "program-room", ...(authoredRoom ? [`program-room:${authoredRoom.id}`] : [])]);
-    add("north", 0, -depth / 2, width, floorHeight, 0.18, generated.material, ["wall", "building-shell"]);
-    add("west", -width / 2, 0, 0.18, floorHeight, depth, generated.material, ["wall", "building-shell"]);
-    add("east", width / 2, 0, 0.18, floorHeight, depth, generated.material, ["wall", "building-shell", "focus-cutaway"]);
-    add("south-left", -width * 0.31, depth / 2, width * 0.34, floorHeight, 0.18, generated.material, ["wall", "door-frame", "focus-cutaway"]);
-    add("south-right", width * 0.31, depth / 2, width * 0.34, floorHeight, 0.18, generated.material, ["wall", "door-frame", "focus-cutaway"]);
-    const partitionX = level % 2 === 0 ? -width * 0.12 : width * 0.17;
-    add("partition", partitionX, -depth * 0.08, 0.18, floorHeight * 0.92, depth * 0.62, generated.material, ["wall", "room-partition", "door-frame"]);
-    if (level > 0 || generated.floors > 1) {
-      const stair = point(primary.offset.x + width * 0.28, primary.offset.z + depth * 0.18);
-      scene.primitives.push(stairs(`${lot.id}-focus-stair-${level}`, level, stair.x, y, stair.z, 1.05, floorHeight, Math.max(2.8, depth * 0.42), "wood", [...tags, "building-stair", "vertical-opening", "standable"], lot.rotation));
+    const levelRooms = interiorProgram.rooms.filter((room) => room.level === level && room.id !== "basement");
+    for (const [roomIndex, room] of levelRooms.entries()) {
+      const center = point(room.centerLocalCells.x, room.centerLocalCells.z);
+      const width = Math.max(2.8, room.sizeCells.x);
+      const depth = Math.max(2.8, room.sizeCells.z);
+      const roomTags = [...tags, "program-room", `program-room:${room.id}`, `room-role:${room.role}`];
+      const addRoomPart = (id: string, localX: number, localZ: number, w: number, h: number, d: number, material: MaterialKey, extra: string[] = []) => {
+        const position = point(room.centerLocalCells.x + localX, room.centerLocalCells.z + localZ);
+        scene.primitives.push(box(`${lot.id}-focus-${level}-${room.id}-${id}`, level, position.x, y, position.z, w, h, d, material, [...roomTags, ...extra], lot.rotation));
+      };
+      addRoomPart("floor", 0, 0, width, FLOOR_SLAB_METERS, depth, room.role === "service" ? "stone" : "wood", ["floor", "standable"]);
+      addRoomPart("north", 0, -depth / 2, width, floorHeight, 0.18, generated.material, ["wall", "building-shell"]);
+      addRoomPart("west", -width / 2, 0, 0.18, floorHeight, depth, generated.material, ["wall", "building-shell"]);
+      addRoomPart("east", width / 2, 0, 0.18, floorHeight, depth, generated.material, ["wall", "building-shell", "focus-cutaway"]);
+      addRoomPart("south", 0, depth / 2, width, floorHeight, 0.18, generated.material, ["wall", "door-frame", "focus-cutaway"]);
+      const fixtureMaterial: MaterialKey = lot.kind === "factory" || lot.kind === "clinic" ? "metal" : "wood";
+      const fixtureWidth = Math.max(0.9, Math.min(2.4, width * (room.role === "public" ? 0.34 : 0.24)));
+      scene.primitives.push(box(`${lot.id}-focus-${level}-${room.id}-fixture`, level, center.x + (roomIndex % 2 === 0 ? 0.22 : -0.22) * width, y + FLOOR_SLAB_METERS, center.z, fixtureWidth, feetToMeters(room.role === "combat" ? 4.5 : 3.1), Math.max(0.75, Math.min(1.4, depth * 0.22)), fixtureMaterial, [...roomTags, "furniture", room.role === "service" ? "workstation" : room.role === "private" ? "storage" : "cover"], lot.rotation));
     }
-    if (level === 0) scene.primitives.push(box(`${lot.id}-focus-furniture`, level, center.x + width * 0.12, y + FLOOR_SLAB_METERS, center.z, Math.max(1.2, width * 0.24), feetToMeters(3.2), 1.1, lot.kind === "factory" || lot.kind === "clinic" ? "metal" : "wood", [...tags, "furniture", "cover"], lot.rotation));
+    for (const [connectionIndex, connection] of interiorProgram.connections.filter((entry) => {
+      const from = interiorProgram.rooms.find((room) => room.id === entry.from);
+      const to = interiorProgram.rooms.find((room) => room.id === entry.to);
+      return from?.level === level && to?.level === level;
+    }).entries()) {
+      const from = interiorProgram.rooms.find((room) => room.id === connection.from);
+      const to = interiorProgram.rooms.find((room) => room.id === connection.to);
+      if (!from || !to) continue;
+      const fromWorld = point(from.centerLocalCells.x, from.centerLocalCells.z);
+      const toWorld = point(to.centerLocalCells.x, to.centerLocalCells.z);
+      scene.primitives.push(corridor(`${lot.id}-focus-${level}-connection-${connectionIndex + 1}`, level, fromWorld.x, fromWorld.z, toWorld.x, toWorld.z, y + FLOOR_SLAB_METERS + 0.03, 0.9, "wood", [...tags, "room-connection", "door-route", "standable"]));
+    }
+    for (const core of interiorProgram.verticalCores.filter((entry) => entry.fromLevel === level && entry.toLevel === level + 1)) {
+      const stair = point(core.positionLocalCells.x, core.positionLocalCells.z);
+      scene.primitives.push(stairs(`${lot.id}-focus-${core.id}`, level, stair.x, y, stair.z, 1.05, floorHeight, Math.max(2.8, primary.size.z * 0.42), "wood", [...tags, "building-stair", "vertical-opening", "standable", `vertical-core:${core.id}`], lot.rotation));
+    }
     y += floorHeight;
   }
   const cellarY = Math.min(baseY - feetToMeters(12), FLOOR_SLAB_METERS - feetToMeters(9));

@@ -478,6 +478,28 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
+.model-assist-button {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid rgba(150, 194, 178, 0.24);
+  border-radius: 3px;
+  color: #b7cec3;
+  background: rgba(19, 39, 34, 0.72);
+  text-align: left;
+}
+
+.model-assist-button span { font-size: 0.72rem; font-weight: 700; }
+.model-assist-button small { color: #708e82; font-size: 0.61rem; line-height: 1.35; }
+.model-assist-button[aria-pressed="true"] {
+  border-color: rgba(240, 190, 111, 0.68);
+  color: #f0ca88;
+  background: rgba(83, 57, 28, 0.48);
+  box-shadow: inset 3px 0 #dca65d;
+}
+.model-assist-button[aria-pressed="true"] small { color: #d9b77e; }
+
 .button-orbit {
   width: 13px;
   height: 13px;

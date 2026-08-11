@@ -213,20 +213,50 @@ function addHollowTreeCity(scene: GeneratedScene, width: number, depth: number):
   const outer = Math.min(width, depth) * 0.4;
   const inner = outer * 0.7;
   const trunkHeight = feetToMeters(58);
-  for (let index = 0; index < 24; index += 1) {
-    if (index === 4 || index === 5) continue;
-    const angle = (Math.PI * 2 * index) / 24;
-    const x = cx + Math.cos(angle) * (outer + 0.4);
-    const z = cz + Math.sin(angle) * (outer + 0.4);
+  const barkRibCount = 32;
+  for (let index = 0; index < barkRibCount; index += 1) {
+    if (index === 5 || index === 6 || index === 7) continue;
+    const angle = (Math.PI * 2 * index) / barkRibCount;
+    const x = cx + Math.cos(angle) * (outer + 0.2);
+    const z = cz + Math.sin(angle) * (outer + 0.2);
     const taper = 1 + Math.sin(index * 1.7) * 0.22;
-    const lean = Math.sin(index * 1.19) * 0.12;
-    scene.primitives.push(box(`hollow-tree-bark-${index + 1}`, 0, x, trunkHeight / 2 + feetToMeters(index % 3), z, 1.9 * taper, trunkHeight * (0.84 + (index % 4) * 0.045), 7.2 * taper, "wood", ["hollow-tree", "bark-wall", "vertical-face", "cover", "site-program"], angle + Math.PI / 2 + lean));
-    if (index % 2 === 1) {
+    const ribHeight = trunkHeight * (0.84 + (index % 4) * 0.045);
+    // cylinder() accepts diameter in grid cells. Keep adjacent ribs slightly
+    // overlapping so the silhouette reads as one hollow trunk instead of a
+    // ring of detached poles, while the skipped ribs remain a true entrance.
+    const ribRadius = Math.max(4.2, outer * 0.27 * taper);
+    scene.primitives.push(
+      cylinder(`hollow-tree-bark-${index + 1}`, 0, x, ribHeight / 2 + feetToMeters(index % 3), z, ribRadius, ribHeight, "wood", ["hollow-tree", "bark-wall", "bark-rib", "vertical-face", "cover", "site-program"]),
+      cylinder(`hollow-tree-bark-ridge-${index + 1}`, 0, cx + Math.cos(angle) * (outer + ribRadius * 0.72), ribHeight * 0.46, cz + Math.sin(angle) * (outer + ribRadius * 0.72), ribRadius * 0.34, ribHeight * 0.78, index % 3 === 0 ? "roof" : "wood", ["hollow-tree", "bark-ridge", "vertical-face", "site-program"]),
+    );
+    if (index % 3 === 1) {
       const branchAngle = angle + (index % 4 - 1.5) * 0.22;
       scene.primitives.push(corridor(`hollow-tree-branch-${index + 1}`, 2, x, z, x + Math.cos(branchAngle) * 7, z + Math.sin(branchAngle) * 7, feetToMeters(36 + index % 3 * 5), 1.15, "wood", ["hollow-tree", "branch-bridge", "cover", "standable", "site-program"]));
     }
-    if (index % 2 === 0) scene.primitives.push(cylinder(`hollow-tree-root-${index + 1}`, 0, x, FLOOR_SLAB_METERS, z, 1.1, feetToMeters(8 + index % 3 * 3), "wood", ["hollow-tree", "root-buttress", "cover", "site-program"]));
+    if (index % 2 === 0) {
+      const rootLength = 5.5 + (index % 3) * 1.4;
+      scene.primitives.push(corridor(
+        `hollow-tree-root-${index + 1}`,
+        0,
+        cx + Math.cos(angle) * (outer - 0.8),
+        cz + Math.sin(angle) * (outer - 0.8),
+        cx + Math.cos(angle) * (outer + rootLength),
+        cz + Math.sin(angle) * (outer + rootLength),
+        FLOOR_SLAB_METERS + feetToMeters(2 + index % 2),
+        1.5 + (index % 3) * 0.22,
+        "wood",
+        ["hollow-tree", "root-buttress", "root-route", "cover", "standable", "site-program"],
+      ));
+    }
   }
+  const entranceAngle = (Math.PI * 2 * 6) / barkRibCount;
+  const entranceX = cx + Math.cos(entranceAngle) * outer;
+  const entranceZ = cz + Math.sin(entranceAngle) * outer;
+  scene.primitives.push(
+    cylinder("hollow-tree-entrance-column-left", 0, entranceX + Math.cos(entranceAngle - Math.PI / 2) * 3.2, feetToMeters(12), entranceZ + Math.sin(entranceAngle - Math.PI / 2) * 3.2, 1.4, feetToMeters(24), "roof", ["hollow-tree", "entrance", "bark-arch", "support", "site-program"]),
+    cylinder("hollow-tree-entrance-column-right", 0, entranceX + Math.cos(entranceAngle + Math.PI / 2) * 3.2, feetToMeters(12), entranceZ + Math.sin(entranceAngle + Math.PI / 2) * 3.2, 1.4, feetToMeters(24), "roof", ["hollow-tree", "entrance", "bark-arch", "support", "site-program"]),
+    corridor("hollow-tree-entrance-root-ramp", 0, cx + Math.cos(entranceAngle) * (outer + 7), cz + Math.sin(entranceAngle) * (outer + 7), cx + Math.cos(entranceAngle) * inner * 0.8, cz + Math.sin(entranceAngle) * inner * 0.8, FLOOR_SLAB_METERS + feetToMeters(2), 2.4, "wood", ["hollow-tree", "entrance", "root-ramp", "standable", "site-program"]),
+  );
   for (const [level, yFeet] of [0, 15, 35, 55].entries()) {
     const y = feetToMeters(yFeet) + FLOOR_SLAB_METERS;
     const radius = inner * (level === 0 ? 0.84 : level === 1 ? 0.66 : level === 2 ? 0.5 : 0.34);
@@ -252,8 +282,8 @@ function addHollowTreeCity(scene: GeneratedScene, width: number, depth: number):
     box("hollow-tree-root-archive", 3, cx, -feetToMeters(10), cz + outer * 0.45, inner * 0.46, FLOOR_SLAB_METERS, inner * 0.3, "wood", ["hollow-tree", "root-archive", "underground", "standable", "site-program"]),
     stairs("hollow-tree-root-stairs", 4, cx, -feetToMeters(10), cz + outer * 0.28, 1.7, feetToMeters(10), 5.6, "wood", ["hollow-tree", "root-archive", "vertical-route", "vertical-opening", "shaft-access", "site-program"]),
   );
-  for (let crown = 0; crown < 12; crown += 1) {
-    const crownAngle = (Math.PI * 2 * crown) / 12 + 0.12;
+  for (let crown = 0; crown < 16; crown += 1) {
+    const crownAngle = (Math.PI * 2 * crown) / 16 + 0.12;
     scene.primitives.push(primitive(
       `hollow-tree-canopy-crown-${crown + 1}`,
       "sphere",
@@ -261,9 +291,9 @@ function addHollowTreeCity(scene: GeneratedScene, width: number, depth: number):
       cx + Math.cos(crownAngle) * outer * 0.78,
       feetToMeters(58 + crown % 3 * 2),
       cz + Math.sin(crownAngle) * outer * 0.78,
-      4.2 + crown % 3 * 0.65,
-      feetToMeters(7 + crown % 2 * 2),
-      4 + crown % 2 * 0.8,
+      5.2 + crown % 3 * 0.8,
+      feetToMeters(9 + crown % 2 * 2),
+      4.8 + crown % 2 * 1.1,
       "moss",
       ["hollow-tree", "canopy", "blocks-sight", "site-program"],
     ));
