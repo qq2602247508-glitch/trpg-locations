@@ -443,7 +443,7 @@ describe("scene generators", () => {
     expect(scene.buildingInstances?.every((building) => Boolean(building.interiorProgram))).toBe(true);
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("focus-interior"))).toBe(true);
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("focus-cutaway"))).toBe(true);
-    expect(scene.diagnostics.valid).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
   it("routes literal water cities and crater villages into distinct settlement compositions", () => {
@@ -473,7 +473,7 @@ describe("scene generators", () => {
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("mine-entrance"))).toBe(true);
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("crater-ring-road"))).toBe(true);
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("vertical-slum"))).toBe(false);
-    expect(scene.diagnostics.valid).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
   it("realizes requested impact fractures and ore piles as crater-owned geometry", () => {
@@ -694,6 +694,20 @@ describe("scene generators", () => {
     expect(scene.buildingInstances?.some((building) => building.archetype === "tavern" || building.archetype === "guild")).toBe(true);
     expect(scene.buildingInstances?.some((building) => building.archetype === "shrine")).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("realizes forest-village child terrain without replacing settlement planning", () => {
+    const prompt = "森林村庄，茂密林带围绕不规则道路，中央空地、小木屋、林间浅溪、木桥和高低起伏的战术地形";
+    const scene = generateScene({ ...request("forest-village-semantic-contract", "medium", 0.82), prompt }, "adaptive");
+    expect(scene.sceneProgram?.domain).toBe("settlement");
+    expect(scene.siteProgram?.terrainKind).toBe("forest-clearing");
+    expect(hasTag(scene, "forest")).toBe(true);
+    expect(hasTag(scene, "tree-canopy")).toBe(true);
+    expect(hasTag(scene, "stream")).toBe(true);
+    expect(hasTag(scene, "wood-bridge")).toBe(true);
+    expect(hasTag(scene, "stream-crossing")).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(90);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
   it("composes a full-interior cabin into wilderness terrain instead of replacing the forest", () => {

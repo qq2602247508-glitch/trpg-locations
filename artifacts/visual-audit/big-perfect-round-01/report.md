@@ -31,8 +31,29 @@
 - Night forest-village semantic coverage remained 0% for explicit lantern, bonfire and shrine-brazier requirements. Light transport works, but those requested fixtures need authored composition requirements and geometry.
 - Browser density automation remained at 20% in the latest UI runs; high-density and changed-seed visual comparisons are still required.
 
+## Regression 05 — settlement child terrain, surface grids and support endpoints
+
+Prompt:
+
+`森林村庄，茂密林带围绕不规则道路，中央空地、小木屋、林间浅溪、木桥和高低起伏的战术地形`
+
+- `regression-05/01-forest-village-grid-high.png`: fixed Seed, medium, density 82%; dense forest belts, clearing, stream crossing, individual buildings and surface-attached grids are visible.
+- `regression-05/02-forest-village-grid-low.png`: same Seed, medium, density 25%; fewer building masses/tree groups/routes, proving density changes structure rather than only decorations.
+- `regression-05/03-forest-village-grid-seed-variant.png`: changed Seed, medium, density 82%; parcel/building/tree arrangement changes while the forest-village grammar remains.
+- `regression-05/04-ice-crevasse-grid.png`: fixed Seed ice-crevasse settlement; grid follows both ice banks and supported bridges while void remains ungridded.
+- `regression-05/05-ice-crevasse-low-angle.png`: low-angle height audit after converting the cargo lift to a route-derived stair connection.
+- `regression-05/06-focused-building-interior.png`: real browser “聚焦内部” state; the selected settlement building isolates a room/wall/fixture blueprint and changes the floor view.
+
+Changes in this round:
+
+- Settlement-owned forest prompts now retain child requirements for forest, dense canopy, clearing, stream and wood footbridge.
+- Forest settlement trunks/canopies expose matching tree-cluster/canopy tags, and the village bridge becomes a real supported wood footbridge when the parent terrain is forest.
+- Surface grids now attach to standable/buildable SiteProgram terrain instead of disappearing across settlement and ice surfaces.
+- Site validation checks high-risk cliff/cargo/stilt/megastructure stair endpoints and rejects detached canopy blobs with no trunk attachment.
+- The ice cargo lift now derives geometry and route endpoints from the same bottom/top portals; the megastructure crown stair direction and stilt-home landing geometry were corrected.
+
 ## Automated verification
 
-- `npm run check`: 266/266 tests passed.
+- `npm run check`: 270/270 tests passed.
 - `npm run build`: passed.
 - Production build retains the existing large-chunk warning; no new build failure was introduced.

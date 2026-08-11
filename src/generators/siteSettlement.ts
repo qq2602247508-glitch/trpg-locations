@@ -434,8 +434,23 @@ function addHarbor(scene: GeneratedScene, width: number, depth: number, features
 function addVillageLandmarks(scene: GeneratedScene, width: number, depth: number, features: readonly string[]): void {
   scene.primitives.push(cylinder("village-public-well", 0, width / 2, FLOOR_SLAB_METERS, depth / 2, 2.2, feetToMeters(3.2), "stone", ["well", "village-anchor", "cover", "site-program"]));
   const bridgeZ = depth * 0.42;
-  scene.primitives.push(water("village-stream", 0, width * 0.16, -0.14, depth / 2, 3, 0.2, depth - 5, ["stream", "watercourse", "site-program"], 0), corridor("village-stone-bridge", 0, width * 0.16 - 3, bridgeZ, width * 0.16 + 3, bridgeZ, FLOOR_SLAB_METERS + 0.16, 2.2, "stone", ["bridge", "village-anchor", "standable"]));
-  scene.tactical.push(tacticalFeature("village-bridge-choke", "chokepoint", width * 0.16, bridgeZ, FLOOR_SLAB_METERS, 2, "The stone bridge and public well anchor the village's organic road growth."));
+  const forestSettlement = features.includes("forest-settlement");
+  scene.primitives.push(
+    water("village-stream", 0, width * 0.16, -0.14, depth / 2, 3, 0.2, depth - 5, ["stream", "watercourse", "site-program"], 0),
+    corridor(
+      forestSettlement ? "village-wood-footbridge" : "village-stone-bridge",
+      0,
+      width * 0.16 - 3,
+      bridgeZ,
+      width * 0.16 + 3,
+      bridgeZ,
+      FLOOR_SLAB_METERS + 0.16,
+      2.2,
+      forestSettlement ? "wood" : "stone",
+      ["bridge", "village-anchor", "standable", "supported", ...(forestSettlement ? ["wood-bridge", "footbridge", "stream-crossing"] : ["stone-bridge"])],
+    ),
+  );
+  scene.tactical.push(tacticalFeature("village-bridge-choke", "chokepoint", width * 0.16, bridgeZ, FLOOR_SLAB_METERS, 2, `The ${forestSettlement ? "wood footbridge" : "stone bridge"} and public well anchor the village's organic road growth.`));
   if (features.includes("wooden-wall")) {
     const wallHeight = feetToMeters(7);
     scene.primitives.push(
@@ -1140,6 +1155,16 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       siteProfile,
     }, context.rng.fork(parcel.buildingSeed));
     if (raisedStiltHome) {
+      const stairRotation = parcel.rotationY ?? 0;
+      const stairRunCells = 4;
+      const stairEntry = {
+        x: placement.x,
+        z: placement.z + parcel.buildingSize.z * 0.48,
+      };
+      const stairCenter = {
+        x: stairEntry.x - Math.sin(stairRotation) * stairRunCells / 2,
+        z: stairEntry.z - Math.cos(stairRotation) * stairRunCells / 2,
+      };
       for (const [pierIndex, dx, dz] of [[0, -0.32, -0.32], [1, 0.32, -0.32], [2, -0.32, 0.32], [3, 0.32, 0.32]] as const) {
         scene.primitives.push(cylinder(
           `coastal-stilt-home-${parcel.id}-${pierIndex + 1}`,
@@ -1156,15 +1181,28 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       scene.primitives.push(stairs(
         `coastal-stilt-home-entry-${parcel.id}`,
         0,
-        placement.x,
+        stairCenter.x,
         siteElevation,
-        placement.z + parcel.buildingSize.z * 0.48,
+        stairCenter.z,
         1.4,
         feetToMeters(5),
-        4,
+        stairRunCells,
         "wood",
         ["coastal-cliff", "stilt-foundation", "home", "supported", "standable", `parcel:${parcel.id}`, "site-program"],
-        parcel.rotationY,
+        stairRotation,
+      ));
+      scene.primitives.push(box(
+        `coastal-stilt-home-entry-landing-${parcel.id}`,
+        0,
+        stairEntry.x,
+        siteElevation + feetToMeters(5) + FLOOR_SLAB_METERS,
+        stairEntry.z,
+        1.8,
+        FLOOR_SLAB_METERS,
+        1.8,
+        "wood",
+        ["coastal-cliff", "stilt-foundation", "stair-landing", "standable", `parcel:${parcel.id}`, "site-program"],
+        stairRotation,
       ));
     }
     const requiresParentWater = parcel.functionalModules?.some((module) => module.requiresWater) ?? false;

@@ -158,6 +158,23 @@ function pointNearPrimitiveSurface(point: Vec3, primitive: ScenePrimitive, horiz
     && point.y <= span.max + verticalMargin;
 }
 
+function stairEndpoints(stair: ScenePrimitive): { lower: Vec3; upper: Vec3 } {
+  const rotation = stair.rotationY ?? 0;
+  const sine = Math.sin(rotation);
+  const cosine = Math.cos(rotation);
+  const halfRun = stair.size.z / 2;
+  const offset = (localZ: number): { x: number; z: number } => ({
+    x: stair.position.x + localZ * sine,
+    z: stair.position.z + localZ * cosine,
+  });
+  const lower = offset(-halfRun);
+  const upper = offset(halfRun);
+  return {
+    lower: { ...lower, y: stair.position.y },
+    upper: { ...upper, y: stair.position.y + stair.size.y },
+  };
+}
+
 function routeSamples(route: Route): Vec3[] {
   const samples: Vec3[] = [];
   for (let index = 0; index < route.points.length; index += 1) {
@@ -505,6 +522,58 @@ function validateGeometryInvariants(
     const supportingColumns = authoredSupports.filter((support) => pointNearPrimitiveFootprint(support.position, platform, GRID_METERS * 0.2)
       && primitiveVerticalSpan(support).max >= platformBottom - ROUTE_SURFACE_MARGIN_METERS);
     if (supportingColumns.length < 2) geometryError(`Elevated platform ${platform.id} lacks two grounded structural supports.`);
+  }
+
+  // Site-scale stairs are especially prone to becoming detached when parent
+  // terrain, parcel placement, or a Seed changes. Validate their authored
+  // endpoints against real walkable surfaces instead of accepting the stair
+  // primitive itself as evidence.
+  const siteStairs = primitives.filter((primitive) => (
+    primitive.shape === "stairs"
+    && hasAnyTag(primitive, ["site-program", "terrain-program", "stilt-stair"])
+    && (hasAnyTag(primitive, ["cliff-descent", "cargo-lift", "switchback", "stilt-stair"])
+      || primitive.id.includes("megastructure-rise-"))
+    && !hasAnyTag(primitive, ["magical-floating", "levitating", "floating-island"])
+  ));
+  const stairLandingSurfaces = primitives.filter((primitive) => (
+    primitive.shape !== "stairs"
+    && isWalkablePrimitive(primitive)
+    && !hasAnyTag(primitive, ["water", "lava", "void"])
+  ));
+  for (const stair of siteStairs) {
+    const endpoints = stairEndpoints(stair);
+    const lowerSupported = endpoints.lower.y <= ROUTE_SURFACE_MARGIN_METERS
+      || stairLandingSurfaces.some((surface) => pointNearPrimitiveSurface(
+        endpoints.lower,
+        surface,
+        GRID_METERS * 0.75,
+        ROUTE_SURFACE_MARGIN_METERS * 2,
+      ));
+    const upperSupported = stairLandingSurfaces.some((surface) => pointNearPrimitiveSurface(
+      endpoints.upper,
+      surface,
+      GRID_METERS * 0.75,
+      ROUTE_SURFACE_MARGIN_METERS * 2,
+    ));
+    if (!lowerSupported) geometryError(`Site stair ${stair.id} has a floating lower endpoint with no walkable landing.`);
+    if (!upperSupported) geometryError(`Site stair ${stair.id} has a floating upper endpoint with no walkable landing.`);
+  }
+
+  // A tree canopy may overhang its trunk, but it cannot exist as an unrelated
+  // floating blob. Keep this check tag-driven so fantasy floating vegetation
+  // can opt out explicitly.
+  const treeTrunks = primitives.filter((primitive) => hasTag(primitive, "tree-trunk"));
+  for (const canopy of primitives.filter((primitive) => (
+    hasTag(primitive, "tree-canopy")
+    && hasTag(primitive, "canopy-layer")
+    && !hasAnyTag(primitive, ["magical-floating", "levitating", "floating-island"])
+  ))) {
+    const attachmentRadius = Math.max(GRID_METERS, Math.min(canopy.size.x, canopy.size.z) * 0.45);
+    const attached = treeTrunks.some((trunk) => (
+      Math.hypot(canopy.position.x - trunk.position.x, canopy.position.z - trunk.position.z) <= attachmentRadius
+      && primitiveVerticalSpan(trunk).max >= primitiveVerticalSpan(canopy).min - GRID_METERS
+    ));
+    if (!attached) geometryError(`Tree canopy ${canopy.id} has no attached trunk support.`);
   }
 
   return {

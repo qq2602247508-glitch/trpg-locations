@@ -989,7 +989,15 @@ export class SceneRenderer {
       if (!belongsToFocus(surface)) return;
       if (surface.shape !== "box" || !surface.tags?.some((tag) => surfaceTags.has(tag))) return;
       if (surface.id === "site-terrain-base") return;
-      if (scene.siteProgram && surface.tags?.includes("terrain") && !surface.tags.some((tag) => ["road", "bridge", "platform", "ledge"].includes(tag))) return;
+      // Site terrain is still tactical terrain. Only omit cells that cannot
+      // carry a creature: void, water, lava and decorative context. Earlier
+      // filtering hid every settlement/forest/ice ground grid because those
+      // scenes carry a SiteProgram.
+      if (scene.siteProgram
+        && surface.tags?.includes("terrain")
+        && !surface.tags?.includes("standable")
+        && !surface.tags?.includes("buildable")
+        && !surface.tags?.some((tag) => ["road", "bridge", "platform", "ledge"].includes(tag))) return;
       const cosine = Math.cos(surface.rotationY ?? 0);
       const sine = Math.sin(surface.rotationY ?? 0);
       const toWorld = (localX: number, localZ: number): [number, number, number] => [

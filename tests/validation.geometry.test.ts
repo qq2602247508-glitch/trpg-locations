@@ -235,4 +235,49 @@ describe("geometry-level P1 validation", () => {
     expect(hasError(result, "without natural-ramp or elevation-change evidence")).toBe(true);
     expect(result.diagnostics.metrics.geometryErrorCount).toBeGreaterThan(0);
   });
+
+  it("rejects a site stair whose endpoints float away from all landings", () => {
+    const scene = generateScene({
+      ...request,
+      prompt: "森林村庄，有高低起伏道路和木桥",
+      seed: "geometry-floating-site-stair",
+    }, "adaptive");
+    scene.primitives.push({
+      id: "detached-site-stair",
+      shape: "stairs",
+      position: { x: GRID_METERS * 9, y: GRID_METERS * 6, z: GRID_METERS * 9 },
+      size: { x: GRID_METERS, y: GRID_METERS * 2, z: GRID_METERS * 4 },
+      material: "wood",
+      level: 1,
+      tags: ["stairs", "site-program", "supported", "cliff-descent"],
+    });
+
+    const result = validateScene(scene);
+
+    expect(result.valid).toBe(false);
+    expect(hasError(result, "Site stair detached-site-stair has a floating lower endpoint")).toBe(true);
+    expect(hasError(result, "Site stair detached-site-stair has a floating upper endpoint")).toBe(true);
+  });
+
+  it("rejects a detached tree canopy while accepting its grounded trunked neighbors", () => {
+    const scene = generateScene({
+      ...request,
+      prompt: "森林村庄，茂密林带和林间道路",
+      seed: "geometry-detached-canopy",
+    }, "adaptive");
+    scene.primitives.push({
+      id: "detached-tree-canopy",
+      shape: "sphere",
+      position: { x: GRID_METERS * 12, y: GRID_METERS * 8, z: GRID_METERS * 12 },
+      size: { x: GRID_METERS * 3, y: GRID_METERS * 2, z: GRID_METERS * 3 },
+      material: "moss",
+      level: 1,
+      tags: ["forest", "tree", "tree-canopy", "canopy-layer"],
+    });
+
+    const result = validateScene(scene);
+
+    expect(result.valid).toBe(false);
+    expect(hasError(result, "Tree canopy detached-tree-canopy has no attached trunk support")).toBe(true);
+  });
 });

@@ -312,6 +312,38 @@ describe("five-layer composition catalog", () => {
     expect(forest.motifIds).not.toContain("motif.waterfall-valley");
   });
 
+  it("keeps forest, stream and bridge semantics when a village owns the parent grammar", () => {
+    const prompt = "森林村庄，茂密林带围绕不规则道路，中央空地、小木屋、林间浅溪、木桥和高低起伏的战术地形";
+    const program = compileSceneComposition({
+      prompt,
+      seed: "forest-village-child-contract",
+      size: "medium",
+      density: 0.82,
+    });
+    expect(program.primaryDomain).toBe("settlement");
+    expect(program.requirements.map((item) => item.id)).toEqual(expect.arrayContaining([
+      "forest-core",
+      "dense-canopy",
+      "clearings",
+      "forest-stream",
+      "forest-footbridge",
+    ]));
+
+    const scene = generateScene({
+      prompt,
+      seed: "forest-village-child-contract",
+      size: "medium",
+      density: 0.82,
+    }, "adaptive");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(tags.has("forest")).toBe(true);
+    expect(tags.has("tree-canopy")).toBe(true);
+    expect(tags.has("stream")).toBe(true);
+    expect(tags.has("wood-bridge")).toBe(true);
+    expect(tags.has("stream-crossing")).toBe(true);
+    expect(scene.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(90);
+  });
+
   it("treats water-city prompts as a dedicated waterfront grammar", () => {
     const request = {
       prompt: "河道水城，弯曲主河、三条支流、石桥、木桥、水上市集、船坞与沿岸不规则街巷",

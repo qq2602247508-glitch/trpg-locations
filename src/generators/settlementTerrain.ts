@@ -1,7 +1,7 @@
 import type { SeededRandom } from "../core/random";
 import type { GeneratedScene, MaterialKey } from "../schema";
 import type { SiteProgram, TerrainProgramSummary } from "../site-program";
-import { FLOOR_SLAB_METERS, box, corridor, createRoute, cylinder, feetToMeters, primitive, stairs, tacticalFeature, water } from "./shared";
+import { FLOOR_SLAB_METERS, box, corridor, createRoute, cylinder, feetToMeters, primitive, stairConnection, stairs, tacticalFeature, water } from "./shared";
 
 export type TerrainSurface = "ground" | "rock" | "water" | "lava" | "void" | "platform";
 
@@ -615,8 +615,8 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           const pz = z + treeRng.float(0.22, 0.78);
           const baseY = feetToMeters(cell.elevationFeet) + FLOOR_SLAB_METERS;
           scene.primitives.push(
-            cylinder(`forest-settlement-trunk-${treeIndex}`, 0, px, baseY, pz, trunkRadius, trunkHeight, "wood", ["forest", "tree", "tree-trunk", "cover", "blocks-sight", "terrain-program"]),
-            primitive(`forest-settlement-canopy-${treeIndex}`, "sphere", 0, px, baseY + trunkHeight * 0.78, pz, treeRng.float(2.1, 3.8), treeRng.float(2.4, 4.3), treeRng.float(2.1, 3.8), "moss", ["forest", "tree", "tree-canopy", "canopy-layer", "blocks-sight", "terrain-program"]),
+            cylinder(`forest-settlement-trunk-${treeIndex}`, 0, px, baseY, pz, trunkRadius, trunkHeight, "wood", ["forest", "tree", "tree-trunk", "tree-cluster", "cover", "blocks-sight", "terrain-program"]),
+            primitive(`forest-settlement-canopy-${treeIndex}`, "sphere", 0, px, baseY + trunkHeight * 0.78, pz, treeRng.float(2.1, 3.8), treeRng.float(2.4, 4.3), treeRng.float(2.1, 3.8), "moss", ["forest", "tree", "tree-canopy", "tree-cluster", "canopy", "canopy-layer", "blocks-sight", "terrain-program"]),
           );
           treeIndex += 1;
         }
@@ -747,8 +747,17 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         }
         const descentZ = depth * 0.46;
         const descentX = crevasseAt(descentZ) - crevasseHalfGap - 1;
+        const cargoLift = stairConnection(
+          "ice-crevasse-cargo-lift",
+          0,
+          { xCells: crevasseAt(descentZ), zCells: descentZ, yMeters: feetToMeters(-15) },
+          { xCells: descentX, zCells: descentZ, yMeters: feetToMeters(20) },
+          2.4,
+          "metal",
+          ["ice-crevasse", "cargo-lift", "cliff-descent", "vertical-route", "supported", "terrain-program"],
+        );
         scene.primitives.push(
-          stairs("ice-crevasse-cargo-lift", 0, descentX, feetToMeters(20), descentZ, 2.4, feetToMeters(35), 12, "metal", ["ice-crevasse", "cargo-lift", "cliff-descent", "vertical-route", "supported", "terrain-program"]),
+          cargoLift.primitive,
           corridor("ice-crevasse-rock-tunnel-west", 0, descentX - 7, descentZ, descentX - 1, descentZ, feetToMeters(20) + FLOOR_SLAB_METERS, 2.2, "rock", ["ice-crevasse", "rock-tunnel", "cliff-descent", "standable", "terrain-program"]),
           water("ice-crevasse-hot-spring", 0, crevasseAt(depth * 0.72), feetToMeters(-14.4), depth * 0.72, 3.5, 0.25, 5.5, ["ice-crevasse", "hot-spring", "watercourse", "hazard", "terrain-program"]),
           box("ice-crevasse-bottom-mine-portal", 0, crevasseAt(depth * 0.84), feetToMeters(-15), depth * 0.84, 4.8, feetToMeters(10), 3.2, "darkStone", ["ice-crevasse", "rift-bottom", "mine-entrance", "portal", "terrain-program"]),
@@ -769,7 +778,10 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           tacticalFeature("ice-crevasse-bank-east", "highGround", crevasseAt(depth * 0.5) + crevasseHalfGap + 5, depth * 0.5, feetToMeters(30), 3, "The east ice shelf is a separated firing line across the crevasse."),
           tacticalFeature("ice-crevasse-bottom", "hazard", crevasseAt(depth * 0.55), depth * 0.55, feetToMeters(-15), 3, "The deep crevasse floor is reachable only by the supported cargo descent."),
         );
-        scene.routes.push(createRoute("ice-crevasse-bottom-route", "vertical", [{ x: descentX, z: descentZ, y: feetToMeters(20) }, { x: crevasseAt(descentZ), z: descentZ, y: feetToMeters(-15) }], { purpose: "service", traffic: 0.25, schedule: "all" }));
+        scene.routes.push(createRoute("ice-crevasse-bottom-route", "vertical", [
+          { x: cargoLift.top.xCells, z: cargoLift.top.zCells, y: cargoLift.top.yMeters },
+          { x: cargoLift.bottom.xCells, z: cargoLift.bottom.zCells, y: cargoLift.bottom.yMeters },
+        ], { purpose: "service", traffic: 0.25, schedule: "all" }));
       }
       if (kind === "impact-crater" || kind === "caldera") {
         const coreMaterial: MaterialKey = kind === "caldera" ? "hazard" : "metal";
@@ -940,7 +952,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
         scene.primitives.push(
           stairs("megastructure-rise-lower-middle", 1, megaCx + megaRadius * 0.61, feetToMeters(0), megaCz, 2.2, feetToMeters(20), 8, "metal", ["megastructure", "vertical-route", "vertical-opening", "supported", "terrain-program"], Math.PI / 2),
           stairs("megastructure-rise-middle-upper", 2, megaCx, feetToMeters(20), megaCz - megaRadius * 0.43, 2.2, feetToMeters(20), 8, "metal", ["megastructure", "vertical-route", "vertical-opening", "supported", "terrain-program"], 0),
-          stairs("megastructure-rise-upper-crown", 3, megaCx - megaRadius * 0.27, feetToMeters(40), megaCz, 2, feetToMeters(20), 7, "metal", ["megastructure", "vertical-route", "vertical-opening", "supported", "terrain-program"], -Math.PI / 2),
+          stairs("megastructure-rise-upper-crown", 3, megaCx - megaRadius * 0.27, feetToMeters(40), megaCz, 2, feetToMeters(20), 7, "metal", ["megastructure", "vertical-route", "vertical-opening", "supported", "terrain-program"], Math.PI / 2),
         );
         scene.routes.push(
           createRoute("megastructure-vertical-stack", "vertical", [

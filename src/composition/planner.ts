@@ -229,15 +229,24 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
     if (has(text, ["维护栈道", "外部栈道", "维修栈道", "maintenance walkway", "maintenance catwalk"])) add("maintenance-walk", "外部维护栈道", ["external-maintenance-walk", "supported", "standable"], "critical");
     return output;
   }
-  if (domain === "forest") {
+  // Settlement ownership must not erase explicitly requested child terrain.
+  // A forest village is still planned as a settlement, but its canopy,
+  // clearings, stream and crossing remain first-class semantic contracts.
+  const settlementForestChild = settlementParent && has(text, [
+    "森林", "林地", "树林", "密林", "雨林", "丛林", "树海",
+    "forest", "woodland", "rainforest", "jungle",
+  ]);
+  if (domain === "forest" || settlementForestChild) {
     add("forest-core", "森林", ["forest", "tree", "canopy"], "critical");
-    if (has(text, ["茂密", "封闭林冠", "dense", "closed canopy"])) add("dense-canopy", "封闭林冠", ["canopy", "tree-cluster"], "critical");
+    if (has(text, ["茂密", "密林", "林带", "封闭林冠", "dense", "closed canopy", "forest belt"])) {
+      add("dense-canopy", "封闭林冠", settlementForestChild ? ["tree-canopy", "canopy-layer"] : ["canopy", "tree-cluster"], "critical");
+    }
     if (has(text, ["灌木", "林下", "undergrowth"])) add("undergrowth", "林下灌木", ["undergrowth"], "major");
-    if (has(text, ["空地", "clearing"])) add("clearings", "林间空地", ["clearing"], "major");
+    if (has(text, ["空地", "林间空地", "中央空地", "clearing"])) add("clearings", "林间空地", ["clearing"], "major");
     if (has(text, ["浅溪", "溪流", "小溪", "溪边", "溪畔", "林溪", "stream", "creek", "streamside", "creekside"])) {
       add("forest-stream", "林间浅溪", ["stream", "watercourse"], "critical");
     }
-    if (has(text, ["木桥", "溪边木桥", "footbridge", "foot bridge"])) {
+    if (has(text, ["木桥", "溪边木桥", "跨溪木桥", "footbridge", "foot bridge", "wood bridge"])) {
       add("forest-footbridge", "跨溪木桥", ["wood-bridge", "bridge", "stream-crossing"], "critical");
     }
     if (has(text, ["根桥", "树根桥", "root bridge", "root-bridge"])) add("forest-root-bridge", "根桥", ["root-bridge", "bridge"], "critical");
