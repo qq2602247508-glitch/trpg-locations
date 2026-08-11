@@ -812,6 +812,72 @@ function buildMountain(scene: GeneratedScene, width: number, depth: number, dens
   buildMountainContinuous(scene, width, depth, density, rng);
 }
 
+/** Reusable coastal process layer for a mountain parent. It cuts a real sea
+ * margin out of the heightfield, exposes a continuous cliff toe, and reserves
+ * the tidal strip so an embedded facility remains on the upper shelf. */
+function addCoastalCliffLayer(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+  // A coastal parent must read as coastline from the overview camera.  The old
+  // six-cell strip and five-foot-deep water existed in the data, but the upper
+  // shelf and scene skirt hid it completely. Reserve a tactically meaningful
+  // coastal margin and keep the rendered surface just above the zero datum.
+  const coastCut = Math.max(7.5, width * (0.16 + density * 0.02));
+  scene.primitives = scene.primitives.filter((entry) => {
+    const x = entry.position.x / CELL;
+    if (x >= coastCut - 0.35) return true;
+    return !entry.id.startsWith("mountain-region-cell-") && !entry.id.startsWith("mountain-cliff-face-");
+  });
+  const seaY = 0.04;
+  scene.primitives.push(
+    water("coastal-cliff-open-sea", 0, coastCut * 0.43, seaY, depth * 0.5, coastCut * 0.92, 0.24, depth - 2, ["coastal-cliff", "open-sea", "tidal-water", "hazard"]),
+  );
+  const wallSegments = 11;
+  for (let index = 0; index < wallSegments; index += 1) {
+    const fromZ = 1 + (depth - 2) * index / wallSegments;
+    const toZ = 1 + (depth - 2) * (index + 1) / wallSegments;
+    const height = feetToMeters(18 + density * 17 + rng.float(-4, 6));
+    const wallX = coastCut + Math.sin(index * 1.73) * 0.28 + rng.float(-0.16, 0.16);
+    scene.primitives.push(box(
+      `coastal-cliff-wall-${index + 1}`,
+      0,
+      wallX,
+      seaY,
+      (fromZ + toZ) / 2,
+      0.72 + (index % 3) * 0.12,
+      height,
+      toZ - fromZ + 0.62,
+      index % 3 === 0 ? "darkStone" : "rock",
+      ["coastal-cliff", "cliff-face", "vertical-face", "sea-cliff", "terrain"],
+    ));
+    if (index % 2 === 0) {
+      scene.primitives.push(cylinder(
+        `coastal-cliff-toe-rock-${index + 1}`,
+        0,
+        coastCut - rng.float(0.45, 1.05),
+        seaY + 0.03,
+        (fromZ + toZ) / 2 + rng.float(-0.5, 0.5),
+        rng.float(1.1, 2.2),
+        feetToMeters(rng.float(4, 10)),
+        index % 4 === 0 ? "darkStone" : "rock",
+        ["coastal-cliff", "cliff-toe", "sea-stack", "cover", "terrain"],
+      ));
+    }
+  }
+  const tideShelfZ = depth * rng.float(0.58, 0.73);
+  scene.primitives.push(
+    box("coastal-cliff-tide-shelf", 0, coastCut - 1.1, seaY + feetToMeters(1.5), tideShelfZ, 2.6, FLOOR_SLAB_METERS, 7.4, "rock", ["coastal-cliff", "tide-shelf", "ledge", "standable", "terrain"]),
+    water("coastal-cliff-tide-pool", 0, coastCut - 1.15, seaY + feetToMeters(1.7), tideShelfZ + 1.3, 1.7, 0.1, 2.4, ["coastal-cliff", "tide-pool", "hazard"]),
+  );
+  reserveLinearTerrain(scene, "coastal-open-sea-reservation", "water", coastCut * 0.42, 1, coastCut * 0.42, depth - 1, coastCut * 0.9, 1, "The sea and cliff toe own the western margin; facilities remain on the supported upper shelf.");
+  scene.routes.push(createRoute("coastal-cliff-waterline", "waterflow", [
+    { x: coastCut * 0.4, z: 1, y: seaY },
+    { x: coastCut * 0.4, z: depth * 0.5, y: seaY },
+    { x: coastCut * 0.4, z: depth - 1, y: seaY },
+  ]));
+  scene.rooms.push(createRoom("coastal-cliff-tidal-margin", "Sea-cliff tidal margin", "natural", 0, coastCut * 0.45, depth * 0.5, coastCut * 0.9, depth - 2, seaY));
+  connectRooms(scene.rooms, "coastal-cliff-tidal-margin", "mountain-basin");
+  scene.tactical.push(tacticalFeature("coastal-cliff-drop", "hazard", coastCut, depth * 0.48, seaY, 4, "A continuous sea cliff drops from the upper shelf to the tidal margin and open water."));
+}
+
 /** Continuous macro-terrain grammar. Heights belong to regions, not isolated
  * cells: large shelves stay flat, boundaries become cliff faces, and voids are
  * carved as coherent cuts. This is the base grammar future outdoor themes can
@@ -2419,7 +2485,10 @@ function rerouteParentTrailsAroundBuilding(
   halfDepth: number,
   fallbackY: number,
 ): void {
-  const clearance = 1.6;
+  // The route centreline needs more than pedestrian clearance because
+  // prompt-owned hangars, chapels and roof supports extend beyond their floor
+  // slab footprint. A 2.8-cell apron keeps the visible trail outside walls.
+  const clearance = 2.8;
   const minX = centerX - halfWidth - clearance;
   const maxX = centerX + halfWidth + clearance;
   const minZ = centerZ - halfDepth - clearance;
@@ -2432,8 +2501,10 @@ function rerouteParentTrailsAroundBuilding(
     }
     return false;
   };
-  for (const route of scene.routes.filter((entry) => entry.kind === "primary" || entry.kind === "alternate")) {
-    if (route.id.startsWith("wilderness-") || route.id.includes("building") || route.id.includes("station")) continue;
+  for (const route of scene.routes.filter((entry) => entry.kind === "primary"
+    || entry.kind === "alternate"
+    || (entry.kind === "vertical" && entry.id.startsWith("mountain-switchback-route-")))) {
+    if (route.id.startsWith("wilderness-") || route.id.includes("building") || route.id.includes("station") || route.id.startsWith("ice-main-crevasse-crossing-route-")) continue;
     const cells = route.points.map((point) => ({ x: point.x / CELL, z: point.z / CELL, y: point.y }));
     const affectedSegments = cells.flatMap((point, index) => {
       const next = cells[index + 1];
@@ -2447,12 +2518,17 @@ function rerouteParentTrailsAroundBuilding(
     const afterIndex = Math.min(cells.length - 1, lastSegment + 1);
     const before = cells[beforeIndex]!;
     const after = cells[afterIndex]!;
-    const candidates = [
+    const perimeterEdges = [
       [{ x: minX, z: minZ }, { x: maxX, z: minZ }],
       [{ x: minX, z: maxZ }, { x: maxX, z: maxZ }],
       [{ x: minX, z: minZ }, { x: minX, z: maxZ }],
       [{ x: maxX, z: minZ }, { x: maxX, z: maxZ }],
-    ].map((corners) => ({
+    ];
+    // Each perimeter edge has two traversal directions. Considering only the
+    // authoring order can select the correct edge but join its far corner to
+    // the next route point, producing a diagonal that cuts back through the
+    // building envelope.
+    const candidates = perimeterEdges.flatMap((corners) => [corners, [...corners].reverse()]).map((corners) => ({
       corners,
       length: Math.hypot(before.x - corners[0]!.x, before.z - corners[0]!.z)
         + Math.hypot(corners[0]!.x - corners[1]!.x, corners[0]!.z - corners[1]!.z)
@@ -2468,11 +2544,16 @@ function rerouteParentTrailsAroundBuilding(
       ...cells.slice(afterIndex),
     ].filter((point, index, array) => index === 0 || Math.hypot(point.x - array[index - 1]!.x, point.z - array[index - 1]!.z) > 0.12);
     route.points = createRoute(`${route.id}-detour`, route.kind, rebuilt).points;
-    scene.primitives = scene.primitives.filter((primitiveEntry) => !primitiveEntry.id.startsWith(`${route.id}-segment-`) && !primitiveEntry.id.startsWith(`${route.id}-rise-`));
+    const authoredVerticalPrimitiveId = route.kind === "vertical" && route.id.endsWith("-route")
+      ? route.id.slice(0, -"-route".length)
+      : undefined;
+    scene.primitives = scene.primitives.filter((primitiveEntry) => !primitiveEntry.id.startsWith(`${route.id}-segment-`)
+      && !primitiveEntry.id.startsWith(`${route.id}-rise-`)
+      && primitiveEntry.id !== authoredVerticalPrimitiveId);
     for (let index = 1; index < rebuilt.length; index += 1) {
       const from = rebuilt[index - 1]!;
       const to = rebuilt[index]!;
-      const routeTags = ["route", "trail", "surface-grid", "terrain-following", "building-detour"];
+      const routeTags = ["route", "trail", "surface-grid", "terrain-following", "building-detour", ...(route.kind === "vertical" ? ["vertical-opening", "shaft-access"] : [])];
       if (Math.abs(to.y - from.y) <= feetToMeters(1.25)) {
         scene.primitives.push(corridor(`${route.id}-segment-${index}`, 0, from.x, from.z, to.x, to.z, (from.y + to.y) / 2 + 0.02, route.kind === "primary" ? 1.25 : 0.85, "earth", routeTags));
       } else {
@@ -2601,8 +2682,7 @@ function rerouteServiceRoutesAroundBuildingFootprint(
     const counterClockwise = ringPath(-1);
     const selected = pathLength(clockwise) <= pathLength(counterClockwise) ? clockwise : counterClockwise;
     const rebuiltCells = [
-      start,
-      ...(inside(start) ? [startAnchor] : []),
+      inside(start) ? startAnchor : start,
       ...selected,
       endAnchor,
     ].filter((point, index, array) => (
@@ -2793,6 +2873,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const wantsSamplingDock = ["取样码头", "采样码头", "取水码头", "sampling dock", "sampling pier"].some((term) => text.includes(term));
   const wantsEscapeRoute = ["逃生路", "逃生路线", "撤离路", "撤离路线", "escape route", "evacuation route"].some((term) => text.includes(term));
   const wantsBunker = ["地下防空洞", "防空洞", "地下避难所", "紧急避难所", "掩体", "bunker", "air-raid shelter", "underground shelter", "emergency shelter"].some((term) => text.includes(term));
+  const coastalCliffSite = ["海岸悬崖", "海岸崖", "海崖", "coastal cliff", "sea cliff"].some((term) => text.includes(term));
   const requestedFloors = ["六层", "6层", "six-storey", "six-story", "six storey", "six story"].some((term) => text.includes(term)) ? 6
     : ["五层", "5层", "five-storey", "five-story", "five storey", "five story"].some((term) => text.includes(term)) ? 5
       : ["四层", "4层", "four-storey", "four-story", "four storey", "four story"].some((term) => text.includes(term)) ? 4
@@ -2854,7 +2935,15 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     ? Math.max(8, Math.min(depth - 8, riverZ + shoreZ * 7.5))
     : archetype === "forest" ? depth * 0.5 : depth * 0.28;
   const engineeredFoundation = ["volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype);
-  const safePlacement = findReservedSafePlacement(scene, requestedX, requestedZ, 13, 12, engineeredFoundation ? "engineered" : "full");
+  // Placement reserves the complete likely child envelope, not just the
+  // historical 13×12 core pad. Prompt-owned chapel, medical and workshop
+  // wings otherwise fit the terrain reservation while hanging outside the
+  // scene edge, forcing exterior service routes through their walls.
+  const requestedSpaceSet = new Set([...(facilityIntent?.spaces ?? []), ...retrievedFacilitySpaces]);
+  const placementWidth = requestedSpaceSet.has("hangar") ? 26 : requestedSpaceSet.size >= 3 ? 16 : 15;
+  const placementDepth = requestedSpaceSet.has("hangar") ? 20 : 14;
+  const placementPolicy = engineeredFoundation || customFacility || requestedSpaceSet.size >= 3 ? "engineered" : "full";
+  const safePlacement = findReservedSafePlacement(scene, requestedX, requestedZ, placementWidth, placementDepth, placementPolicy);
   if (!safePlacement) return;
   const x = safePlacement.x;
   const z = safePlacement.z;
@@ -3123,9 +3212,17 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   // terrain surface so the route remains physically explainable.
   if (wantsMaintenanceWalk) {
     const walkY = baseY + feetToMeters(5);
-    const walkStart = { x: entrance.x, z: entrance.z };
+    const childFootprint = taggedPrimitiveFootprint(
+      scene,
+      "building-instance:wilderness-core-building",
+      { minX: x - 7, maxX: x + 7, minZ: z - 6, maxZ: z + 6 },
+    );
+    const walkStart = {
+      x: Math.max(2, Math.min(width - 2, entranceDirection > 0 ? childFootprint.maxX + 1.35 : childFootprint.minX - 1.35)),
+      z: Math.max(2, Math.min(depth - 2, childFootprint.minZ + 2.2)),
+    };
     const walkEnd = {
-      x: Math.max(3, Math.min(width - 3, x + entranceDirection * 10)),
+      x: coastalCliffSite ? Math.max(5, width * 0.17) : Math.max(3, Math.min(width - 3, x + entranceDirection * 10)),
       z: Math.max(3, Math.min(depth - 3, z - 8)),
     };
     scene.primitives.push(
@@ -3142,14 +3239,53 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       { x: walkEnd.x, z: walkEnd.z, y: walkY },
     ], { purpose: "service", traffic: 0.2, schedule: "all" }));
     scene.tactical.push(tacticalFeature("wilderness-exterior-maintenance-choke", "chokepoint", (walkStart.x + walkEnd.x) / 2, (walkStart.z + walkEnd.z) / 2, walkY, 1, "The exposed maintenance catwalk is a supported alternate route around the mountain compound."));
+    if (["海蚀洞", "sea cave", "sea-eroded cave"].some((term) => text.includes(term))) {
+      const caveFloorY = Math.min(terrainBaseY - feetToMeters(12), -feetToMeters(8));
+      const caveX = coastalCliffSite ? Math.max(5, width * 0.155) : Math.max(5, Math.min(width - 5, walkEnd.x + entranceDirection * 3.5));
+      const caveZ = Math.max(5, Math.min(depth - 5, walkEnd.z - 2.5));
+      const caveInterfaceTags = ["site-program", "sea-cave", "underground", "building-instance:wilderness-core-building"];
+      const caveAccess = stairConnection(
+        "wilderness-sea-cave-descent",
+        3,
+        { xCells: caveX, zCells: caveZ, yMeters: caveFloorY + FLOOR_SLAB_METERS },
+        { xCells: walkEnd.x, zCells: walkEnd.z, yMeters: walkY },
+        1.35,
+        "rock",
+        [...caveInterfaceTags, "vertical-route", "vertical-opening", "shaft-access", "supported"],
+      );
+      scene.primitives.push(
+        box("wilderness-sea-cave-floor", 3, caveX, caveFloorY, caveZ, 8.5, FLOOR_SLAB_METERS, 6.8, "darkStone", [...caveInterfaceTags, "floor", "standable"]),
+        primitive("wilderness-sea-cave-wall-north", "sphere", 3, caveX, caveFloorY, caveZ - 4.1, 10.5, feetToMeters(9), 4.4, "rock", [...caveInterfaceTags, "cave-wall", "cover", "vertical-face"]),
+        primitive("wilderness-sea-cave-wall-south", "sphere", 3, caveX - 0.8, caveFloorY, caveZ + 4.1, 10.2, feetToMeters(8), 4.2, "rock", [...caveInterfaceTags, "cave-wall", "cover", "vertical-face"]),
+        primitive("wilderness-sea-cave-back-wall", "sphere", 3, caveX + 4.6, caveFloorY, caveZ - 0.4, 4.8, feetToMeters(10), 8.8, "darkStone", [...caveInterfaceTags, "cave-wall", "vertical-face"]),
+        water("wilderness-sea-cave-tidal-pool", 3, caveX + 1.8, caveFloorY + 0.08, caveZ + 0.6, 3.2, 0.12, 2.8, [...caveInterfaceTags, "tidal-pool", "hazard"]),
+        caveAccess.primitive,
+      );
+      for (const [rockIndex, rockX, rockZ, diameter] of [
+        [1, caveX - 3.2, caveZ - 2.4, 1.7],
+        [2, caveX - 2.7, caveZ + 2.5, 2.1],
+        [3, caveX + 0.2, caveZ - 2.9, 1.4],
+        [4, caveX + 3.1, caveZ + 2.2, 1.8],
+        [5, caveX + 3.5, caveZ - 2.1, 1.25],
+      ] as const) {
+        scene.primitives.push(cylinder(`wilderness-sea-cave-rock-${rockIndex}`, 3, rockX, caveFloorY + FLOOR_SLAB_METERS, rockZ, diameter, feetToMeters(3 + rockIndex * 0.75), rockIndex % 2 === 0 ? "darkStone" : "rock", [...caveInterfaceTags, "cave-rock", "cover", "vertical-face"]));
+      }
+      scene.routes.push(stairRoute("wilderness-sea-cave-route", caveAccess));
+      scene.rooms.push(createRoom("wilderness-sea-cave-room", "Tidal sea cave below the rescue station", "natural", 3, caveX, caveZ, 8.5, 6.8, caveFloorY));
+      const coreRoom = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
+      if (coreRoom) connectRooms(scene.rooms, coreRoom.id, "wilderness-sea-cave-room");
+      scene.tactical.push(tacticalFeature("wilderness-sea-cave-choke", "chokepoint", caveX, caveZ - 2.4, caveFloorY, 1, "The maintenance descent reaches a tidal cave through one narrow rock throat."));
+    }
   }
   scene.viewProgram = {
     version: 1,
     mode: "site",
-    focusCells: { x, z },
-    radiusCells: Math.max(16, Math.min(22, 16 + context.request.density * 5)),
-    includeTags: ["site-program", "building-pad", "settlement-building", "communications-tower", "generator-shed"],
-    reason: "Frame the authored wilderness compound as the tactical subject while retaining enough parent terrain to explain access, hazards and elevation.",
+    focusCells: coastalCliffSite ? { x: width * 0.32, z: depth * 0.5 } : { x, z },
+    radiusCells: coastalCliffSite ? Math.max(24, Math.max(width, depth) * 0.57) : Math.max(16, Math.min(22, 16 + context.request.density * 5)),
+    includeTags: ["site-program", "building-pad", "settlement-building", "communications-tower", "generator-shed", ...(coastalCliffSite ? ["coastal-cliff", "open-sea", "sea-cave"] : [])],
+    reason: coastalCliffSite
+      ? "Frame the upper rescue compound, continuous sea cliff, open water and cave descent together so the parent-child relationship remains visible."
+      : "Frame the authored wilderness compound as the tactical subject while retaining enough parent terrain to explain access, hazards and elevation.",
   };
   const wildernessRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
 
@@ -3332,9 +3468,10 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
 
   if (wantsReserveVault) {
     const vaultY = Math.min(baseY - feetToMeters(14), FLOOR_SLAB_METERS - feetToMeters(10));
+    const medicineVault = ["药品库", "药品仓", "medicine vault", "medical cache", "medicine store"].some((term) => text.includes(term));
     const vaultTags = quarantine
       ? ["site-program", "medical-vault", "reserve-vault", "medicine-store", "underground", "restricted", "cover"]
-      : ["site-program", "reserve-vault", "underground-reserve", "storage", "underground", "restricted", "cover"];
+      : ["site-program", "reserve-vault", "underground-reserve", "storage", "underground", "restricted", "cover", ...(medicineVault ? ["medical-vault", "medicine-store"] : [])];
     scene.primitives.push(
       box("wilderness-reserve-vault-locker-a", 3, x - 1.7, vaultY + FLOOR_SLAB_METERS, z, 0.8, feetToMeters(5.5), 3.2, "metal", vaultTags),
       box("wilderness-reserve-vault-locker-b", 3, x + 1.7, vaultY + FLOOR_SLAB_METERS, z, 0.8, feetToMeters(5.5), 3.2, "metal", vaultTags),
@@ -3679,7 +3816,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       }
     }
   }
-  if (archetype === "forest" && (wantsFootbridge || streamWanted)) {
+  if (archetype === "forest" && (wantsFootbridge || streamWanted) && !wantsRootBridge) {
     // A footbridge crosses the actual stream corridor and lands on terrain
     // surfaces; it is not a floating decorative slab.
     const crossingX = Math.max(6, Math.min(width - 6, x + 6.5));
@@ -4058,7 +4195,6 @@ function terrainSupportsPoint(scene: GeneratedScene, xCells: number, zCells: num
 }
 
 function findReservedSafePlacement(scene: GeneratedScene, requestedX: number, requestedZ: number, widthCells: number, depthCells: number, supportPolicy: "full" | "engineered" = "full"): { x: number; z: number } | undefined {
-  if (!scene.terrainReservations?.length) return { x: requestedX, z: requestedZ };
   const halfX = widthCells / 2; const halfZ = depthCells / 2;
   const supportInsetX = Math.max(0.4, halfX - 0.55);
   const supportInsetZ = Math.max(0.4, halfZ - 0.55);
@@ -4072,8 +4208,29 @@ function findReservedSafePlacement(scene: GeneratedScene, requestedX: number, re
       [x - sampleX, z + sampleZ], [x + sampleX, z + sampleZ],
     ].every(([px, pz]) => terrainSupportsPoint(scene, px!, pz!));
   };
+  const overlapsParentRoute = (x: number, z: number) => widthCells >= 10 && depthCells >= 9 && scene.routes.some((route) => {
+    // Most terrain trails are intentionally reroutable around a child parcel.
+    // Ice bridges have endpoints fixed to opposite crevasse banks. Ordinary
+    // parent switchbacks are rebuilt around the complete child footprint after
+    // placement, so they must not make an otherwise valid coastal shelf unusable.
+    if (!route.id.startsWith("ice-main-crevasse-crossing-route-")) return false;
+    const samples = route.points.flatMap((point, index) => {
+      const next = route.points[index + 1];
+      if (!next) return [{ x: point.x / CELL, z: point.z / CELL }];
+      const lengthCells = Math.hypot(next.x - point.x, next.z - point.z) / CELL;
+      const sections = Math.max(1, Math.ceil(lengthCells / 1.25));
+      return Array.from({ length: sections + 1 }, (_, section) => ({
+        x: (point.x + (next.x - point.x) * section / sections) / CELL,
+        z: (point.z + (next.z - point.z) * section / sections) / CELL,
+      }));
+    });
+    const crossingClearanceX = Math.max(halfX + 1.35, 10.5);
+    const crossingClearanceZ = Math.max(halfZ + 1.35, 9.5);
+    return samples.some((sample) => Math.abs(sample.x - x) <= crossingClearanceX && Math.abs(sample.z - z) <= crossingClearanceZ);
+  });
   const valid = (x: number, z: number) => withinBounds(x, z)
     && !overlapsReservedTerrainFootprint(scene, x, z, halfX, halfZ, 0.75)
+    && !overlapsParentRoute(x, z)
     && supported(x, z);
   if (valid(requestedX, requestedZ)) return { x: requestedX, z: requestedZ };
   const candidates: Array<{ x: number; z: number; score: number }> = [];
@@ -4722,7 +4879,12 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   else if (archetype === "floating-islands") buildFloatingIslands(scene, profile.width, profile.depth, profile.density, context.rng.fork("floating-islands"));
   else if (archetype === "burial-ground") buildBurialGround(scene, profile.width, profile.depth, profile.density, context.rng.fork("burial-ground"));
   else if (archetype === "rift") buildRift(scene, profile.width, profile.depth, profile.density, context.rng.fork("rift"), ["火山", "熔岩", "volcanic", "lava"].some((term) => context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term)), context.request.prompt);
-  else if (archetype === "mountain") buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
+  else if (archetype === "mountain") {
+    buildMountain(scene, profile.width, profile.depth, profile.density, context.rng.fork("mountain"));
+    if (["海岸悬崖", "海岸崖", "海崖", "coastal cliff", "sea cliff"].some((term) => context.request.prompt.normalize("NFKC").toLocaleLowerCase("en-US").includes(term))) {
+      addCoastalCliffLayer(scene, profile.width, profile.depth, profile.density, context.rng.fork("coastal-cliff-layer"));
+    }
+  }
   else if (archetype === "ice") buildIce(scene, profile.width, profile.depth, profile.density, context.rng.fork("ice"), context.request.prompt);
   else if (archetype === "ruin") buildRuin(scene, profile.width, profile.depth, context.rng.fork("ruin"));
   else if (archetype === "forest") buildForest(scene, profile.width, profile.depth, profile.density, context.rng.fork("forest"), context.request.prompt);

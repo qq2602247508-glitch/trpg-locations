@@ -298,6 +298,7 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
     && !programText.includes("盐晶")
     && hasExplicitBuilding
     && ["cave", "forest", "river", "volcanic", "crater", "rift", "ice", "swamp", "floating"].includes(composition.primaryDomain);
+  const explicitCoastalCliffParent = ["海岸悬崖", "海岸崖", "海崖", "coastal cliff", "sea cliff"].some((term) => programText.includes(term));
   const industrialDistrictOwnsSite = programText.includes("工业区") && !["废弃工业区", "工业遗址", "industrial ruin"].some((term) => programText.includes(term));
   const ownsSite = !wildernessBuildingOwnsSite && (hasStrongSettlement || industrialDistrictOwnsSite || (!hasExplicitBuilding && ["城市", "city"].some((term) => programText.includes(term))));
   // Parent-site ownership is a hard schema constraint, not a model opinion.
@@ -314,7 +315,7 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
     program = planSceneProgramLocally(normalized.prompt, kind);
     primary = "wilderness";
   }
-  if (naturalCompoundOwnsSite && composition.primaryDomain === "cave") {
+  if (naturalCompoundOwnsSite && composition.primaryDomain === "cave" && !explicitCoastalCliffParent) {
     // Cave compounds need chamber shells and vertical voids, not a town
     // road/parcel planner.  The cave generator will place the child building
     // on a real chamber floor and preserve all parent routes.
@@ -343,7 +344,7 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   // When local wording is unresolved, bounded capability retrieval may still
   // identify a real cave graph or floating-island stack. It selects an
   // existing deterministic generator; it never authors coordinates.
-  if (kind === "adaptive" && program.morphology.includes("plain")) {
+  if (kind === "adaptive" && program.morphology.includes("plain") && !wildernessBuildingOwnsSite && !naturalCompoundOwnsSite) {
     if (composition.primaryDomain === "cave") primary = "cave";
     if (composition.primaryDomain === "floating") primary = "wilderness";
   }

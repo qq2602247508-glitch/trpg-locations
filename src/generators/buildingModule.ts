@@ -1001,6 +1001,7 @@ function addFunctionalModuleGeometry(
       const access = point(localX * 0.42 + width * 0.34, localZ + depth * 0.34);
       scene.primitives.push(stairs(`${lot.id}-${module.kind}-access`, 3, access.x, submergedY, access.z, 1.05, baseY - submergedY, 4.5, "stone", [...common, `function:${module.kind}`, "submerged-access", "standable"], lot.rotation));
       scene.primitives.push(box(`${lot.id}-${module.kind}-door-opening`, 3, access.x, submergedY, access.z, 1.4, feetToMeters(7), 0.3, "stone", [...common, `function:${module.kind}`, "opening", "door-frame", "vertical-opening"], lot.rotation));
+      scene.primitives.push(box(`${lot.id}-${module.kind}-top-opening`, 0, access.x, baseY - 0.04, access.z, 1.4, 0.12, 1.4, "darkStone", [...common, `function:${module.kind}`, "floor-opening", "opening-frame", "vertical-opening"], lot.rotation));
       scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "vertical", [{ x: access.x, z: access.z, y: baseY }, { x: center.x, z: center.z, y: submergedY }], { purpose: "service", traffic: 0.25, schedule: "all" }));
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-hazard`, "hazard", center.x, center.z, submergedY, 1.8, "Floodwater slows movement and conceals a lower access route."));
     } else if (module.kind === "observation") {
@@ -1057,6 +1058,20 @@ function addFunctionalModuleGeometry(
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-cover`, "cover", center.x, center.z, baseY, 1.6, "Heavy workshop machinery creates durable cover and a service bottleneck."));
     }
     if (moduleRoom) moduleRoom.name = module.label;
+  }
+  // Modules are composed in Seed-dependent order. A later medical/chapel wing
+  // can therefore grow across an earlier hangar or service route after that
+  // route already cut the then-existing shell. Re-run the doorway pass once
+  // all functional geometry exists so composition order cannot leave a valid
+  // route buried in a subsequently authored wall.
+  for (const route of scene.routes.filter((entry) => entry.id.startsWith(`${lot.id}-`) && entry.points.length >= 2)) {
+    for (let index = 1; index < route.points.length; index += 1) {
+      const fromWorld = route.points[index - 1]!;
+      const toWorld = route.points[index]!;
+      const from = toLocal(fromWorld.x, fromWorld.z);
+      const to = toLocal(toWorld.x, toWorld.z);
+      cutDoorOpeningsAlongLocalSegment(`final-${route.id}-${index}`, from, to);
+    }
   }
 }
 

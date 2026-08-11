@@ -40,6 +40,7 @@ async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean
     && localProgram.coverage.length === 1
     && localProgram.coverage[0] === "sparse";
   const shouldUseOllama = allowOllama && unresolved
+    && !shouldComposeWildernessFacility(prompt)
     && (localProgram.primaryKind === "wilderness" || localProgram.primaryKind === "building")
     && (kind === "adaptive" || kind === "wilderness" || kind === "building" || kind === "settlement");
   const program = shouldUseOllama

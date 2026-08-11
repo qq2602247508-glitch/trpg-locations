@@ -86,6 +86,9 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   // two-bank rift. The parent material/process owns the composition domain.
   if (has(text, ["冰原", "冰盖", "冰川", "冻土", "雪原", "ice field", "ice sheet", "glacier", "tundra", "permafrost"])) return "ice";
   if (has(text, ["浮空岛", "浮空岩岛", "浮岛", "空岛", "悬空岛", "悬空石盘", "漂浮岩岛", "floating island", "sky island", "levitating island"])) return "floating";
+  // A sea cave named as the destination of a cliff facility is subordinate
+  // interior terrain. The explicit coastal cliff owns the macro landform.
+  if (has(text, ["海岸悬崖", "海岸崖", "海崖", "coastal cliff", "sea cliff"])) return "mountain";
   const caveTerms = ["洞穴", "洞窟", "岩窟", "溶洞", "地底洞室", "海蚀洞", "潮汐洞穴", "洞穴群", "cave", "cavern", "grotto", "sea cave", "tidal cavern", "cave network"] as const;
   const riftTerms = ["裂谷", "裂缝", "裂隙", "深渊", "rift", "crevasse", "chasm", "ravine"] as const;
   const caveIndex = firstIndexOf(caveTerms);

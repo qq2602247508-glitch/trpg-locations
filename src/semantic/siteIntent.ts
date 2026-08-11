@@ -103,13 +103,13 @@ function includesAny(text: string, terms: readonly string[]): boolean {
 }
 
 function hasGenericFacilityNoun(text: string): boolean {
-  return includesAny(text, ["机库", "艇库", "飞行棚", "飞艇棚", "收容院", "避难院", "救护所", "医务所"])
+  return includesAny(text, ["机库", "艇库", "飞行棚", "飞艇棚", "收容院", "避难院", "救护所", "救护站", "医务所", "诊疗站", "巡护院", "工坊", "车间"])
     || /(?:修复|收藏|标本|档案|抄写|制图|测量|系留|维护|观景|警戒|巡查|实验|工艺|冶炼|蒸馏|酿造|医疗|救护|避难|储备|货运|信号|灯号|祭祀|礼拜|学术|研究|勘探|采集|加工)[^，。；;]{0,8}(?:站|所|院|塔|楼|馆|屋|堡|堂|庙|工坊|车间|基地|营房|设施|实验室|仓|库)/u.test(text)
     || /(?:station|facility|observatory|repair shop|collection hall|specimen hall|archive|scriptorium|cartography room|survey post|mooring tower|maintenance depot|lookout|watch post|laboratory|workshop|foundry|distillery|brewery|clinic|infirmary|shelter|depot|signal tower|chapel|shrine|academy|research outpost|hangar|warehouse)\b/u.test(text);
 }
 
 function hasExplicitNaturalEmbeddingRelation(text: string): boolean {
-  return /(?:中的|里的|内部的|上的|上方的|下方的|旁边的|沿岸的|背后的|边缘的)/u.test(text)
+  return /(?:中的|里的|内部的|上的|上方的|下方的|旁的|旁边的|沿岸的|背后的|边缘的|外缘的)/u.test(text)
     || /(?:建在|位于|嵌在|藏在|坐落在)[^，。；;]{0,28}(?:中|内|上|旁|边缘|沿岸|背后|下方)/u.test(text)
     || /\b(?:in|inside|within|on|along|behind|beneath|under|at the edge of)\b[^,.;]{0,36}\b(?:forest|swamp|marsh|mountain|ridge|valley|canyon|glacier|ice field|tundra|volcanic|crater|cavern|cave|coast|river)\b/u.test(text);
 }
