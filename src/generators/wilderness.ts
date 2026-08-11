@@ -246,43 +246,89 @@ function buildRiverValley(scene: GeneratedScene, width: number, depth: number, r
   addCover(scene, rng, "river", width * 0.22, depth * 0.24, 0, 3);
 }
 
-function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"]): void {
+function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"], prompt: string): void {
   const cols = Math.floor(width);
   const rows = Math.floor(depth);
-  const channel = rows * rng.float(0.46, 0.55);
+  const normalized = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const explicitBraids = includesAny(normalized, ["分汊", "辫状河", "河中岛", "岛洲", "braided", "river island"]);
+  const explicitCanyon = includesAny(normalized, ["峡谷", "峡湾", "悬崖", "峭壁", "gorge", "canyon", "cliff"]);
+  const explicitFloodplain = includesAny(normalized, ["冲积谷", "冲积平原", "宽阔河谷", "洪泛平原", "floodplain", "broad valley"]);
+  const explicitWaterfall = includesAny(normalized, ["瀑布", "落差", "跌水", "waterfall", "cascade", "drop"]);
+  const dramaticDrop = includesAny(normalized, ["巨大落差", "高处落入", "深潭", "峡谷瀑布", "悬崖瀑布", "towering waterfall", "great drop", "plunge pool"]);
+  const forms = ["floodplain", "asymmetric-gorge", "double-canyon", "s-confluence", "braided-reach"] as const;
+  type RiverForm = typeof forms[number];
+  const form: RiverForm = explicitBraids
+    ? "braided-reach"
+    : explicitCanyon
+      ? (density >= 0.62 ? "double-canyon" : "asymmetric-gorge")
+      : explicitFloodplain
+        ? "floodplain"
+        : (forms[rng.int(0, forms.length - 1)] ?? "s-confluence");
+  const flowAxis: "x" | "z" = rng.bool(0.5) ? "x" : "z";
+  const spanU = flowAxis === "x" ? cols : rows;
+  const spanV = flowAxis === "x" ? rows : cols;
+  const mapPoint = (u: number, v: number) => flowAxis === "x" ? { x: u, z: v } : { x: v, z: u };
+  const toFlowCoordinates = (x: number, z: number) => flowAxis === "x" ? { u: x, v: z } : { u: z, v: x };
+  const channel = spanV * rng.float(0.43, 0.57);
   const phaseA = rng.float(-Math.PI, Math.PI);
   const phaseB = rng.float(-Math.PI, Math.PI);
-  const channelHalfWidth = 1.65 + density * 1.45;
-  const riverLineAt = (x: number) => channel + Math.sin(x * (0.12 + density * 0.055) + phaseA) * (2.2 + density * 2.5) + Math.sin(x * 0.041 + phaseB) * (2.2 + density * 1.5);
+  const channelHalfWidth = form === "floodplain"
+    ? 2.15 + density * 1.8
+    : form === "double-canyon"
+      ? 1.35 + density * 0.85
+      : 1.65 + density * 1.35;
+  const riverLineAt = (u: number) => {
+    const t = u / Math.max(1, spanU);
+    const broadBend = form === "s-confluence"
+      ? Math.sin((t * 2.25 - 0.3) * Math.PI + phaseA) * (4.5 + density * 3.6)
+      : Math.sin(u * (0.085 + density * 0.04) + phaseA) * (2.1 + density * 2.8);
+    const secondary = Math.sin(u * 0.037 + phaseB) * (form === "floodplain" ? 3.8 : 2.1 + density * 1.5);
+    return Math.max(5, Math.min(spanV - 5, channel + broadBend + secondary));
+  };
+  const braidOffset = 5.2 + density * 3.2;
+  const braidLineAt = (u: number) => riverLineAt(u) + Math.sin((u / Math.max(1, spanU)) * Math.PI) * braidOffset;
+  const inBraidReach = (u: number) => form === "braided-reach" && u > spanU * 0.18 && u < spanU * 0.78;
   const tributaryCount = 1 + Math.floor(density * 2.6);
   const tributaries = Array.from({ length: tributaryCount }, (_, index) => {
-    const joinX = cols * (0.3 + (index + 1) / (tributaryCount + 2) * 0.5) + rng.float(-2.5, 2.5);
-    const fromNorth = index % 2 === 0;
-    const startZ = fromNorth ? rows * rng.float(0.08, 0.18) : rows * rng.float(0.82, 0.92);
-    const joinZ = riverLineAt(joinX);
-    return { joinX, startZ, joinZ, fromNorth, width: 0.9 + density * 0.75 };
+    const joinU = spanU * (0.34 + (index + 1) / (tributaryCount + 2) * 0.48) + rng.float(-2.2, 2.2);
+    const startU = Math.max(2, joinU - spanU * rng.float(0.18, 0.34));
+    const fromLowSide = index % 2 === 0;
+    const startV = fromLowSide ? spanV * rng.float(0.06, 0.15) : spanV * rng.float(0.85, 0.94);
+    const joinV = riverLineAt(joinU);
+    return { joinU, startU, startV, joinV, fromLowSide, width: 0.75 + density * 0.7 };
   });
+  const tributaryLineAt = (branch: typeof tributaries[number], u: number) => {
+    const t = Math.max(0, Math.min(1, (u - branch.startU) / Math.max(0.01, branch.joinU - branch.startU)));
+    return branch.startV + (branch.joinV - branch.startV) * t + Math.sin(t * Math.PI * 2 + phaseB) * (0.8 + density * 0.7);
+  };
   const heights: Array<number | undefined> = [];
   const at = (x: number, z: number) => (x < 0 || z < 0 || x >= cols || z >= rows ? undefined : heights[z * cols + x]);
   for (let z = 0; z < rows; z += 1) {
     for (let x = 0; x < cols; x += 1) {
-      const riverLine = riverLineAt(x);
-      const distance = Math.abs(z - riverLine);
+      const { u, v } = toFlowCoordinates(x, z);
+      const riverLine = riverLineAt(u);
+      const distance = Math.abs(v - riverLine);
       const edge = Math.min(x, z, cols - 1 - x, rows - 1 - z);
       const inWater = distance <= channelHalfWidth;
+      const inBraid = inBraidReach(u) && Math.abs(v - braidLineAt(u)) <= channelHalfWidth * 0.68;
       const inTributary = tributaries.some((branch) => {
-        const dx = branch.joinX - (branch.fromNorth ? cols * 0.08 : cols * 0.92);
-        const startX = branch.fromNorth ? cols * 0.08 : cols * 0.92;
-        const t = Math.max(0, Math.min(1, (x - startX) / (Math.abs(dx) < 0.01 ? 1 : dx)));
-        const lineZ = branch.startZ + (branch.joinZ - branch.startZ) * t + Math.sin(t * Math.PI * 2 + phaseB) * 1.2;
-        return t > 0 && t < 1 && Math.abs(z - lineZ) <= branch.width;
+        if (u <= branch.startU || u >= branch.joinU) return false;
+        return Math.abs(v - tributaryLineAt(branch, u)) <= branch.width;
       });
-      const erodedPocket = distance > 7 && Math.sin(x * 0.27 + z * 0.19 + phaseA) > 0.94 - density * 0.08 && Math.cos(x * 0.08 - z * 0.12) > 0.15;
-      if (edge === 0 || inWater || inTributary || erodedPocket) heights.push(undefined);
+      const erodedPocket = distance > 7 && Math.sin(x * 0.27 + z * 0.19 + phaseA) > 0.96 - density * 0.09 && Math.cos(x * 0.08 - z * 0.12) > 0.15;
+      if (edge === 0 || inWater || inBraid || inTributary || erodedPocket) heights.push(undefined);
       else {
-        const distanceBand = distance < 5 ? 0 : distance < 9 ? 1 : distance < 15 ? 2 : 3;
-        const ridgeLift = z < riverLine && distance > 13 && Math.sin(x * 0.095) + Math.cos(z * 0.12) > 0.65 ? 1 : 0;
-        heights.push(Math.min(4, distanceBand + ridgeLift));
+        const lowSide = v < riverLine;
+        let distanceBand: number;
+        if (form === "floodplain") distanceBand = distance < 8 ? 0 : distance < 16 ? 1 : distance < 24 ? 2 : 3;
+        else if (form === "double-canyon") distanceBand = distance < 4 ? 0 : distance < 7 ? 2 : distance < 11 ? 4 : 5;
+        else if (form === "asymmetric-gorge") {
+          distanceBand = lowSide
+            ? (distance < 6 ? 0 : distance < 13 ? 1 : distance < 20 ? 2 : 3)
+            : (distance < 4 ? 0 : distance < 7 ? 2 : distance < 11 ? 4 : 5);
+        } else distanceBand = distance < 6 ? 0 : distance < 11 ? 1 : distance < 18 ? 2 : 3;
+        const ridgeLift = distance > 12 && Math.sin(u * 0.095 + (lowSide ? 0 : 1.3)) + Math.cos(v * 0.12) > 0.75 - density * 0.15 ? 1 : 0;
+        heights.push(Math.min(form === "double-canyon" || form === "asymmetric-gorge" ? 6 : 4, distanceBand + ridgeLift));
       }
     }
   }
@@ -310,53 +356,100 @@ function buildRiverValleyContinuous(scene: GeneratedScene, width: number, depth:
     }
   }
   const waterSegments = 14 + Math.round(density * 12);
-  const waterfallX = cols * rng.float(0.62, 0.74);
-  const upperWaterY = feetToMeters(3);
-  const lowerWaterY = feetToMeters(-4);
+  const waterfallU = spanU * rng.float(0.58, 0.76);
+  const dropFeet = dramaticDrop ? rng.int(18, 30) : explicitWaterfall ? rng.int(8, 16) : rng.int(3, 7);
+  const upperWaterFeet = Math.max(2, Math.round(dropFeet * 0.34));
+  const lowerWaterFeet = upperWaterFeet - dropFeet;
+  const upperWaterY = feetToMeters(upperWaterFeet);
+  const lowerWaterY = feetToMeters(lowerWaterFeet);
+  const waterflowSamples: Array<{ u: number; x: number; z: number; y: number }> = [];
   for (let index = 0; index < waterSegments; index += 1) {
-    const fromX = 1 + ((cols - 2) * index) / waterSegments;
-    const toX = 1 + ((cols - 2) * (index + 1)) / waterSegments;
-    const fromZ = riverLineAt(fromX);
-    const toZ = riverLineAt(toX);
-    const dx = toX - fromX;
-    const dz = toZ - fromZ;
-    const waterY = (fromX + toX) / 2 < waterfallX ? upperWaterY : lowerWaterY;
-    scene.primitives.push(water(`river-semantic-channel-${index}`, 0, (fromX + toX) / 2, waterY, (fromZ + toZ) / 2, channelHalfWidth * 2, 0.34, Math.hypot(dx, dz) + 0.8, ["river", "watercourse", "terrain", "meandering-channel", waterY === upperWaterY ? "upper-water" : "lower-water"], Math.atan2(dx, dz)));
-    reserveLinearTerrain(scene, `river-channel-reservation-${index}`, "water", fromX, fromZ, toX, toZ, channelHalfWidth * 2, 0.65, "The main river owns this channel; ordinary foundations and loose props must remain on supported banks.");
+    const fromU = 1 + ((spanU - 2) * index) / waterSegments;
+    const toU = 1 + ((spanU - 2) * (index + 1)) / waterSegments;
+    const from = mapPoint(fromU, riverLineAt(fromU));
+    const to = mapPoint(toU, riverLineAt(toU));
+    const waterY = (fromU + toU) / 2 < waterfallU ? upperWaterY : lowerWaterY;
+    waterflowSamples.push({ u: (fromU + toU) / 2, x: (from.x + to.x) / 2, z: (from.z + to.z) / 2, y: waterY });
+    scene.primitives.push(water(`river-semantic-channel-${index}`, 0, (from.x + to.x) / 2, waterY, (from.z + to.z) / 2, channelHalfWidth * 2, 0.34, Math.hypot(to.x - from.x, to.z - from.z) + 0.8, ["river", "watercourse", "terrain", "meandering-channel", `river-form:${form}`, waterY === upperWaterY ? "upper-water" : "lower-water"], Math.atan2(to.x - from.x, to.z - from.z)));
+    reserveLinearTerrain(scene, `river-channel-reservation-${index}`, "water", from.x, from.z, to.x, to.z, channelHalfWidth * 2, 0.65, "The main river owns this channel; ordinary foundations and loose props must remain on supported banks.");
+    if (inBraidReach((fromU + toU) / 2)) {
+      const braidFrom = mapPoint(fromU, braidLineAt(fromU));
+      const braidTo = mapPoint(toU, braidLineAt(toU));
+      scene.primitives.push(water(`river-braided-channel-${index}`, 0, (braidFrom.x + braidTo.x) / 2, waterY + 0.04, (braidFrom.z + braidTo.z) / 2, channelHalfWidth * 1.35, 0.28, Math.hypot(braidTo.x - braidFrom.x, braidTo.z - braidFrom.z) + 0.7, ["river", "watercourse", "braided-channel", "waterflow"], Math.atan2(braidTo.x - braidFrom.x, braidTo.z - braidFrom.z)));
+      reserveLinearTerrain(scene, `river-braided-reservation-${index}`, "water", braidFrom.x, braidFrom.z, braidTo.x, braidTo.z, channelHalfWidth * 1.35, 0.5, "A distributary channel encloses a standable floodplain island.");
+    }
   }
   for (const [branchIndex, branch] of tributaries.entries()) {
-    const startX = branch.fromNorth ? cols * 0.08 : cols * 0.92;
     const pieces = 6 + Math.round(density * 4);
     for (let index = 0; index < pieces; index += 1) {
       const t1 = index / pieces; const t2 = (index + 1) / pieces;
-      const x1 = startX + (branch.joinX - startX) * t1; const x2 = startX + (branch.joinX - startX) * t2;
-      const z1 = branch.startZ + (branch.joinZ - branch.startZ) * t1 + Math.sin(t1 * Math.PI * 2 + phaseB) * 1.2;
-      const z2 = branch.startZ + (branch.joinZ - branch.startZ) * t2 + Math.sin(t2 * Math.PI * 2 + phaseB) * 1.2;
-      scene.primitives.push(water(`river-tributary-${branchIndex}-${index}`, 0, (x1 + x2) / 2, upperWaterY + feetToMeters(1.5), (z1 + z2) / 2, branch.width * 2, 0.26, Math.hypot(x2 - x1, z2 - z1) + 0.55, ["river", "tributary", "watercourse", "waterflow"], Math.atan2(x2 - x1, z2 - z1)));
-      reserveLinearTerrain(scene, `river-tributary-reservation-${branchIndex}-${index}`, "water", x1, z1, x2, z2, branch.width * 2, 0.55, "A tributary owns its wet channel and bank clearance.");
+      const u1 = branch.startU + (branch.joinU - branch.startU) * t1;
+      const u2 = branch.startU + (branch.joinU - branch.startU) * t2;
+      const from = mapPoint(u1, tributaryLineAt(branch, u1));
+      const to = mapPoint(u2, tributaryLineAt(branch, u2));
+      const tributaryY = upperWaterY + feetToMeters(Math.max(1, Math.round((1 - t1) * (2 + density * 3))));
+      scene.primitives.push(water(`river-tributary-${branchIndex}-${index}`, 0, (from.x + to.x) / 2, tributaryY, (from.z + to.z) / 2, branch.width * 2, 0.26, Math.hypot(to.x - from.x, to.z - from.z) + 0.55, ["river", "tributary", "watercourse", "waterflow"], Math.atan2(to.x - from.x, to.z - from.z)));
+      reserveLinearTerrain(scene, `river-tributary-reservation-${branchIndex}-${index}`, "water", from.x, from.z, to.x, to.z, branch.width * 2, 0.55, "A tributary owns its wet channel and bank clearance.");
     }
   }
-  const fallsZ = riverLineAt(waterfallX);
+  const falls = mapPoint(waterfallU, riverLineAt(waterfallU));
   const fallsHeight = upperWaterY - lowerWaterY;
-  scene.primitives.push(box("river-waterfall-face", 0, waterfallX, lowerWaterY, fallsZ, 0.32, fallsHeight, channelHalfWidth * 2.25, "water", ["river", "waterfall", "vertical-water", "hazard"]));
-  scene.primitives.push(water("river-deep-pool", 0, waterfallX + 2.4, lowerWaterY - 0.18, riverLineAt(waterfallX + 2.4), channelHalfWidth * 3.4, 0.62, 5.8, ["river", "deep-pool", "waterfall-basin", "hazard"]));
-  reserveRadialTerrain(scene, "river-deep-pool-reservation", "water", waterfallX + 2.4, riverLineAt(waterfallX + 2.4), Math.max(channelHalfWidth * 3.4, 5.8), 0.85, "The waterfall plunge pool is deep water and cannot receive an ordinary building pad.");
-  const crossingX = cols * rng.float(0.36, 0.52);
-  const crossingZ = riverLineAt(crossingX);
-  scene.primitives.push(corridor("river-semantic-old-bridge", 0, crossingX, crossingZ - 4, crossingX, crossingZ + 4, yOf(1), 2.4, "stone", ["bridge", "semantic-grid", "old-bridge"]));
-  const fordX = cols * rng.float(0.16, 0.25);
-  const fordZ = riverLineAt(fordX);
-  scene.primitives.push(corridor("river-semantic-shallow-ford", 0, fordX, fordZ - 3.5, fordX, fordZ + 3.5, yOf(0), 2.2, "earth", ["terrain", "semantic-grid", "shallow-ford"]));
-  scene.rooms.push(createRoom("river-upper-ridge", "Upper ridge", "natural", 0, cols * 0.5, rows * 0.2, cols - 6, rows * 0.25, yOf(3)), createRoom("river-floodplain", "River floodplain", "natural", 0, cols * 0.5, channel, cols - 6, 8, yOf(1)), createRoom("river-falls-basin", "Waterfall basin", "combat", 0, waterfallX + 2.4, fallsZ, cols * 0.26, rows * 0.22, lowerWaterY));
+  scene.primitives.push(box("river-waterfall-face", 0, falls.x, (upperWaterY + lowerWaterY) / 2, falls.z, flowAxis === "x" ? 0.32 : channelHalfWidth * 2.25, fallsHeight, flowAxis === "x" ? channelHalfWidth * 2.25 : 0.32, "water", ["water", "river", "waterfall", "vertical-water", "hazard", `drop-feet:${dropFeet}`]));
+  const poolPoint = mapPoint(waterfallU + 2.8, riverLineAt(waterfallU + 2.8));
+  scene.primitives.push(water("river-deep-pool", 0, poolPoint.x, lowerWaterY - 0.18, poolPoint.z, channelHalfWidth * 3.4, 0.62, 5.8, ["river", "deep-pool", "waterfall-basin", "hazard"]));
+  reserveRadialTerrain(scene, "river-deep-pool-reservation", "water", poolPoint.x, poolPoint.z, Math.max(channelHalfWidth * 3.4, 5.8), 0.85, "The waterfall plunge pool is deep water and cannot receive an ordinary building pad.");
+  const crossingU = spanU * rng.float(0.32, 0.48);
+  const crossingV = riverLineAt(crossingU);
+  const bridgeFrom = mapPoint(crossingU, crossingV - channelHalfWidth - 2.2);
+  const bridgeTo = mapPoint(crossingU, crossingV + channelHalfWidth + 2.2);
+  scene.primitives.push(corridor("river-semantic-old-bridge", 0, bridgeFrom.x, bridgeFrom.z, bridgeTo.x, bridgeTo.z, yOf(1), 2.4, "stone", ["bridge", "semantic-grid", "old-bridge", "supported-crossing"]));
+  const fordU = spanU * rng.float(0.12, 0.25);
+  const fordV = riverLineAt(fordU);
+  const fordFrom = mapPoint(fordU, fordV - channelHalfWidth - 1.5);
+  const fordTo = mapPoint(fordU, fordV + channelHalfWidth + 1.5);
+  scene.primitives.push(corridor("river-semantic-shallow-ford", 0, fordFrom.x, fordFrom.z, fordTo.x, fordTo.z, yOf(0), 2.2, "earth", ["terrain", "semantic-grid", "shallow-ford", "supported-crossing"]));
+  if (density >= 0.68) {
+    const secondaryU = spanU * rng.float(0.8, 0.9);
+    const secondaryV = riverLineAt(secondaryU);
+    const secondaryFrom = mapPoint(secondaryU, secondaryV - channelHalfWidth - 1.8);
+    const secondaryTo = mapPoint(secondaryU, secondaryV + channelHalfWidth + 1.8);
+    scene.primitives.push(corridor("river-secondary-log-crossing", 0, secondaryFrom.x, secondaryFrom.z, secondaryTo.x, secondaryTo.z, yOf(1), 1.45, "wood", ["bridge", "log-crossing", "supported-crossing", "alternate-route"]));
+    scene.routes.push(createRoute("river-secondary-crossing-route", "alternate", [
+      { x: secondaryFrom.x, z: secondaryFrom.z, y: yOf(1) },
+      { x: secondaryTo.x, z: secondaryTo.z, y: yOf(1) },
+    ]));
+  }
+  const upperRidgeCenter = mapPoint(spanU * 0.34, spanV * 0.14);
+  const floodplainCenter = mapPoint(spanU * 0.5, channel);
+  scene.rooms.push(createRoom("river-upper-ridge", "Upper ridge", "natural", 0, upperRidgeCenter.x, upperRidgeCenter.z, flowAxis === "x" ? spanU * 0.58 : spanV * 0.24, flowAxis === "x" ? spanV * 0.24 : spanU * 0.58, yOf(form === "double-canyon" ? 5 : 3)), createRoom("river-floodplain", "River floodplain", "natural", 0, floodplainCenter.x, floodplainCenter.z, flowAxis === "x" ? spanU * 0.7 : 9, flowAxis === "x" ? 9 : spanU * 0.7, yOf(1)), createRoom("river-falls-basin", "Waterfall basin", "combat", 0, poolPoint.x, poolPoint.z, Math.max(8, cols * 0.22), Math.max(8, rows * 0.2), lowerWaterY));
+  if (form === "braided-reach") {
+    const island = mapPoint(spanU * 0.48, (riverLineAt(spanU * 0.48) + braidLineAt(spanU * 0.48)) / 2);
+    scene.rooms.push(createRoom("river-floodplain-island", "Floodplain island", "combat", 0, island.x, island.z, flowAxis === "x" ? spanU * 0.24 : 5, flowAxis === "x" ? 5 : spanU * 0.24, yOf(0)));
+    connectRooms(scene.rooms, "river-floodplain", "river-floodplain-island");
+    scene.tactical.push(tacticalFeature("river-island-high-ground", "highGround", island.x, island.z, yOf(0), 3, "A standable floodplain island divides the braided current and supports a flanking route."));
+  }
   connectRooms(scene.rooms, "river-upper-ridge", "river-floodplain");
   connectRooms(scene.rooms, "river-floodplain", "river-falls-basin");
-  const ridgeRoute = [nearestWalkable(2, rows * 0.18), nearestWalkable(cols * 0.32, rows * 0.32), nearestWalkable(crossingX, crossingZ - 4), nearestWalkable(cols - 2, rows * 0.76)];
+  const routeStart = mapPoint(2, spanV * 0.16);
+  const routeBend = mapPoint(spanU * 0.32, spanV * 0.28);
+  const routeBridge = mapPoint(crossingU, crossingV - channelHalfWidth - 2.2);
+  const routeEnd = mapPoint(spanU - 2, spanV * 0.78);
+  const ridgeRoute = [nearestWalkable(routeStart.x, routeStart.z), nearestWalkable(routeBend.x, routeBend.z), nearestWalkable(routeBridge.x, routeBridge.z), nearestWalkable(routeEnd.x, routeEnd.z)];
   scene.routes.push(createRoute("river-ridge-route", "primary", ridgeRoute.map((point) => ({ x: point.x, z: point.z, y: yOf(point.level) }))));
-  scene.routes.push(createRoute("river-shallow-ford", "alternate", [{ x: fordX, z: fordZ - 4, y: yOf(1) }, { x: fordX, z: fordZ, y: yOf(0) }, { x: fordX, z: fordZ + 4, y: yOf(1) }]));
-  scene.routes.push(createRoute("river-downstream", "waterflow", Array.from({ length: 9 }, (_, index) => { const x = 2 + ((cols - 4) * index) / 8; return { x, z: riverLineAt(x), y: x < waterfallX ? upperWaterY : lowerWaterY }; })));
-  scene.tactical.push(tacticalFeature("river-semantic-entrance", "entrance", 2, rows * 0.18, yOf(3), 2, "The high ridge is the main approach into the valley."), tacticalFeature("river-ford", "chokepoint", fordX, fordZ, yOf(0), 2, "A shallow ford is a legal crossing but exposes anyone in the channel."), tacticalFeature("river-falls", "hazard", waterfallX, fallsZ, lowerWaterY, 3, "A seven-foot vertical waterfall drops into a deep pool and divides the water levels."));
-  scene.description = `River-valley grammar with ${cliffCount} bank cliff segments, ${tributaryCount} tributaries, a ${Math.round(fallsHeight / 0.3048)}-foot waterfall, deep pool, old bridge, shallow ford, and density-driven channel width.`;
-  scene.floorHeightFeet = [Math.ceil((yOf(3) + feetToMeters(12)) / 0.3048)];
+  scene.routes.push(createRoute("river-shallow-ford", "alternate", [{ x: fordFrom.x, z: fordFrom.z, y: yOf(0) }, { ...mapPoint(fordU, fordV), y: yOf(0) }, { x: fordTo.x, z: fordTo.z, y: yOf(0) }]));
+  const waterflowRoute: Array<{ x: number; y: number; z: number }> = [];
+  for (let index = 0; index < waterflowSamples.length; index += 1) {
+    const sample = waterflowSamples[index]!;
+    const previous = waterflowSamples[index - 1];
+    if (previous && previous.u < waterfallU && sample.u >= waterfallU) {
+      waterflowRoute.push({ x: falls.x, z: falls.z, y: upperWaterY }, { x: falls.x, z: falls.z, y: lowerWaterY });
+    }
+    waterflowRoute.push({ x: sample.x, z: sample.z, y: sample.y });
+  }
+  scene.routes.push(createRoute("river-downstream", "waterflow", waterflowRoute));
+  scene.tactical.push(tacticalFeature("river-semantic-entrance", "entrance", routeStart.x, routeStart.z, yOf(form === "double-canyon" ? 5 : 3), 2, "The high ridge is the main approach into the valley."), tacticalFeature("river-ford", "chokepoint", mapPoint(fordU, fordV).x, mapPoint(fordU, fordV).z, yOf(0), 2, "A shallow ford is a legal crossing but exposes anyone in the channel."), tacticalFeature("river-falls", "hazard", falls.x, falls.z, lowerWaterY, Math.max(3, Math.ceil(dropFeet / 10)), `A ${dropFeet}-foot vertical waterfall drops into a deep pool and divides the water levels.`));
+  scene.description = `${form} river-valley grammar flowing on the ${flowAxis.toUpperCase()} axis with ${cliffCount} bank cliff segments, ${tributaryCount} tributaries, a ${dropFeet}-foot waterfall, ${form === "braided-reach" ? "a standable floodplain island, " : ""}an old bridge, shallow ford, and ${density >= 0.68 ? "three" : "two"} legal crossings.`;
+  scene.floorHeightFeet = [Math.ceil((yOf(form === "double-canyon" || form === "asymmetric-gorge" ? 6 : 4) + feetToMeters(12)) / 0.3048)];
 }
 
 function buildRift(scene: GeneratedScene, width: number, depth: number, density: number, rng: GeneratorContext["rng"], volcanicTheme = false): void {
@@ -2574,6 +2667,9 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const wantsReserveVault = facilityCapabilities.undergroundStore;
   const monastery = ["修道院", "寺院", "monastery", "abbey", "cloister"].some((term) => text.includes(term));
   const wantsMaintenanceWalk = ["维护栈道", "外部栈道", "维修栈道", "维护步道", "maintenance walkway", "maintenance catwalk", "service catwalk"].some((term) => text.includes(term));
+  const wantsWaterfallMaintenanceBridge = ["跨瀑维护桥", "跨瀑桥", "瀑布维护桥", "waterfall maintenance bridge", "bridge across the falls"].some((term) => text.includes(term));
+  const wantsSamplingDock = ["取样码头", "采样码头", "取水码头", "sampling dock", "sampling pier"].some((term) => text.includes(term));
+  const wantsEscapeRoute = ["逃生路", "逃生路线", "撤离路", "撤离路线", "escape route", "evacuation route"].some((term) => text.includes(term));
   const wantsBunker = ["地下防空洞", "防空洞", "地下避难所", "紧急避难所", "掩体", "bunker", "air-raid shelter", "underground shelter", "emergency shelter"].some((term) => text.includes(term));
   const requestedFloors = ["六层", "6层", "six-storey", "six-story", "six storey", "six story"].some((term) => text.includes(term)) ? 6
     : ["五层", "5层", "five-storey", "five-story", "five storey", "five story"].some((term) => text.includes(term)) ? 5
@@ -2606,17 +2702,34 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     }
   }
   const streamWanted = ["溪", "溪流", "小溪", "溪边", "溪畔", "林溪", "stream", "creek", "streamside", "creekside"].some((term) => text.includes(term));
+  const riverFlowRoute = archetype === "river-valley" ? scene.routes.find((route) => route.id === "river-downstream") : undefined;
+  const riverFlowStart = riverFlowRoute?.points[0];
+  const riverFlowEnd = riverFlowRoute?.points.at(-1);
+  const riverFlowLength = riverFlowStart && riverFlowEnd ? Math.max(0.001, Math.hypot(riverFlowEnd.x - riverFlowStart.x, riverFlowEnd.z - riverFlowStart.z)) : 1;
+  const riverFlowX = riverFlowStart && riverFlowEnd ? (riverFlowEnd.x - riverFlowStart.x) / riverFlowLength : 1;
+  const riverFlowZ = riverFlowStart && riverFlowEnd ? (riverFlowEnd.z - riverFlowStart.z) / riverFlowLength : 0;
+  const riverCrossX = -riverFlowZ;
+  const riverCrossZ = riverFlowX;
+  const riverTargetX = riverFlowStart && riverFlowEnd ? riverFlowStart.x + (riverFlowEnd.x - riverFlowStart.x) * 0.32 : width * 0.3;
+  const riverTargetZ = riverFlowStart && riverFlowEnd ? riverFlowStart.z + (riverFlowEnd.z - riverFlowStart.z) * 0.32 : depth * 0.5;
   const riverAnchor = archetype === "river-valley"
     ? scene.primitives
-      .filter((item) => item.tags?.includes("watercourse") && !item.tags?.includes("tributary"))
-      .sort((left, right) => Math.abs(left.position.x / CELL - width * 0.3) - Math.abs(right.position.x / CELL - width * 0.3))[0]
+      .filter((item) => item.tags?.includes("watercourse") && !item.tags?.includes("tributary") && !item.tags?.includes("braided-channel"))
+      .sort((left, right) => Math.hypot(left.position.x / CELL - riverTargetX, left.position.z / CELL - riverTargetZ) - Math.hypot(right.position.x / CELL - riverTargetX, right.position.z / CELL - riverTargetZ))[0]
     : undefined;
   const riverX = riverAnchor?.position.x ? riverAnchor.position.x / CELL : width * 0.28;
   const riverZ = riverAnchor?.position.z ? riverAnchor.position.z / CELL : depth * 0.5;
-  const shoreDirection = riverZ < depth * 0.5 ? 1 : -1;
-  const requestedX = archetype === "forest" ? width * 0.52 : Math.max(12, Math.min(width - 12, riverX));
+  const plusBank = { x: riverX + riverCrossX * 8, z: riverZ + riverCrossZ * 8 };
+  const minusBank = { x: riverX - riverCrossX * 8, z: riverZ - riverCrossZ * 8 };
+  const bankMargin = (point: { x: number; z: number }) => Math.min(point.x, width - point.x, point.z, depth - point.z);
+  const shoreSign = bankMargin(plusBank) >= bankMargin(minusBank) ? 1 : -1;
+  const shoreX = riverCrossX * shoreSign;
+  const shoreZ = riverCrossZ * shoreSign;
+  const requestedX = archetype === "river-valley"
+    ? Math.max(8, Math.min(width - 8, riverX + shoreX * 7.5))
+    : archetype === "forest" ? width * 0.52 : Math.max(12, Math.min(width - 12, riverX));
   const requestedZ = archetype === "river-valley"
-    ? Math.max(8, Math.min(depth - 8, riverZ + shoreDirection * 7.5))
+    ? Math.max(8, Math.min(depth - 8, riverZ + shoreZ * 7.5))
     : archetype === "forest" ? depth * 0.5 : depth * 0.28;
   const engineeredFoundation = ["volcanic", "infernal-waste", "rift", "impact-crater"].includes(archetype);
   const safePlacement = findReservedSafePlacement(scene, requestedX, requestedZ, 13, 12, engineeredFoundation ? "engineered" : "full");
@@ -3337,36 +3450,58 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     siteRoadCount += 1;
     siteRoadLength += Math.hypot(serviceTurn.x - entrance.x, serviceTurn.z - entrance.z) + Math.hypot(1, 12);
   }
-  if (context.request.density >= 0.8) {
-    const escapeEnd = { x: Math.min(width - 2, x + width * 0.32), z: Math.max(2, z - depth * 0.34) };
-    scene.primitives.push(corridor("wilderness-escape-path", 0, x + 9, z - 5, escapeEnd.x, escapeEnd.z, baseY, 0.9, archetype === "forest" ? "earth" : "rock", ["road", "trail", "escape-route", "site-program"]));
+  if (context.request.density >= 0.8 || wantsEscapeRoute) {
+    const escapeEnd = archetype === "river-valley"
+      ? {
+        x: Math.max(2, Math.min(width - 2, x - riverFlowX * width * 0.3 + shoreX * 3)),
+        z: Math.max(2, Math.min(depth - 2, z - riverFlowZ * depth * 0.3 + shoreZ * 3)),
+      }
+      : { x: Math.min(width - 2, x + width * 0.32), z: Math.max(2, z - depth * 0.34) };
+    const escapeStart = archetype === "river-valley"
+      ? { x: x + shoreX * 6 - riverFlowX * 3, z: z + shoreZ * 6 - riverFlowZ * 3 }
+      : { x: x + 2, z: z - 4 };
+    const escapeTurn = archetype === "river-valley"
+      ? { x: x + shoreX * 8 - riverFlowX * 7, z: z + shoreZ * 8 - riverFlowZ * 7 }
+      : { x: x + 9, z: z - 5 };
+    scene.primitives.push(
+      corridor("wilderness-escape-path-a", 0, escapeStart.x, escapeStart.z, escapeTurn.x, escapeTurn.z, baseY, 0.9, archetype === "forest" ? "earth" : "rock", ["road", "trail", "escape-route", "site-program", ...(wantsEscapeRoute ? ["prompt-required"] : [])]),
+      corridor("wilderness-escape-path-b", 0, escapeTurn.x, escapeTurn.z, escapeEnd.x, escapeEnd.z, baseY, 0.9, archetype === "forest" ? "earth" : "rock", ["road", "trail", "escape-route", "site-program", ...(wantsEscapeRoute ? ["upstream-escape-route"] : [])]),
+    );
     scene.routes.push(createRoute("wilderness-escape-route", "alternate", [
-      { x: x + 2, z: z - 4, y: baseY },
-      { x: x + 9, z: z - 5, y: baseY },
+      { x: escapeStart.x, z: escapeStart.z, y: baseY },
+      { x: escapeTurn.x, z: escapeTurn.z, y: baseY },
       { x: escapeEnd.x, z: escapeEnd.z, y: baseY },
     ], { purpose: "escape", traffic: 0.12, schedule: "night" }));
     siteRoadCount += 1;
-    siteRoadLength += Math.hypot(7, 1) + Math.hypot(escapeEnd.x - (x + 9), escapeEnd.z - (z - 5));
+    siteRoadLength += Math.hypot(escapeTurn.x - escapeStart.x, escapeTurn.z - escapeStart.z) + Math.hypot(escapeEnd.x - escapeTurn.x, escapeEnd.z - escapeTurn.z);
   }
-  const waterfrontDirection = archetype === "river-valley" ? -shoreDirection : 1;
-  const inlandDirection = -waterfrontDirection;
+  const waterfrontX = archetype === "river-valley" ? -shoreX : 0;
+  const waterfrontZ = archetype === "river-valley" ? -shoreZ : 1;
+  const inlandX = -waterfrontX;
+  const inlandZ = -waterfrontZ;
+  const inlandDirection = -1;
+  const porchAcrossX = archetype === "river-valley" && Math.abs(waterfrontX) > Math.abs(waterfrontZ) ? 2.2 : 5;
+  const porchAcrossZ = archetype === "river-valley" && Math.abs(waterfrontX) > Math.abs(waterfrontZ) ? 5 : 2.2;
   scene.primitives.push(
-    box("wilderness-porch", 0, x, baseY + FLOOR_SLAB_METERS, z + waterfrontDirection * 5, 5, feetToMeters(2), 2.2, "wood", ["porch", "standable", "building-exterior", "site-program"]),
-    cylinder("wilderness-well", 0, x - 6, baseY, z + inlandDirection * 3.5, 2, feetToMeters(3), "stone", ["well", "cover", "building-exterior", "site-program"]),
-    box("wilderness-woodpile", 0, x + 5.5, baseY, z + inlandDirection * 3, 3.5, feetToMeters(3), 1.8, "wood", ["woodpile", "cover", "building-exterior"]),
+    box("wilderness-porch", 0, x + waterfrontX * 5, baseY + FLOOR_SLAB_METERS, z + waterfrontZ * 5, porchAcrossX, feetToMeters(2), porchAcrossZ, "wood", ["porch", "standable", "building-exterior", "site-program", ...(archetype === "river-valley" ? ["river-facing"] : [])]),
+    cylinder("wilderness-well", 0, x + inlandX * 3.5 - riverFlowX * 5.5, baseY, z + inlandZ * 3.5 - riverFlowZ * 5.5, 2, feetToMeters(3), "stone", ["well", "cover", "building-exterior", "site-program"]),
+    box("wilderness-woodpile", 0, x + inlandX * 3 + riverFlowX * 5.2, baseY, z + inlandZ * 3 + riverFlowZ * 5.2, 3.5, feetToMeters(3), 1.8, "wood", ["woodpile", "cover", "building-exterior"]),
   );
   if (archetype === "river-valley" && riverAnchor) {
     const waterY = riverAnchor.position.y + riverAnchor.size.y;
     const dockY = waterY + 0.22;
-    const dockStartZ = z - shoreDirection * 5.4;
-    const dockEndZ = riverZ + shoreDirection * 0.45;
+    const dockStartX = x - shoreX * 5.4;
+    const dockStartZ = z - shoreZ * 5.4;
+    const dockEndX = riverX + shoreX * 0.45;
+    const dockEndZ = riverZ + shoreZ * 0.45;
+    const dockTags = ["dock", "river-access", "standable", "site-program", ...(wantsSamplingDock ? ["sampling-dock", "sampling-pier", "hydrology"] : [])];
     scene.primitives.push(
-      corridor("wilderness-river-dock", 0, x, dockStartZ, x, dockEndZ, dockY, 2.2, "wood", ["dock", "river-access", "standable", "site-program"]),
-      cylinder("wilderness-dock-pile-a", 0, x - 0.75, waterY - feetToMeters(5), dockEndZ, 0.24, feetToMeters(7), "wood", ["dock", "support", "site-program"]),
-      cylinder("wilderness-dock-pile-b", 0, x + 0.75, waterY - feetToMeters(5), dockEndZ, 0.24, feetToMeters(7), "wood", ["dock", "support", "site-program"]),
+      corridor("wilderness-river-dock", 0, dockStartX, dockStartZ, dockEndX, dockEndZ, dockY, 2.2, "wood", dockTags),
+      cylinder("wilderness-dock-pile-a", 0, dockEndX - riverFlowX * 0.75, waterY - feetToMeters(5), dockEndZ - riverFlowZ * 0.75, 0.24, feetToMeters(7), "wood", ["dock", "support", "site-program"]),
+      cylinder("wilderness-dock-pile-b", 0, dockEndX + riverFlowX * 0.75, waterY - feetToMeters(5), dockEndZ + riverFlowZ * 0.75, 0.24, feetToMeters(7), "wood", ["dock", "support", "site-program"]),
     );
-    const bankPortal = { xCells: x, zCells: dockStartZ - shoreDirection * 1.2, yMeters: baseY };
-    const dockPortal = { xCells: x, zCells: dockStartZ + shoreDirection * 1.1, yMeters: dockY };
+    const bankPortal = { xCells: dockStartX + shoreX * 1.1, zCells: dockStartZ + shoreZ * 1.1, yMeters: baseY };
+    const dockPortal = { xCells: dockStartX - shoreX * 1.2, zCells: dockStartZ - shoreZ * 1.2, yMeters: dockY };
     const bankConnection = stairConnection(
       "wilderness-river-bank-descent",
       0,
@@ -3374,19 +3509,40 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       baseY <= dockY ? dockPortal : bankPortal,
       1.5,
       "wood",
-      ["river-access", "vertical-route", "supported", "site-program"],
+      ["river-access", "vertical-route", "supported", "site-program", "shaft-access", "vertical-opening"],
     );
     scene.primitives.push(bankConnection.primitive);
     scene.routes.push(
       stairRoute("wilderness-river-bank-route", bankConnection),
       createRoute("wilderness-dock-route", "alternate", [
-        { x, z: dockStartZ, y: dockY },
-        { x, z: dockEndZ, y: dockY },
+        { x: dockStartX, z: dockStartZ, y: dockY },
+        { x: dockEndX, z: dockEndZ, y: dockY },
       ], { purpose: "movement", traffic: 0.3, schedule: "all" }),
     );
     scene.tactical.push(
-      tacticalFeature("wilderness-river-dock-choke", "chokepoint", x, dockEndZ, dockY, 2, "The narrow cabin dock is a supported river access point and exposed tactical bottleneck."),
+      tacticalFeature("wilderness-river-dock-choke", "chokepoint", dockEndX, dockEndZ, dockY, 2, "The narrow cabin dock is a supported river access point and exposed tactical bottleneck."),
     );
+    if (wantsWaterfallMaintenanceBridge) {
+      const waterfall = scene.primitives.find((primitiveEntry) => primitiveEntry.id === "river-waterfall-face");
+      if (waterfall) {
+        const fallsX = waterfall.position.x / CELL;
+        const fallsZ = waterfall.position.z / CELL;
+        const crossingHalf = Math.max(3.4, (riverAnchor.size.x + riverAnchor.size.z) / CELL * 0.62);
+        const bridgeFrom = { x: fallsX - riverCrossX * crossingHalf, z: fallsZ - riverCrossZ * crossingHalf };
+        const bridgeTo = { x: fallsX + riverCrossX * crossingHalf, z: fallsZ + riverCrossZ * crossingHalf };
+        const bridgeY = waterfall.position.y + waterfall.size.y / 2 + FLOOR_SLAB_METERS + 0.12;
+        scene.primitives.push(
+          corridor("wilderness-waterfall-maintenance-bridge", 0, bridgeFrom.x, bridgeFrom.z, bridgeTo.x, bridgeTo.z, bridgeY, 1.45, "metal", ["site-program", "waterfall-maintenance-bridge", "bridge", "supported", "standable", "hydrology"]),
+          cylinder("wilderness-waterfall-bridge-support-a", 0, bridgeFrom.x, waterY - feetToMeters(4), bridgeFrom.z, 0.22, bridgeY - waterY + feetToMeters(6), "metal", ["waterfall-maintenance-bridge", "support", "structural-support"]),
+          cylinder("wilderness-waterfall-bridge-support-b", 0, bridgeTo.x, waterY - feetToMeters(4), bridgeTo.z, 0.22, bridgeY - waterY + feetToMeters(6), "metal", ["waterfall-maintenance-bridge", "support", "structural-support"]),
+        );
+        scene.routes.push(createRoute("wilderness-waterfall-maintenance-route", "alternate", [
+          { x: bridgeFrom.x, z: bridgeFrom.z, y: bridgeY },
+          { x: bridgeTo.x, z: bridgeTo.z, y: bridgeY },
+        ], { purpose: "service", traffic: 0.18, schedule: "all" }));
+        scene.tactical.push(tacticalFeature("wilderness-waterfall-maintenance-choke", "chokepoint", fallsX, fallsZ, bridgeY, 1, "A narrow supported maintenance bridge crosses directly above the waterfall drop."));
+      }
+    }
   }
   if (archetype === "forest" && (wantsFootbridge || streamWanted)) {
     // A footbridge crosses the actual stream corridor and lands on terrain
@@ -3548,10 +3704,12 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     scene.tactical.push(tacticalFeature("wilderness-site-log-defense", "cover", x, defenseZ, baseY, 2, "A staggered fallen-log barricade creates cover and a broken approach line."));
   }
   if (archetype === "river-valley") {
-    const inlandFenceZ = z + inlandDirection * 5;
+    const inlandFenceX = x + shoreX * 5;
+    const inlandFenceZ = z + shoreZ * 5;
+    const fenceAlongX = Math.abs(riverFlowX) >= Math.abs(riverFlowZ);
     scene.primitives.push(
-      box("wilderness-fence-inland-west", 0, x - 4.25, baseY, inlandFenceZ, 3.5, feetToMeters(4), 0.25, "wood", ["fence", "cover", "building-exterior", "river-aware"]),
-      box("wilderness-fence-inland-east", 0, x + 4.25, baseY, inlandFenceZ, 3.5, feetToMeters(4), 0.25, "wood", ["fence", "cover", "building-exterior", "river-aware"]),
+      box("wilderness-fence-inland-west", 0, inlandFenceX - riverFlowX * 4.25, baseY, inlandFenceZ - riverFlowZ * 4.25, fenceAlongX ? 3.5 : 0.25, feetToMeters(4), fenceAlongX ? 0.25 : 3.5, "wood", ["fence", "cover", "building-exterior", "river-aware"]),
+      box("wilderness-fence-inland-east", 0, inlandFenceX + riverFlowX * 4.25, baseY, inlandFenceZ + riverFlowZ * 4.25, fenceAlongX ? 3.5 : 0.25, feetToMeters(4), fenceAlongX ? 0.25 : 3.5, "wood", ["fence", "cover", "building-exterior", "river-aware"]),
     );
   } else {
     for (const [index, fx, fz] of [[0, -6, -5], [1, 6, -5], [2, -6, 5], [3, 6, 5]] as const) scene.primitives.push(box(`wilderness-fence-${index}`, 0, x + fx, baseY, z + fz, index < 2 ? 0.25 : 12, feetToMeters(4), index < 2 ? 10 : 0.25, "wood", ["fence", "cover", "building-exterior"]));
@@ -4265,7 +4423,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   scene.archetype = archetype;
   if (archetype === "industrial-ruin") buildIndustrialRuin(scene, profile.width, profile.depth, profile.density, context.rng.fork("industrial"));
   else if (archetype === "coral-tide") buildCoralTide(scene, profile.width, profile.depth, context.rng.fork("coral"));
-  else if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, profile.density, context.rng.fork("river"));
+  else if (archetype === "river-valley") buildRiverValleyContinuous(scene, profile.width, profile.depth, profile.density, context.rng.fork("river"), context.request.prompt);
   else if (archetype === "dry-riverbed") buildDryRiverbed(scene, profile.width, profile.depth, profile.density, context.rng.fork("dry-riverbed"));
   else if (archetype === "salt-waste") buildSaltWasteland(scene, profile.width, profile.depth, profile.density, context.rng.fork("salt-wasteland"));
   else if (archetype === "impact-crater") buildImpactCrater(scene, profile.width, profile.depth, profile.density, context.rng.fork("impact-crater"));

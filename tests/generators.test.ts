@@ -739,6 +739,44 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
+  it("lets river prompts, density and seed reshape the macro valley instead of only adding props", () => {
+    const prompt = "蜿蜒峡谷河谷，主河从高处落入深潭，两条支流、河岸悬崖、浅滩和旧石桥";
+    const sparse = generateScene({ ...request("river-macro-contract", "large", 0.2), prompt }, "adaptive");
+    const dense = generateScene({ ...request("river-macro-contract", "large", 0.9), prompt }, "adaptive");
+    const replay = generateScene({ ...request("river-macro-contract", "large", 0.9), prompt }, "adaptive");
+    const alternate = generateScene({ ...request("river-macro-contract-alt", "large", 0.9), prompt }, "adaptive");
+    const riverSignature = (scene: GeneratedScene) => scene.primitives
+      .filter((primitive) => primitive.tags?.includes("watercourse") || primitive.tags?.includes("river-bank"))
+      .map((primitive) => `${primitive.id}:${primitive.position.x.toFixed(2)}:${primitive.position.y.toFixed(2)}:${primitive.position.z.toFixed(2)}:${primitive.size.x.toFixed(2)}:${primitive.size.z.toFixed(2)}`)
+      .join("|");
+    const tributaryCount = (scene: GeneratedScene) => new Set(scene.primitives
+      .filter((primitive) => primitive.id.startsWith("river-tributary-"))
+      .map((primitive) => primitive.id.split("-").slice(0, 3).join("-"))).size;
+    const crossingCount = (scene: GeneratedScene) => scene.primitives.filter((primitive) => primitive.tags?.includes("supported-crossing")).length;
+    const dropFeet = (scene: GeneratedScene) => Number(scene.primitives.find((primitive) => primitive.id === "river-waterfall-face")?.tags?.find((tag) => tag.startsWith("drop-feet:"))?.split(":")[1]);
+
+    expect(sparse.description).toContain("river-valley grammar");
+    expect(dense.description).toContain("double-canyon");
+    expect(tributaryCount(dense)).toBeGreaterThan(tributaryCount(sparse));
+    expect(crossingCount(dense)).toBeGreaterThan(crossingCount(sparse));
+    expect(dropFeet(dense)).toBeGreaterThanOrEqual(18);
+    expect(dropFeet(dense)).toBeLessThanOrEqual(30);
+    expect(dense).toEqual(replay);
+    expect(riverSignature(alternate)).not.toBe(riverSignature(dense));
+    expect(sparse.diagnostics.valid && dense.diagnostics.valid && alternate.diagnostics.valid).toBe(true);
+  });
+
+  it("realizes a braided reach as two watercourses around a standable tactical island", () => {
+    const prompt = "宽阔冲积河谷，分汊河道围绕河中岛洲，有浅滩、倒木桥和下游跌水";
+    const scene = generateScene({ ...request("river-braided-island", "large", 0.82), prompt }, "adaptive");
+    expect(scene.archetype).toBe("river-valley");
+    expect(hasTag(scene, "braided-channel")).toBe(true);
+    expect(scene.rooms.some((room) => room.id === "river-floodplain-island")).toBe(true);
+    expect(scene.tactical.some((feature) => feature.id === "river-island-high-ground")).toBe(true);
+    expect(scene.routes.filter((route) => route.kind === "alternate").length).toBeGreaterThanOrEqual(2);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("turns wilderness density into additional physical service and escape routes", () => {
     const prompt = "森林中的猎人木屋，有起居室、地窖、门廊、柴堆和林间道路";
     const sparse = generateScene({ ...request("forest-cabin-density", "medium", 0.25), prompt }, "adaptive");
@@ -758,6 +796,22 @@ describe("scene generators", () => {
     expect(scene.primitives.some((primitive) => primitive.id === "wilderness-river-bank-descent" && primitive.tags?.includes("supported"))).toBe(true);
     expect(scene.routes.some((route) => route.id === "wilderness-dock-route")).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("orients an unfamiliar hydrology outpost to either river axis and realizes every requested access structure", () => {
+    const prompt = "峡谷瀑布旁的水文档案哨所，有悬崖办公室、地下洪水记录库、跨瀑维护桥、河边取样码头和上游逃生路";
+    const scene = generateScene({ ...request("round-85-hydrology-outpost", "medium", 0.78), prompt }, "adaptive");
+    const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
+    expect(scene.archetype).toBe("river-valley");
+    expect(scene.buildingInstances?.[0]?.detailLevel).toBe("full-interior");
+    expect(tags.has("waterfall-maintenance-bridge")).toBe(true);
+    expect(tags.has("sampling-dock")).toBe(true);
+    expect(tags.has("archive")).toBe(true);
+    expect(tags.has("upstream-escape-route")).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-waterfall-maintenance-route")).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-dock-route")).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-escape-route")).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
   it("realizes mining infrastructure as terrain, water, bridge and portal geometry", () => {

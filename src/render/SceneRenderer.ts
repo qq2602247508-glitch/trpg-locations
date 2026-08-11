@@ -509,6 +509,47 @@ export class SceneRenderer {
         return;
       }
     }
+    // A generic diagonal low camera can look along a river bank and hide the
+    // channel, waterfall and opposite cliff behind the foreground plateau.
+    // For river valleys, frame the authored drop from downstream: the flow
+    // route supplies direction while the waterfall primitive supplies the
+    // exact vertical focus. This keeps the low-angle audit about the water
+    // level difference instead of producing an unreadable green side wall.
+    if (this.currentScene?.archetype === "river-valley") {
+      const waterfall = this.currentScene.primitives.find((primitive) => primitive.id === "river-waterfall-face");
+      const waterflow = this.currentScene.routes.find((route) => route.id === "river-downstream");
+      const first = waterflow?.points[0];
+      const last = waterflow?.points.at(-1);
+      if (waterfall && first && last) {
+        const deltaX = last.x - first.x;
+        const deltaZ = last.z - first.z;
+        const length = Math.max(0.001, Math.hypot(deltaX, deltaZ));
+        const flowX = deltaX / length;
+        const flowZ = deltaZ / length;
+        const crossX = -flowZ;
+        const crossZ = flowX;
+        const worldWidth = this.worldBounds.maxX - this.worldBounds.minX;
+        const worldDepth = this.worldBounds.maxZ - this.worldBounds.minZ;
+        const span = Math.max(18 * GRID_METERS, Math.min(worldWidth, worldDepth) * 0.72);
+        const target = new THREE.Vector3(
+          waterfall.position.x,
+          waterfall.position.y + waterfall.size.y * 0.08,
+          waterfall.position.z,
+        );
+        this.controls.target.copy(target);
+        this.camera.position.set(
+          target.x + flowX * span * 0.82 + crossX * span * 0.28,
+          target.y + Math.max(6.2, span * 0.27),
+          target.z + flowZ * span * 0.82 + crossZ * span * 0.28,
+        );
+        this.camera.near = 0.1;
+        this.camera.far = Math.max(300, span * 18);
+        this.camera.lookAt(target);
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+        return;
+      }
+    }
     if (typeof this.activeFloorView === "number" && this.currentScene) {
       const visible = this.floorInspectionPrimitives(this.activeFloorView);
       if (visible.length > 0) {
