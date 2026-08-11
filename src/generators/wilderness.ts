@@ -2890,6 +2890,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const wantsReserveVault = facilityCapabilities.undergroundStore;
   const monastery = ["修道院", "寺院", "monastery", "abbey", "cloister"].some((term) => text.includes(term));
   const wantsMaintenanceWalk = ["维护栈道", "外部栈道", "维修栈道", "维护步道", "maintenance walkway", "maintenance catwalk", "service catwalk"].some((term) => text.includes(term));
+  const wantsSeaCave = ["海蚀洞", "sea cave", "sea-eroded cave"].some((term) => text.includes(term));
   const wantsWaterfallMaintenanceBridge = ["跨瀑维护桥", "跨瀑桥", "瀑布维护桥", "waterfall maintenance bridge", "bridge across the falls"].some((term) => text.includes(term));
   const wantsSamplingDock = ["取样码头", "采样码头", "取水码头", "sampling dock", "sampling pier"].some((term) => text.includes(term));
   const wantsEscapeRoute = ["逃生路", "逃生路线", "撤离路", "撤离路线", "escape route", "evacuation route"].some((term) => text.includes(term));
@@ -3246,25 +3247,28 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       x: coastalCliffSite ? Math.max(5, width * 0.17) : Math.max(3, Math.min(width - 3, x + entranceDirection * 10)),
       z: Math.max(3, Math.min(depth - 3, z - 8)),
     };
+    const caveContextTags = wantsSeaCave
+      ? ["building-instance:wilderness-core-building", "floor-context:3", "focus-cluster:sea-cave-interface"]
+      : [];
     scene.primitives.push(
-      corridor("wilderness-exterior-maintenance-walk", 0, walkStart.x, walkStart.z, walkEnd.x, walkEnd.z, walkY, 1.35, "metal", ["site-program", "external-maintenance-walk", "maintenance-catwalk", "standable", "supported", "high-ground"]),
+      corridor("wilderness-exterior-maintenance-walk", 0, walkStart.x, walkStart.z, walkEnd.x, walkEnd.z, walkY, 1.35, "metal", ["site-program", "external-maintenance-walk", "maintenance-catwalk", "standable", "supported", "high-ground", ...caveContextTags]),
     );
     for (const [index, ratio] of [0.22, 0.5, 0.78].entries()) {
       const supportX = walkStart.x + (walkEnd.x - walkStart.x) * ratio;
       const supportZ = walkStart.z + (walkEnd.z - walkStart.z) * ratio;
       const supportSurfaceY = terrainSurfaceY(scene, supportX, supportZ, terrainBaseY);
-      scene.primitives.push(cylinder(`wilderness-exterior-maintenance-support-${index + 1}`, 0, supportX, supportSurfaceY - feetToMeters(0.4), supportZ, 0.18, Math.max(FLOOR_SLAB_METERS, walkY - supportSurfaceY), "metal", ["site-program", "external-maintenance-walk", "structural-support", "supported"]));
+      scene.primitives.push(cylinder(`wilderness-exterior-maintenance-support-${index + 1}`, 0, supportX, supportSurfaceY - feetToMeters(0.4), supportZ, 0.18, Math.max(FLOOR_SLAB_METERS, walkY - supportSurfaceY), "metal", ["site-program", "external-maintenance-walk", "structural-support", "supported", ...caveContextTags]));
     }
     scene.routes.push(createRoute("wilderness-exterior-maintenance-route", "alternate", [
       { x: walkStart.x, z: walkStart.z, y: walkY },
       { x: walkEnd.x, z: walkEnd.z, y: walkY },
     ], { purpose: "service", traffic: 0.2, schedule: "all" }));
     scene.tactical.push(tacticalFeature("wilderness-exterior-maintenance-choke", "chokepoint", (walkStart.x + walkEnd.x) / 2, (walkStart.z + walkEnd.z) / 2, walkY, 1, "The exposed maintenance catwalk is a supported alternate route around the mountain compound."));
-    if (["海蚀洞", "sea cave", "sea-eroded cave"].some((term) => text.includes(term))) {
+    if (wantsSeaCave) {
       const caveFloorY = Math.min(terrainBaseY - feetToMeters(12), -feetToMeters(8));
       const caveX = coastalCliffSite ? Math.max(5, width * 0.155) : Math.max(5, Math.min(width - 5, walkEnd.x + entranceDirection * 3.5));
       const caveZ = Math.max(5, Math.min(depth - 5, walkEnd.z - 2.5));
-      const caveInterfaceTags = ["site-program", "sea-cave", "underground", "building-instance:wilderness-core-building"];
+      const caveInterfaceTags = ["site-program", "sea-cave", "underground", "building-instance:wilderness-core-building", "focus-cluster:sea-cave-interface"];
       const caveAccess = stairConnection(
         "wilderness-sea-cave-descent",
         3,

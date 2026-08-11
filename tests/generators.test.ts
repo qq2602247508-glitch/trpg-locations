@@ -4,7 +4,7 @@ import { SeededRandom } from "../src/core/random";
 import { instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
-import { floorBaseY, focusedCameraFactors, fogDensityForSpan, levelForY, overlayTouchesFloor, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
+import { floorBaseY, floorContextLevels, focusedCameraFactors, fogDensityForSpan, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
 import { planSettlementSite } from "../src/site-program";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
@@ -76,6 +76,16 @@ describe("scene generators", () => {
     expect(routeMatchesTime("day", "night")).toBe(false);
     expect(routeMatchesTime("night", "night")).toBe(true);
     expect(routeMatchesTime("all", "night")).toBe(true);
+  });
+
+  it("keeps only explicitly linked cross-storey interface pieces in numeric floor context", () => {
+    const linked = { level: 0, tags: ["maintenance-catwalk", "floor-context:3", "floor-context:3"] };
+    const ordinary = { level: 0, tags: ["floor"] };
+    expect(floorContextLevels(linked)).toEqual([3]);
+    expect(primitiveTouchesFloorContext(linked, 0)).toBe(true);
+    expect(primitiveTouchesFloorContext(linked, 3)).toBe(true);
+    expect(primitiveTouchesFloorContext(linked, 2)).toBe(false);
+    expect(primitiveTouchesFloorContext(ordinary, 3)).toBe(false);
   });
 
   it("registers each fixed topology", () => {

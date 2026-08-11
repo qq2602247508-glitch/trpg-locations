@@ -94,6 +94,26 @@ function focusClusterTag(primitive: ScenePrimitive): string | undefined {
   return primitive.tags?.find((tag) => tag.startsWith("focus-cluster:"));
 }
 
+/**
+ * Explicitly authored cross-storey context. A basement inspection may need to
+ * retain the one catwalk, bridge or stair landing that explains how it reaches
+ * the surface, without making the renderer show the whole surface storey.
+ */
+export function floorContextLevels(primitive: Pick<ScenePrimitive, "tags">): number[] {
+  const levels = new Set<number>();
+  for (const tag of primitive.tags ?? []) {
+    const match = /^floor-context:(\d+)$/.exec(tag);
+    if (!match) continue;
+    const level = Number.parseInt(match[1] ?? "", 10);
+    if (Number.isInteger(level) && level >= 0) levels.add(level);
+  }
+  return [...levels].sort((left, right) => left - right);
+}
+
+export function primitiveTouchesFloorContext(primitive: Pick<ScenePrimitive, "level" | "tags">, level: number): boolean {
+  return primitive.level === level || floorContextLevels(primitive).includes(level);
+}
+
 const MATERIAL_STYLE: Record<
   MaterialKey,
   {
@@ -240,6 +260,8 @@ export class SceneRenderer {
 
   private floorLayers = new Map<number, FloorLayer>();
 
+  private floorContextLayers = new Map<number, THREE.Group>();
+
   private activeFloorView: FloorView = "cut";
 
   private cameraMode: "perspective" | "top" = "perspective";
@@ -325,6 +347,7 @@ export class SceneRenderer {
     this.currentScene = scene;
     this.focusedBuildingId = undefined;
     this.floorLayers.clear();
+    this.floorContextLayers.clear();
     this.modelRoot.clear();
     this.primitiveBatches = 0;
 
@@ -344,6 +367,7 @@ export class SceneRenderer {
     this.focusedBuildingId = selected?.id;
     this.modelRoot.clear();
     this.floorLayers.clear();
+    this.floorContextLayers.clear();
     this.primitiveBatches = 0;
     this.buildGrid(this.currentScene);
     this.buildPrimitiveBatches(this.currentScene);
@@ -377,7 +401,7 @@ export class SceneRenderer {
     const viewLevel = typeof view === "number" ? view : 0;
     const buildingLevelPrimitives = this.currentScene?.primitives.filter((primitive) => (
       primitive.tags?.includes(selectedIdTag) === true
-      && primitive.level === viewLevel
+      && primitiveTouchesFloorContext(primitive, viewLevel)
       && primitive.tags?.includes("focus-cutaway") !== true
       && primitive.tags?.includes("roof") !== true
     )) ?? [];
@@ -446,6 +470,9 @@ export class SceneRenderer {
         layer.roof.visible = authoredRoofView && level === view;
       }
     }
+    for (const [level, layer] of this.floorContextLayers) {
+      layer.visible = typeof view === "number" && level === view;
+    }
     this.applyRouteFilters();
     this.applyOverlayFloorFilter(this.gridRoot, view);
     this.applyOverlayFloorFilter(this.tacticalRoot, view);
@@ -479,6 +506,7 @@ export class SceneRenderer {
     if (!this.currentScene) return;
     this.modelRoot.clear();
     this.floorLayers.clear();
+    this.floorContextLayers.clear();
     this.primitiveBatches = 0;
     this.buildPrimitiveBatches(this.currentScene);
     this.setFloorView(this.activeFloorView);
@@ -880,7 +908,7 @@ export class SceneRenderer {
     }
 
     const surfaceTags = new Set(["floor", "platform", "ledge", "terrain", "bridge", "boardwalk", "ice-island", "road", "plaza", "quay", "clearing"]);
-    const surfaceLinesByKey = new Map<string, { level: number; focusCluster?: string; positions: number[] }>();
+    const surfaceLinesByKey = new Map<string, { levels: number[]; focusCluster?: string; positions: number[] }>();
     const belongsToFocus = (primitive: ScenePrimitive): boolean => !this.focusedBuildingId
       || primitive.tags?.includes(`building-instance:${this.focusedBuildingId}`) === true;
     const addSurfaceGrid = (surface: ScenePrimitive): void => {
@@ -897,7 +925,12 @@ export class SceneRenderer {
       ];
       const cluster = focusClusterTag(surface);
       const key = `${surface.level}|${cluster ?? "none"}`;
-      const entry = surfaceLinesByKey.get(key) ?? { level: surface.level, focusCluster: cluster, positions: [] };
+      const entry = surfaceLinesByKey.get(key) ?? {
+        levels: [surface.level, ...floorContextLevels(surface)],
+        focusCluster: cluster,
+        positions: [],
+      };
+      entry.levels = [...new Set([...entry.levels, ...floorContextLevels(surface)])].sort((left, right) => left - right);
       surfaceLinesByKey.set(key, entry);
       const linePositions = entry.positions;
       const push = (a: [number, number, number], b: [number, number, number]) => linePositions.push(...a, ...b);
@@ -914,8 +947,8 @@ export class SceneRenderer {
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(entry.positions, 3));
       const material = new THREE.LineBasicMaterial({ color: 0x9bb8bd, transparent: true, opacity: 0.78, depthTest: true, depthWrite: false, toneMapped: false });
       const grid = new THREE.LineSegments(geometry, material);
-      grid.name = `surface grid batch · level ${entry.level + 1}`;
-      grid.userData.levels = [entry.level];
+      grid.name = `surface grid batch · levels ${entry.levels.map((level) => level + 1).join(",")}`;
+      grid.userData.levels = entry.levels;
       grid.userData.focusCluster = entry.focusCluster;
       grid.renderOrder = 2;
       this.gridRoot.add(grid);
@@ -1051,6 +1084,29 @@ export class SceneRenderer {
           primitives: [primitive],
         });
       }
+      // Duplicate only explicitly linked interface pieces into a dedicated
+      // context layer. The original remains on its authored floor; the ghosted
+      // copy appears solely while inspecting the target floor. This preserves
+      // a readable surface-to-basement relationship without reintroducing an
+      // entire overlapping storey.
+      for (const contextLevel of floorContextLevels(primitive)) {
+        if (contextLevel === primitive.level) continue;
+        const contextHost = this.createFloorContextLayer(contextLevel);
+        const contextKey = `floor-context:${contextLevel}|${primitive.shape}|${primitive.material}|${chunk}|${planningClass}|${focusCluster ?? "none"}`;
+        const existingContext = batchMap.get(contextKey);
+        if (existingContext) {
+          existingContext.primitives.push(primitive);
+        } else {
+          batchMap.set(contextKey, {
+            host: contextHost,
+            shape: primitive.shape,
+            material: primitive.material,
+            ghost: true,
+            focusCluster,
+            primitives: [primitive],
+          });
+        }
+      }
     }
 
     for (const batch of batchMap.values()) {
@@ -1129,6 +1185,17 @@ export class SceneRenderer {
     const layer = { structure, roof };
     this.floorLayers.set(level, layer);
     return layer;
+  }
+
+  private createFloorContextLayer(level: number): THREE.Group {
+    const existing = this.floorContextLayers.get(level);
+    if (existing) return existing;
+    const context = new THREE.Group();
+    context.name = `Level ${level + 1} linked context`;
+    context.visible = false;
+    this.modelRoot.add(context);
+    this.floorContextLayers.set(level, context);
+    return context;
   }
 
   private buildRoutes(scene: GeneratedScene): void {
@@ -1277,7 +1344,7 @@ export class SceneRenderer {
   private floorInspectionPrimitives(level: number): ScenePrimitive[] {
     if (!this.currentScene) return [];
     const authoredRoofView = this.currentScene.floorLabels?.[level]?.includes("屋顶") === true;
-    return this.floorFocusCluster(this.currentScene.primitives.filter((primitive) => primitive.level === level
+    return this.floorFocusCluster(this.currentScene.primitives.filter((primitive) => primitiveTouchesFloorContext(primitive, level)
       && (authoredRoofView || (primitive.material !== "roof"
         && !primitive.tags?.includes("roof")
         && !(primitive.tags?.includes("roof-platform") && !primitive.tags?.includes("wall-walk"))))));
@@ -1412,7 +1479,7 @@ export class SceneRenderer {
     const focusedIdTag = this.focusedBuildingId ? `building-instance:${this.focusedBuildingId}` : undefined;
     const focusedVisible = focusedIdTag
       ? this.currentScene.primitives.filter((primitive) => primitive.tags?.includes(focusedIdTag) === true
-        && (typeof this.activeFloorView !== "number" || primitive.level === this.activeFloorView)
+        && (typeof this.activeFloorView !== "number" || primitiveTouchesFloorContext(primitive, this.activeFloorView))
         && primitive.tags?.includes("focus-cutaway") !== true
         && (this.activeFloorView === "roof" || (primitive.material !== "roof" && !primitive.tags?.includes("roof"))))
       : [];

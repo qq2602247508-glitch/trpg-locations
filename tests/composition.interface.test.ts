@@ -80,4 +80,23 @@ describe("cross-domain building and natural-terrain interfaces", () => {
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("medical-wing"))).toBe(true);
     expect(scene.diagnostics.warnings).toHaveLength(0);
   });
+
+  it("authors a focused cross-storey context contract for the coastal cave descent", () => {
+    const prompt = "海岸悬崖上的滑翔救难站，有宽门机库、绞盘库、医务室、屋顶信号台和通往海蚀洞的维护栈道。";
+    const scene = generateScene({ prompt, seed: "round-88-coastal-signal-hangar-a", size: "medium", density: 0.84 }, "adaptive");
+    const catwalk = scene.primitives.find((primitive) => primitive.id === "wilderness-exterior-maintenance-walk");
+    const caveFloor = scene.primitives.find((primitive) => primitive.id === "wilderness-sea-cave-floor");
+    expect(catwalk?.level).toBe(0);
+    expect(catwalk?.tags).toEqual(expect.arrayContaining([
+      "building-instance:wilderness-core-building",
+      "floor-context:3",
+      "focus-cluster:sea-cave-interface",
+    ]));
+    expect(caveFloor?.level).toBe(3);
+    expect(caveFloor?.tags).toContain("focus-cluster:sea-cave-interface");
+    const linkedContext = scene.primitives.filter((primitive) => primitive.tags?.includes("floor-context:3"));
+    expect(linkedContext.length).toBeGreaterThanOrEqual(4);
+    expect(linkedContext.every((primitive) => primitive.tags?.includes("focus-cluster:sea-cave-interface"))).toBe(true);
+    expect(scene.diagnostics.warnings).toHaveLength(0);
+  });
 });
