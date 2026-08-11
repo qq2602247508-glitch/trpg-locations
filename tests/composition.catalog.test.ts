@@ -1166,6 +1166,57 @@ describe("five-layer composition catalog", () => {
     expect(signature(scene)).not.toBe(signature(other));
   });
 
+  it("composes travertine terraces as a mineral landform instead of a forest fallback", () => {
+    const prompt = "石灰华阶地中的钟表水文所，有水位井、机械档案室、取样平台、地下校准室和跨溪维修桥。";
+    const sparse = generateScene({ prompt, seed: "travertine-contract", size: "medium", density: 0.28 }, "adaptive");
+    const dense = generateScene({ prompt, seed: "travertine-contract", size: "medium", density: 0.84 }, "adaptive");
+    const alternate = generateScene({ prompt, seed: "round-87-travertine-alt", size: "medium", density: 0.84 }, "adaptive");
+    const tags = new Set(dense.primitives.flatMap((primitive) => primitive.tags ?? []));
+    const signature = (scene: typeof dense) => scene.primitives
+      .filter((primitive) => primitive.tags?.includes("travertine-terrace"))
+      .map((primitive) => `${primitive.position.x.toFixed(2)}:${primitive.position.y.toFixed(2)}:${primitive.position.z.toFixed(2)}:${primitive.size.x.toFixed(2)}`)
+      .join("|");
+    expect(dense.sceneProgram?.domain).toBe("natural");
+    expect(dense.archetype).toBe("mountain");
+    expect(tags.has("travertine-terrace")).toBe(true);
+    expect(tags.has("travertine-pool")).toBe(true);
+    expect(tags.has("travertine-cascade")).toBe(true);
+    expect(tags.has("vertical-water")).toBe(true);
+    expect(tags.has("tree-cluster")).toBe(false);
+    expect(dense.buildingInstances?.some((building) => building.id === "wilderness-core-building")).toBe(true);
+    expect(dense.primitives.filter((primitive) => primitive.tags?.includes("travertine-terrace")).length)
+      .toBeGreaterThan(sparse.primitives.filter((primitive) => primitive.tags?.includes("travertine-terrace")).length);
+    expect(signature(dense)).not.toBe(signature(alternate));
+    expect(dense.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(90);
+    expect(dense.diagnostics.warnings, dense.diagnostics.warnings.join("\n")).toHaveLength(0);
+    expect(alternate.diagnostics.warnings, alternate.diagnostics.warnings.join("\n")).toHaveLength(0);
+  });
+
+  it("realizes honeycomb weathering as recessed tactical rock geometry", () => {
+    const prompt = "风蚀蜂巢岩台上的昆虫学信号站，有标本处理室、气象桅杆、地下样本库和跨沟缆桥。";
+    const sparse = generateScene({ prompt, seed: "tafoni-contract", size: "medium", density: 0.26 }, "adaptive");
+    const dense = generateScene({ prompt, seed: "tafoni-contract", size: "medium", density: 0.88 }, "adaptive");
+    const alternate = generateScene({ prompt, seed: "tafoni-contract-alt", size: "medium", density: 0.88 }, "adaptive");
+    const tags = new Set(dense.primitives.flatMap((primitive) => primitive.tags ?? []));
+    const signature = (scene: typeof dense) => scene.primitives
+      .filter((primitive) => primitive.tags?.includes("tafoni-wall") || primitive.tags?.includes("weathering-cavity"))
+      .map((primitive) => `${primitive.id}:${primitive.position.x.toFixed(2)}:${primitive.position.y.toFixed(2)}:${primitive.position.z.toFixed(2)}`)
+      .join("|");
+    expect(dense.sceneProgram?.domain).toBe("natural");
+    expect(dense.archetype).toBe("mountain");
+    expect(tags.has("tafoni-wall")).toBe(true);
+    expect(tags.has("weathering-cavity")).toBe(true);
+    expect(tags.has("tafoni-rib")).toBe(true);
+    expect(dense.primitives.filter((primitive) => primitive.tags?.includes("weathering-cavity")).length).toBeGreaterThanOrEqual(8);
+    expect(dense.routes.some((route) => route.id.startsWith("tafoni-rib-climb-route-"))).toBe(true);
+    expect(dense.buildingInstances?.some((building) => building.id === "wilderness-core-building")).toBe(true);
+    expect(dense.primitives.filter((primitive) => primitive.tags?.includes("weathering-cavity")).length)
+      .toBeGreaterThan(sparse.primitives.filter((primitive) => primitive.tags?.includes("weathering-cavity")).length);
+    expect(signature(dense)).not.toBe(signature(alternate));
+    expect(dense.compositionProgram?.semanticCoverage?.score ?? 0).toBeGreaterThanOrEqual(90);
+    expect(dense.diagnostics.warnings, dense.diagnostics.warnings.join("\n")).toHaveLength(0);
+  });
+
   it("changes mangrove parent topology across seeds, not only building props", () => {
     const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、半淹档案库和水下温室";
     const first = generateScene({ prompt, seed: "mangrove-macro-a", size: "medium", density: 0.62 }, "adaptive");

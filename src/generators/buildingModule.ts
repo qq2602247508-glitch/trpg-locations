@@ -729,8 +729,15 @@ function addFunctionalModuleGeometry(
       for (const [railIndex, zOffset] of [-0.48, 0.48].entries()) {
         addBox(module, `apron-rail-${railIndex + 1}`, 0, apronX, baseY + feetToMeters(2.8), hangarZ + wideDoorDepth * 0.44 * zOffset / 0.48, apronWidth * 0.82, 0.12, 0.12, "metal", ["apron-rail", "railing", "hangar-apron", "edge-protection"]);
       }
-      const threshold = point(side * lot.width * 0.46, hangarZ);
-      const hangarDoor = point(hangarX - side * hangarWidth / 2, hangarZ);
+      const thresholdLocal = { x: side * lot.width * 0.46, z: hangarZ };
+      const hangarDoorLocal = { x: hangarX - side * hangarWidth / 2, z: hangarZ };
+      // Functional wings are authored after the site envelope. A Seed can put
+      // the selected annex behind an existing sample-store wall, so the first
+      // service segment must cut a physical doorway through every envelope
+      // wall it crosses instead of relying on an "opening" tag elsewhere.
+      cutDoorOpeningsAlongLocalSegment(`hangar-${index + 1}`, thresholdLocal, hangarDoorLocal);
+      const threshold = point(thresholdLocal.x, thresholdLocal.z);
+      const hangarDoor = point(hangarDoorLocal.x, hangarDoorLocal.z);
       const launchDoor = point(outerX, hangarZ);
       scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "alternate", [
         { x: threshold.x, z: threshold.z, y: baseY },

@@ -40,6 +40,8 @@ const MACRO_CAPABILITY_CUES: Record<string, readonly string[]> = {
   "terrain.salt-crystal-island": ["盐晶浮岛", "盐晶岛", "floating monastery", "salt crystal island"],
   "terrain.cave-chamber": ["洞穴", "洞窟", "岩窟", "溶洞", "海蚀洞", "cave", "cavern", "grotto", "sea cave"],
   "terrain.marsh-basin": ["沼泽", "湿地", "泥沼", "marsh", "swamp", "bog", "wetland"],
+  "terrain.travertine-terraces": ["石灰华", "钙华", "石灰华阶地", "travertine", "travertine terrace"],
+  "terrain.tafoni-rock": ["蜂巢岩", "蜂窝岩", "风蚀蜂巢岩", "tafoni", "honeycomb rock", "honeycomb weathering"],
   "water.meandering-channel": ["河流", "河谷", "溪流", "河川", "河湾", "river", "stream", "riverbank"],
   "water.tributary": ["支流", "分流", "tributary", "branch channel"],
   "water.waterfall": ["瀑布", "落差", "waterfall", "cascade"],
@@ -56,7 +58,7 @@ function filterRetrievedCapabilities(prompt: string, ids: readonly string[]): st
   const text = normalized(prompt);
   const hasExplicitParent = has(text, [
     "森林", "林地", "树林", "巨树", "树冠", "forest", "woodland", "canopy", "ancient tree", "giant tree",
-    "山", "高山", "山地", "山脊", "峡谷", "高原", "峰顶", "mountain", "ridge", "canyon", "plateau", "summit",
+    "山", "高山", "山地", "山脊", "峡谷", "高原", "峰顶", "石灰华", "钙华", "蜂巢岩", "蜂窝岩", "mountain", "ridge", "canyon", "plateau", "summit", "travertine", "tafoni", "honeycomb rock",
     "冰原", "冰盖", "冰川", "冻土", "雪原", "ice field", "ice sheet", "glacier", "tundra", "permafrost",
     "河流", "河谷", "溪流", "河川", "瀑布", "river", "stream", "riverbank", "waterfall",
     "沼泽", "湿地", "泥沼", "marsh", "swamp", "bog", "wetland",
@@ -123,7 +125,9 @@ function densityProfile(domain: string, value: number): DomainDensityProfile {
 function styleFor(prompt: string, domain: string): StyleProgram {
   const text = normalized(prompt);
   const era = has(text, ["1920", "现代", "modern", "工业", "industrial"]) ? "historic" : has(text, ["d&d", "法师", "魔法", "中世纪", "medieval", "fantasy"]) ? "fantasy-medieval" : "timeless";
-  const materialFamily = has(text, ["盐晶", "salt crystal"]) ? ["salt-crystal", "ice", "rock", "water"]
+  const materialFamily = has(text, ["石灰华", "钙华", "travertine"]) ? ["pale-limestone", "mineral-water", "weathered-stone", "earth"]
+    : has(text, ["蜂巢岩", "蜂窝岩", "tafoni", "honeycomb rock"]) ? ["weathered-sandstone", "dark-recess", "earth", "metal"]
+    : has(text, ["盐晶", "salt crystal"]) ? ["salt-crystal", "ice", "rock", "water"]
     : has(text, ["红树林", "mangrove"]) ? ["mangrove", "wood", "mud", "water"]
       : has(text, ["空心古树", "古树内部", "hollow tree"]) ? ["bark", "wood", "root", "moss"]
         : has(text, ["冻土", "冰原", "冰川", "tundra", "glacier", "ice field"]) ? ["ice", "snow", "weathered-metal", "wood"]
@@ -132,7 +136,9 @@ function styleFor(prompt: string, domain: string): StyleProgram {
     : has(text, ["红树林", "mangrove"]) ? "tropical-wet"
       : has(text, ["冰", "glacier", "snow"]) ? "cold"
       : domain === "volcanic" ? "hot-dry" : domain === "salt-waste" ? "cold-dry-salt" : domain === "floating" ? "exposed-high-altitude" : domain === "cave" ? "subterranean" : domain === "swamp" ? "humid-wetland" : domain === "river" || domain === "forest" ? "temperate-wet" : "neutral";
-  const silhouetteTags = has(text, ["盐晶", "salt crystal"]) ? ["three-floating-levels", "crystal-spires", "cavern-void"]
+  const silhouetteTags = has(text, ["石灰华", "钙华", "travertine"]) ? ["stepped-mineral-terraces", "shallow-rim-pools", "cascade-drops"]
+    : has(text, ["蜂巢岩", "蜂窝岩", "tafoni", "honeycomb rock"]) ? ["perforated-rock-walls", "eroded-alcoves", "climbable-ribs"]
+    : has(text, ["盐晶", "salt crystal"]) ? ["three-floating-levels", "crystal-spires", "cavern-void"]
     : has(text, ["红树林", "mangrove"]) ? ["root-canopy", "tidal-channel", "boardwalks"]
       : has(text, ["空心古树", "古树内部", "hollow tree"]) ? ["bark-shell", "spiral-cavity", "canopy-platform"]
       : domain === "salt-waste" ? ["broken-salt-crust", "brine-basins", "salt-ridges", "fractured-route"] : domain === "floating" ? ["three-height-bands", "exposed-undersides", "void-gaps"] : domain === "cave" ? ["connected-chambers", "rock-ledges", "dark-passages"] : domain === "swamp" ? ["broken-dry-islands", "water-pools", "raised-boardwalks"] : domain === "forest" ? ["layered-canopy", "irregular-clearings"] : domain === "river" ? ["incised-valley", "descending-water"] : domain === "volcanic" ? ["broken-rim", "radial-fractures"] : ["broken-rim"];
@@ -145,6 +151,16 @@ function semanticRequirements(prompt: string, domain: string): SemanticRequireme
   const settlementParent = hasSettlementParent(text);
   const output: SemanticRequirement[] = [];
   const add = (id: string, phrase: string, tags: string[], importance: SemanticRequirement["importance"] = "major") => output.push({ id, sourcePhrase: phrase, requiredTags: tags, importance });
+  if (has(text, ["石灰华", "钙华", "travertine"])) {
+    add("travertine-terraces", "石灰华阶地", ["travertine-terrace", "standable"], "critical");
+    add("travertine-pools", "矿物浅池", ["travertine-pool", "water"], "major");
+    add("travertine-cascades", "阶地跌水", ["travertine-cascade", "vertical-water"], "major");
+  }
+  if (has(text, ["蜂巢岩", "蜂窝岩", "tafoni", "honeycomb rock", "honeycomb weathering"])) {
+    add("tafoni-wall", "蜂巢风蚀岩壁", ["tafoni-wall", "vertical-face"], "critical");
+    add("tafoni-cavities", "风蚀洞穴", ["weathering-cavity", "cover"], "critical");
+    add("tafoni-climb", "可攀岩肋与高台", ["tafoni-rib", "high-ground"], "major");
+  }
   if (has(text, ["空心古树", "古树内部", "树内城市", "hollow tree"])) {
     add("hollow-tree-shell", "空心古树承载结构", ["hollow-tree", "bark-wall"], "critical");
     add("tree-spiral-street", "螺旋树干街道", ["spiral-tree-street", "vertical-route"], "critical");

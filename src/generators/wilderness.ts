@@ -56,7 +56,8 @@ const WILDERNESS_TERMS: Readonly<Record<WildernessArchetype, readonly string[]>>
   rift: ["rift", "chasm", "ravine", "裂谷", "裂隙", "深坑", "断崖"],
   mountain: [
     "mountain", "mountain top", "cliff", "coastal cliff", "sea cliff", "ridge", "weathered rock ridge",
-    "山地", "山顶", "山脊", "风化岩脊", "高山", "峭壁", "悬崖", "海崖", "海岸悬崖",
+    "travertine", "travertine terrace", "tafoni", "honeycomb rock", "honeycomb weathering",
+    "山地", "山顶", "山脊", "风化岩脊", "高山", "峭壁", "悬崖", "海崖", "海岸悬崖", "石灰华", "钙华", "石灰华阶地", "蜂巢岩", "蜂窝岩", "风蚀蜂巢岩",
   ],
   ice: ["ice", "ice sheet", "ice cap", "polar", "glacier", "tundra", "冰原", "冰盖", "冰帽", "极地", "冰川", "冻土", "雪原"],
   ruin: ["ruin", "ruined", "wilderness ruin", "遗迹", "废墟", "残垣", "荒野遗迹"],
@@ -4115,6 +4116,156 @@ function addTerrainComplexity(scene: GeneratedScene, archetype: WildernessArchet
   }
 }
 
+/** Reusable mineral-terrace atom. It owns a compact lower-basin patch rather
+ * than repainting the whole mountain, leaving the parent heightfield and an
+ * embedded facility legible. Each level has a standable calcite rim, a shallow
+ * pool and a real vertical cascade to the next lower level. */
+function addTravertineTerraces(
+  scene: GeneratedScene,
+  width: number,
+  depth: number,
+  density: number,
+  rng: GeneratorContext["rng"],
+): void {
+  const levelCount = Math.round(3 + density * 4);
+  const run = Math.min(depth * 0.26, 10 + density * 5);
+  let centerX = width * rng.float(0.18, 0.38);
+  let startZ = depth * rng.float(0.6, 0.69);
+  const crossesAuthoredRoute = (candidateX: number, candidateStartZ: number): boolean => {
+    const minX = candidateX - 7.2;
+    const maxX = candidateX + 7.2;
+    const minZ = candidateStartZ - 3;
+    const maxZ = candidateStartZ + run + 3;
+    return scene.routes.some((route) => route.points.some((point, pointIndex) => {
+      const next = route.points[pointIndex + 1];
+      if (!next) return false;
+      const fromX = point.x / CELL;
+      const fromZ = point.z / CELL;
+      const toX = next.x / CELL;
+      const toZ = next.z / CELL;
+      for (let sample = 0; sample <= 24; sample += 1) {
+        const ratio = sample / 24;
+        const x = fromX + (toX - fromX) * ratio;
+        const z = fromZ + (toZ - fromZ) * ratio;
+        if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) return true;
+      }
+      return false;
+    }));
+  };
+  for (let attempt = 0; attempt < 18 && crossesAuthoredRoute(centerX, startZ); attempt += 1) {
+    centerX = width * rng.float(0.15, 0.42);
+    startZ = depth * rng.float(0.58, 0.7);
+  }
+  const stepZ = run / Math.max(1, levelCount - 1);
+  const points: Array<{ x: number; z: number; y: number }> = [];
+  const intersectsVerticalRoute = (candidateX: number, candidateZ: number, candidateWidth: number, candidateDepth: number): boolean => {
+    const minX = candidateX - candidateWidth * 0.5 - 0.55;
+    const maxX = candidateX + candidateWidth * 0.5 + 0.55;
+    const minZ = candidateZ - candidateDepth * 0.5 - 0.55;
+    const maxZ = candidateZ + candidateDepth * 0.5 + 0.55;
+    return scene.routes.filter((route) => route.kind === "vertical").some((route) => route.points.some((point, pointIndex) => {
+      const next = route.points[pointIndex + 1];
+      if (!next) return false;
+      for (let sample = 0; sample <= 20; sample += 1) {
+        const ratio = sample / 20;
+        const x = (point.x + (next.x - point.x) * ratio) / CELL;
+        const z = (point.z + (next.z - point.z) * ratio) / CELL;
+        if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) return true;
+      }
+      return false;
+    }));
+  };
+  reserveRadialTerrain(scene, "travertine-terraces-reservation", "water", centerX, startZ + run * 0.48, Math.max(12, run + 4), 1.2, "Mineral terraces own their shallow pools and cascade clearances.");
+  for (let index = 0; index < levelCount; index += 1) {
+    const widthCells = rng.float(7.5, 11.5) * (1 - index * 0.025);
+    const depthCells = rng.float(3.2, 5.2);
+    let x = centerX + Math.sin(index * 1.37 + rng.float(-0.25, 0.25)) * rng.float(0.7, 1.8);
+    const z = startZ + index * stepZ;
+    for (let attempt = 0; attempt < 14 && intersectsVerticalRoute(x, z, widthCells, depthCells); attempt += 1) {
+      x = width * rng.float(0.12, 0.45);
+    }
+    const y = feetToMeters(index * 2.5);
+    const rimDepth = Math.max(0.55, depthCells * 0.22);
+    scene.primitives.push(
+      box(`travertine-terrace-${index}-bed`, 0, x, y, z, widthCells, FLOOR_SLAB_METERS, depthCells, "stone", ["floor", "terrain", "travertine", "travertine-terrace", "standable", "supported", `terrace-level:${index}`]),
+      box(`travertine-terrace-${index}-front-rim`, 0, x, y + FLOOR_SLAB_METERS, z + depthCells * 0.42, widthCells, feetToMeters(1.4), rimDepth, "rock", ["travertine", "mineral-rim", "cover", "vertical-face", "supported"]),
+      box(`travertine-terrace-${index}-west-rim`, 0, x - widthCells * 0.46, y + FLOOR_SLAB_METERS, z, 0.55, feetToMeters(1.2), depthCells * 0.72, "rock", ["travertine", "mineral-rim", "cover", "supported"]),
+      box(`travertine-terrace-${index}-east-rim`, 0, x + widthCells * 0.46, y + FLOOR_SLAB_METERS, z, 0.55, feetToMeters(1.2), depthCells * 0.72, "rock", ["travertine", "mineral-rim", "cover", "supported"]),
+      water(`travertine-pool-${index}`, 0, x, y + FLOOR_SLAB_METERS + 0.05, z - depthCells * 0.06, widthCells * 0.78, 0.12, depthCells * 0.55, ["travertine", "travertine-pool", "mineral-pool", "hazard"]),
+    );
+    points.push({ x: x + widthCells * 0.32, z, y: y + FLOOR_SLAB_METERS });
+    scene.tactical.push(tacticalFeature(`travertine-terrace-high-${index}`, "highGround", x, z, y + FLOOR_SLAB_METERS, 2, "A mineral rim forms a shallow, standable step above the adjacent pool."));
+    if (index > 0) {
+      const previous = points[index - 1];
+      if (!previous) continue;
+      const cascadeZ = z - stepZ * 0.46;
+      const cascadeX = (x + previous.x) / 2;
+      scene.primitives.push(water(`travertine-cascade-${index}`, 0, cascadeX, previous.y, cascadeZ, Math.abs(x - previous.x) + rng.float(1.1, 2.2), Math.max(0.5, y - previous.y), Math.max(0.5, stepZ * 0.34), ["travertine", "travertine-cascade", "vertical-water", "hazard"]));
+    }
+  }
+  scene.routes.push(createRoute("travertine-rim-route", "alternate", points));
+  scene.tactical.push(tacticalFeature("travertine-cascade-choke", "chokepoint", centerX, startZ + run * 0.5, feetToMeters(levelCount * 1.25), 2, "Narrow dry rims provide the only direct route between stepped mineral pools."));
+}
+
+/** Reusable tafoni atom. Dark recessed voids are framed by independent rock
+ * ribs and lintels; the wall therefore reads as eroded honeycomb rather than a
+ * blank box with a label. The stepped outer ribs also create real cover and a
+ * reachable high-ground route. */
+function addTafoniWeathering(
+  scene: GeneratedScene,
+  width: number,
+  depth: number,
+  density: number,
+  rng: GeneratorContext["rng"],
+): void {
+  const clusterCount = Math.round(2 + density * 2);
+  // The mountain grammar's south-west basin is the guaranteed low support
+  // band. Place the weathered wall there so its cavities remain exposed
+  // instead of being buried inside a higher semantic shelf.
+  const baseX = width * rng.float(0.28, 0.36);
+  const baseZ = depth * rng.float(0.64, 0.76);
+  reserveRadialTerrain(scene, "tafoni-wall-reservation", "unstable", baseX, baseZ, 14 + density * 5, 1, "Weathered rock walls own their recessed cavities and climbing ribs.");
+  for (let cluster = 0; cluster < clusterCount; cluster += 1) {
+    const x = baseX + (cluster - (clusterCount - 1) / 2) * rng.float(6.1, 7.4);
+    const z = baseZ + Math.sin(cluster * 1.7) * rng.float(1.2, 2.8);
+    const wallWidth = rng.float(6.8, 9.4);
+    const wallDepth = rng.float(2.2, 3.4);
+    const wallHeight = feetToMeters(rng.int(22, 35));
+    const cavityCount = Math.round(5 + density * 3 + rng.int(0, 1));
+    const cellWidth = wallWidth / cavityCount;
+    scene.primitives.push(
+      box(`tafoni-wall-${cluster}-apron`, 0, x, 0, z - wallDepth * 1.05, wallWidth + 1.6, FLOOR_SLAB_METERS, wallDepth * 1.3, "stone", ["floor", "terrain", "tafoni", "tafoni-apron", "standable", "supported"]),
+      box(`tafoni-wall-${cluster}-back`, 0, x, 0, z + wallDepth * 0.28, wallWidth, wallHeight, wallDepth * 0.45, "rock", ["terrain", "tafoni", "tafoni-wall", "vertical-face", "supported"]),
+      box(`tafoni-wall-${cluster}-cap`, 0, x, wallHeight - feetToMeters(1.5), z, wallWidth + 0.5, feetToMeters(1.5), wallDepth, "stone", ["terrain", "tafoni", "tafoni-lintel", "standable", "high-ground", "supported"]),
+    );
+    for (let cavity = 0; cavity < cavityCount; cavity += 1) {
+      const cavityX = x - wallWidth / 2 + cellWidth * (cavity + 0.5);
+      const cavityHeight = feetToMeters(rng.float(4.4, 7.2));
+      const cavityY = feetToMeters(3.1 + (cavity % 2) * rng.float(5.4, 7.4));
+      scene.primitives.push(
+        primitive(`tafoni-wall-${cluster}-cavity-${cavity}-south`, "sphere", 0, cavityX, cavityY, z - wallDepth * 0.35, cellWidth * 0.82 * CELL, cavityHeight, 0.34 * CELL, "darkStone", ["tafoni", "weathering-cavity", "recess", "cover", "hazard", "face:south"]),
+        primitive(`tafoni-wall-${cluster}-cavity-${cavity}-north`, "sphere", 0, cavityX, cavityY, z + wallDepth * 0.62, cellWidth * 0.82 * CELL, cavityHeight, 0.34 * CELL, "darkStone", ["tafoni", "weathering-cavity", "recess", "cover", "hazard", "face:north"]),
+        box(`tafoni-wall-${cluster}-rib-${cavity}`, 0, cavityX - cellWidth * 0.42, 0, z - wallDepth * 0.18, Math.max(0.25, cellWidth * 0.18), wallHeight * rng.float(0.62, 0.94), wallDepth * 0.7, "stone", ["tafoni", "tafoni-rib", "rock-rib", "cover", "climbable", "supported"]),
+      );
+    }
+    const stepY = Math.min(wallHeight - feetToMeters(2), feetToMeters(3 + cluster * 3));
+    const ladderX = x - wallWidth * 0.35;
+    const ladderZ = z - wallDepth * 0.65;
+    scene.primitives.push(
+      box(`tafoni-wall-${cluster}-climb-step`, 0, ladderX, stepY, ladderZ, 1.4, FLOOR_SLAB_METERS, 1.4, "stone", ["tafoni", "tafoni-rib", "standable", "high-ground", "supported"]),
+      box(`tafoni-wall-${cluster}-ladder`, 0, ladderX, 0, ladderZ - 0.48, 0.55, wallHeight, 0.16, "wood", ["tafoni", "tafoni-rib", "ladder", "climbable", "vertical-route", "shaft-access", "vertical-opening", "supported"]),
+    );
+    scene.routes.push(createRoute(`tafoni-rib-climb-route-${cluster}`, "vertical", [
+      { x: ladderX, z: ladderZ, y: FLOOR_SLAB_METERS },
+      { x: ladderX, z: ladderZ, y: wallHeight },
+    ]));
+    scene.tactical.push(
+      tacticalFeature(`tafoni-cavity-cover-${cluster}`, "cover", x, z - wallDepth * 0.4, feetToMeters(2), 2, "Deep tafoni recesses create hard cover and short ambush alcoves."),
+      tacticalFeature(`tafoni-cap-high-${cluster}`, "highGround", x, z, wallHeight, 2, "The weathered wall cap is a narrow, exposed high ground."),
+    );
+  }
+}
+
 /** Theme pass for outdoor grammars. These are structural features (banks,
  * fissures, terraces, hummocks), not a bag of decorative props. */
 function addSemanticThemeStructure(
@@ -4124,8 +4275,13 @@ function addSemanticThemeStructure(
   depth: number,
   rng: GeneratorContext["rng"],
   prompt: string,
+  density: number,
 ): void {
   const text = prompt.normalize("NFKC").toLocaleLowerCase("en-US");
+  const travertine = ["石灰华", "钙华", "travertine"].some((term) => text.includes(term));
+  const tafoni = ["蜂巢岩", "蜂窝岩", "风蚀蜂巢岩", "tafoni", "honeycomb rock", "honeycomb weathering"].some((term) => text.includes(term));
+  if (travertine && archetype === "mountain") addTravertineTerraces(scene, width, depth, density, rng.fork("travertine"));
+  if (tafoni && archetype === "mountain") addTafoniWeathering(scene, width, depth, density, rng.fork("tafoni"));
   const coastalCliff = ["海岸悬崖", "海崖", "coastal cliff", "sea cliff"].some((term) => text.includes(term));
   if (coastalCliff && archetype === "mountain") {
     const coastY = -feetToMeters(8);
@@ -4583,7 +4739,7 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   if (morphology.woodland && archetype !== "forest" && !infernalTheme) {
     addWoodlandCoverage(scene, profile.width, profile.depth, profile.density, context.rng.fork("woodland-coverage"), archetype === "river-valley");
   }
-  addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"), context.request.prompt);
+  addSemanticThemeStructure(scene, archetype, profile.width, profile.depth, context.rng.fork("theme-structure"), context.request.prompt, profile.density);
   addPromptDrivenTheme(scene, context.request.prompt, profile.width, profile.depth, context.rng.fork("prompt-theme"));
   addSemanticAnchorLandmarks(scene, context.semanticHints, profile.width, profile.depth, context.rng.fork("semantic-anchors"));
   const fungalText = [context.request.prompt, ...(context.semanticHints?.anchors ?? [])].join(" ").normalize("NFKC").toLocaleLowerCase("en-US");

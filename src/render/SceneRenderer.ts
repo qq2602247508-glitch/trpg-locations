@@ -509,6 +509,32 @@ export class SceneRenderer {
         return;
       }
     }
+    // Reusable micro-landforms can occupy only one tactical quarter of a much
+    // larger mountain scene. A generic whole-map low camera makes their actual
+    // vertical contracts unreadable, so frame the authored atom for the audit
+    // preset while the normal overview continues to show the full compound.
+    if (this.currentScene) {
+      const travertine = this.currentScene.primitives.filter((primitive) => primitive.tags?.includes("travertine-terrace") || primitive.tags?.includes("travertine-cascade"));
+      const tafoni = this.currentScene.primitives.filter((primitive) => primitive.tags?.includes("tafoni-wall") || primitive.tags?.includes("weathering-cavity"));
+      const feature = travertine.length > 0 ? travertine : tafoni;
+      if (feature.length > 0) {
+        const bounds = this.boundsForPrimitives(feature, GRID_METERS * 1.2);
+        const span = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 10 * GRID_METERS);
+        const minY = Math.min(...feature.map((primitive) => primitive.position.y));
+        const maxY = Math.max(...feature.map((primitive) => primitive.position.y + primitive.size.y));
+        const target = new THREE.Vector3((bounds.minX + bounds.maxX) / 2, minY + (maxY - minY) * 0.42, (bounds.minZ + bounds.maxZ) / 2);
+        this.controls.target.copy(target);
+        this.camera.position.set(
+          target.x + span * (travertine.length > 0 ? 0.74 : 0.36),
+          target.y + Math.max(5.5, span * 0.34),
+          target.z + span * 0.88,
+        );
+        this.camera.lookAt(target);
+        this.camera.updateProjectionMatrix();
+        this.controls.update();
+        return;
+      }
+    }
     // A generic diagonal low camera can look along a river bank and hide the
     // channel, waterfall and opposite cliff behind the foreground plateau.
     // For river valleys, frame the authored drop from downstream: the flow
@@ -1594,6 +1620,10 @@ export class SceneRenderer {
     if (tags.includes("secondary-crevasse")) return new THREE.Color("#315c69");
     if (tags.includes("thin-ice") || tags.includes("thaw-pool")) return new THREE.Color("#427f89");
     if (tags.includes("snow-patch")) return new THREE.Color("#d9e5df");
+    if (tags.includes("travertine-pool") || tags.includes("travertine-cascade")) return new THREE.Color("#55a7a1");
+    if (tags.includes("mineral-rim") || tags.includes("travertine-terrace")) return new THREE.Color(material === "rock" ? "#d6c392" : "#eadbb0");
+    if (tags.includes("weathering-cavity")) return new THREE.Color("#2d241d");
+    if (tags.includes("tafoni-wall") || tags.includes("tafoni-rib") || tags.includes("tafoni-lintel") || tags.includes("tafoni-apron")) return new THREE.Color(material === "darkStone" ? "#47392c" : "#a8794f");
     if (tags.includes("cold-forest-floor")) return new THREE.Color(material === "earth" ? "#5f6255" : "#315348");
     if (tags.includes("deadwood") || tags.includes("snag")) return new THREE.Color("#4d443b");
     if (tags.includes("conifer-crown")) return new THREE.Color("#284f38");
