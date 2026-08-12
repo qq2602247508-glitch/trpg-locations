@@ -1,0 +1,685 @@
+{
+  "generatedAt": "2026-08-12T12:54:54.397Z",
+  "results": [
+    {
+      "id": "police-transparent",
+      "kind": "building",
+      "size": "large",
+      "density": "72",
+      "steps": [
+        {
+          "label": "overview",
+          "status": "校验通过",
+          "statusDetail": "159 个可批处理图元 · 43 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "false",
+          "routes": "false",
+          "camera": "false",
+          "top": "false",
+          "sceneSummary": {
+            "primitives": 159,
+            "rooms": 14,
+            "routes": 13,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "159",
+              "detail": "17 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "20",
+              "detail": "2,558 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "6 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "transparent-routes",
+          "status": "校验通过",
+          "statusDetail": "159 个可批处理图元 · 43 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "false",
+          "sceneSummary": {
+            "primitives": 159,
+            "rooms": 14,
+            "routes": 13,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "159",
+              "detail": "17 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "20",
+              "detail": "2,558 triangles"
+            },
+            "fps": {
+              "value": "118 FPS",
+              "detail": "6 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "transparent-low",
+          "status": "校验通过",
+          "statusDetail": "159 个可批处理图元 · 43 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "true",
+          "top": "false",
+          "sceneSummary": {
+            "primitives": 159,
+            "rooms": 14,
+            "routes": 13,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "159",
+              "detail": "20 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "36",
+              "detail": "6,302 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "19 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "transparent-top",
+          "status": "校验通过",
+          "statusDetail": "159 个可批处理图元 · 43 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "true",
+          "sceneSummary": {
+            "primitives": 159,
+            "rooms": 14,
+            "routes": 13,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "159",
+              "detail": "20 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "36",
+              "detail": "6,302 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "19 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "floor-3",
+          "status": "校验通过",
+          "statusDetail": "159 个可批处理图元 · 43 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "3",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "true",
+          "sceneSummary": {
+            "primitives": 159,
+            "rooms": 14,
+            "routes": 13,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "159",
+              "detail": "20 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "8",
+              "detail": "384 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "21 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "near-grid",
+          "status": "校验通过",
+          "statusDetail": "159 个可批处理图元 · 43 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "3",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "true",
+          "sceneSummary": {
+            "primitives": 159,
+            "rooms": 14,
+            "routes": 13,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "159",
+              "detail": "20 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "8",
+              "detail": "384 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "21 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "temple-transparent",
+      "kind": "dungeon",
+      "size": "large",
+      "density": "84",
+      "steps": [
+        {
+          "label": "overview",
+          "status": "校验通过",
+          "statusDetail": "174 个可批处理图元 · 37 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "false",
+          "routes": "false",
+          "camera": "false",
+          "top": "false",
+          "sceneSummary": {
+            "primitives": 174,
+            "rooms": 25,
+            "routes": 8,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "174",
+              "detail": "20 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "24",
+              "detail": "2,486 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "6 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "transparent-routes",
+          "status": "校验通过",
+          "statusDetail": "174 个可批处理图元 · 37 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "false",
+          "sceneSummary": {
+            "primitives": 174,
+            "rooms": 25,
+            "routes": 8,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "174",
+              "detail": "20 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "32",
+              "detail": "4,790 triangles"
+            },
+            "fps": {
+              "value": "132 FPS",
+              "detail": "14 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "transparent-low",
+          "status": "校验通过",
+          "statusDetail": "174 个可批处理图元 · 37 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "true",
+          "top": "false",
+          "sceneSummary": {
+            "primitives": 174,
+            "rooms": 25,
+            "routes": 8,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "174",
+              "detail": "21 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "33",
+              "detail": "4,790 triangles"
+            },
+            "fps": {
+              "value": "141 FPS",
+              "detail": "14 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "transparent-top",
+          "status": "校验通过",
+          "statusDetail": "174 个可批处理图元 · 37 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "true",
+          "sceneSummary": {
+            "primitives": 174,
+            "rooms": 25,
+            "routes": 8,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "174",
+              "detail": "21 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "33",
+              "detail": "4,790 triangles"
+            },
+            "fps": {
+              "value": "118 FPS",
+              "detail": "14 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "floor-3",
+          "status": "校验通过",
+          "statusDetail": "174 个可批处理图元 · 37 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "3",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "true",
+          "sceneSummary": {
+            "primitives": 174,
+            "rooms": 25,
+            "routes": 8,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "174",
+              "detail": "21 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "33",
+              "detail": "4,790 triangles"
+            },
+            "fps": {
+              "value": "117 FPS",
+              "detail": "14 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "near-grid",
+          "status": "校验通过",
+          "statusDetail": "174 个可批处理图元 · 37 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "3",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "true",
+          "sceneSummary": {
+            "primitives": 174,
+            "rooms": 25,
+            "routes": 8,
+            "floors": 4,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "174",
+              "detail": "21 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "10",
+              "detail": "986 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "15 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "tower-basement",
+      "kind": "tower",
+      "size": "large",
+      "density": "76",
+      "steps": [
+        {
+          "label": "overview",
+          "status": "校验通过",
+          "statusDetail": "232 个可批处理图元 · 48 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "false",
+          "routes": "false",
+          "camera": "false",
+          "top": "false",
+          "sceneSummary": {
+            "primitives": 232,
+            "rooms": 12,
+            "routes": 8,
+            "floors": 6,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "232",
+              "detail": "35 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "37",
+              "detail": "3,962 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "6 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "transparent-routes",
+          "status": "校验通过",
+          "statusDetail": "232 个可批处理图元 · 48 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "false",
+          "sceneSummary": {
+            "primitives": 232,
+            "rooms": 12,
+            "routes": 8,
+            "floors": 6,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "232",
+              "detail": "35 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "37",
+              "detail": "3,962 triangles"
+            },
+            "fps": {
+              "value": "127 FPS",
+              "detail": "6 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "transparent-low",
+          "status": "校验通过",
+          "statusDetail": "232 个可批处理图元 · 48 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "true",
+          "top": "false",
+          "sceneSummary": {
+            "primitives": 232,
+            "rooms": 12,
+            "routes": 8,
+            "floors": 6,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "232",
+              "detail": "41 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "51",
+              "detail": "10,874 triangles"
+            },
+            "fps": {
+              "value": "168 FPS",
+              "detail": "14 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "transparent-top",
+          "status": "校验通过",
+          "statusDetail": "232 个可批处理图元 · 48 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "cut",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "true",
+          "sceneSummary": {
+            "primitives": 232,
+            "rooms": 12,
+            "routes": 8,
+            "floors": 6,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "232",
+              "detail": "41 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "51",
+              "detail": "10,874 triangles"
+            },
+            "fps": {
+              "value": "117 FPS",
+              "detail": "14 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "floor-5",
+          "status": "校验通过",
+          "statusDetail": "232 个可批处理图元 · 48 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "5",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "true",
+          "sceneSummary": {
+            "primitives": 232,
+            "rooms": 12,
+            "routes": 8,
+            "floors": 6,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "232",
+              "detail": "41 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "51",
+              "detail": "10,874 triangles"
+            },
+            "fps": {
+              "value": "116 FPS",
+              "detail": "14 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        },
+        {
+          "label": "near-grid",
+          "status": "校验通过",
+          "statusDetail": "232 个可批处理图元 · 48 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+          "floor": "5",
+          "transparency": "true",
+          "routes": "true",
+          "camera": "false",
+          "top": "true",
+          "sceneSummary": {
+            "primitives": 232,
+            "rooms": 12,
+            "routes": 8,
+            "floors": 6,
+            "valid": true
+          },
+          "metrics": {
+            "primitives": {
+              "value": "232",
+              "detail": "41 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "8",
+              "detail": "1,380 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "16 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          },
+          "hasVisibleCanvas": true
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    }
+  ],
+  "totalNetworkFailures": 0,
+  "totalConsoleErrors": 0
+}
