@@ -30,6 +30,16 @@ export interface FocusAuditSnapshot {
   dynamicCutawayIds: string[];
 }
 
+export interface SceneViewSnapshot {
+  floorView: FloorView;
+  cameraMode: "perspective" | "top";
+  buildingTransparency: boolean;
+  camera: { x: number; y: number; z: number };
+  target: { x: number; y: number; z: number };
+  near: number;
+  far: number;
+}
+
 interface FloorLayer {
   structure: THREE.Group;
   roof: THREE.Group;
@@ -564,6 +574,50 @@ export class SceneRenderer {
     // rather than stacking every storey's walls into one opaque tower. The
     // ordinary floor selector remains available for upper floors and B1.
     this.setFloorView(0);
+  }
+
+  captureSceneView(): SceneViewSnapshot {
+    return {
+      floorView: this.activeFloorView,
+      cameraMode: this.cameraMode,
+      buildingTransparency: this.buildingTransparency,
+      camera: { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
+      target: { x: this.controls.target.x, y: this.controls.target.y, z: this.controls.target.z },
+      near: this.camera.near,
+      far: this.camera.far,
+    };
+  }
+
+  restoreSceneView(snapshot: SceneViewSnapshot): void {
+    if (!this.currentScene) return;
+    this.focusedBuildingId = undefined;
+    this.dynamicFocusCutaways.clear();
+    this.lastFocusViewDirection = undefined;
+    this.buildingTransparency = snapshot.buildingTransparency;
+    this.modelRoot.clear();
+    this.floorLayers.clear();
+    this.floorContextLayers.clear();
+    this.primitiveBatches = 0;
+    this.buildGrid(this.currentScene);
+    this.buildPrimitiveBatches(this.currentScene);
+    this.buildSemanticLights(this.currentScene);
+    this.buildRoutes(this.currentScene);
+    this.activeFloorView = snapshot.floorView;
+    this.applyFloorViewVisibility(snapshot.floorView);
+    this.cameraMode = snapshot.cameraMode;
+    if (snapshot.cameraMode === "top") {
+      this.controls.enabled = false;
+      this.configureTopCamera();
+      return;
+    }
+    this.controls.enabled = true;
+    this.camera.position.set(snapshot.camera.x, snapshot.camera.y, snapshot.camera.z);
+    this.controls.target.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
+    this.camera.near = snapshot.near;
+    this.camera.far = snapshot.far;
+    this.camera.lookAt(this.controls.target);
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
   }
 
   private positionCameraForFocusedBuilding(selected: BuildingInstance, view: FloorView, preset: "overview" | "low" = "overview"): void {

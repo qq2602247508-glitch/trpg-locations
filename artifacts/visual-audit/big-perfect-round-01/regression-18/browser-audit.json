@@ -1,0 +1,395 @@
+{
+  "url": "http://127.0.0.1:5244/?prompt=%E6%BD%AE%E6%B1%90%E7%BA%A2%E6%A0%91%E6%9E%97%E9%87%8C%E7%9A%84%E7%82%BC%E9%87%91%E5%AD%A6%E8%80%85%E6%B8%AF%E6%9D%91%EF%BC%8C%E6%9C%89%E6%A0%B9%E6%A1%A5%E3%80%81%E6%A0%91%E4%B8%8A%E5%AE%9E%E9%AA%8C%E5%B1%8B%E3%80%81%E7%9B%90%E9%9B%BE%E8%92%B8%E9%A6%8F%E5%A1%94%E3%80%81%E5%8D%8A%E6%B7%B9%E6%A1%A3%E6%A1%88%E5%BA%93%E5%92%8C%E6%B0%B4%E4%B8%8B%E6%B8%A9%E5%AE%A4&seed=browser-r18-entry&size=large&density=0.72&kind=adaptive",
+  "buildingMetadata": [
+    {
+      "id": "settlement-building-1",
+      "detailLevel": "full-interior",
+      "archetype": "home",
+      "district": "civic"
+    },
+    {
+      "id": "settlement-building-2",
+      "detailLevel": "full-interior",
+      "archetype": "factory",
+      "district": "civic"
+    },
+    {
+      "id": "settlement-building-3",
+      "detailLevel": "full-interior",
+      "archetype": "guild",
+      "district": "commercial"
+    },
+    {
+      "id": "settlement-building-4",
+      "detailLevel": "full-interior",
+      "archetype": "factory",
+      "district": "residential"
+    },
+    {
+      "id": "settlement-building-5",
+      "detailLevel": "mass",
+      "archetype": "home",
+      "district": "residential"
+    },
+    {
+      "id": "settlement-building-6",
+      "detailLevel": "mass",
+      "archetype": "warehouse",
+      "district": "industrial"
+    },
+    {
+      "id": "settlement-building-7",
+      "detailLevel": "mass",
+      "archetype": "shrine",
+      "district": "sacred"
+    },
+    {
+      "id": "settlement-building-8",
+      "detailLevel": "mass",
+      "archetype": "home",
+      "district": "service"
+    },
+    {
+      "id": "settlement-building-9",
+      "detailLevel": "mass",
+      "archetype": "manor",
+      "district": "civic"
+    },
+    {
+      "id": "settlement-building-10",
+      "detailLevel": "mass",
+      "archetype": "tower",
+      "district": "civic"
+    },
+    {
+      "id": "settlement-building-11",
+      "detailLevel": "mass",
+      "archetype": "tavern",
+      "district": "commercial"
+    },
+    {
+      "id": "settlement-building-12",
+      "detailLevel": "mass",
+      "archetype": "home",
+      "district": "residential"
+    },
+    {
+      "id": "settlement-building-13",
+      "detailLevel": "facade",
+      "archetype": "factory",
+      "district": "industrial"
+    },
+    {
+      "id": "settlement-building-14",
+      "detailLevel": "facade",
+      "archetype": "shrine",
+      "district": "sacred"
+    },
+    {
+      "id": "settlement-building-15",
+      "detailLevel": "facade",
+      "archetype": "shrine",
+      "district": "sacred"
+    },
+    {
+      "id": "settlement-building-16",
+      "detailLevel": "facade",
+      "archetype": "home",
+      "district": "service"
+    }
+  ],
+  "audits": [
+    {
+      "type": "full-interior",
+      "before": {
+        "status": "校验通过",
+        "floor": "3",
+        "transparency": "true",
+        "low": "true",
+        "top": "false",
+        "selectedBuilding": "settlement-building-1",
+        "focus": {
+          "floorView": 3,
+          "camera": {
+            "x": 41.90872703066174,
+            "y": 5.5233857348138695,
+            "z": 63.96349020067524
+          },
+          "target": {
+            "x": 23.931676608968086,
+            "y": -0.4052159999999998,
+            "z": 49.42885368951866
+          },
+          "dynamicCutawayIds": []
+        },
+        "view": {
+          "floorView": 3,
+          "cameraMode": "perspective",
+          "buildingTransparency": true,
+          "camera": {
+            "x": 41.90872703066174,
+            "y": 5.5233857348138695,
+            "z": 63.96349020067524
+          },
+          "target": {
+            "x": 23.931676608968086,
+            "y": -0.4052159999999998,
+            "z": 49.42885368951866
+          },
+          "near": 0.1,
+          "far": 1591.056
+        }
+      },
+      "inside": {
+        "status": "已进入建筑内部",
+        "floor": "3",
+        "transparency": "true",
+        "low": "false",
+        "top": "false",
+        "selectedBuilding": "settlement-building-1",
+        "focus": {
+          "buildingId": "settlement-building-1",
+          "floorView": 3,
+          "camera": {
+            "x": 79.40762196121719,
+            "y": 1.6936367999999995,
+            "z": 17.405880329773122
+          },
+          "target": {
+            "x": 69.83975103790996,
+            "y": -1.8012000000000008,
+            "z": 19.611603244917234
+          },
+          "dynamicCutawayIds": [
+            "settlement-building-1-basement-east",
+            "settlement-building-1-basement-south"
+          ]
+        },
+        "view": {
+          "floorView": 3,
+          "cameraMode": "perspective",
+          "buildingTransparency": true,
+          "camera": {
+            "x": 79.40762196121719,
+            "y": 1.6936367999999995,
+            "z": 17.405880329773122
+          },
+          "target": {
+            "x": 69.83975103790996,
+            "y": -1.8012000000000008,
+            "z": 19.611603244917234
+          },
+          "near": 0.1,
+          "far": 300
+        }
+      },
+      "after": {
+        "status": "已返回原场景",
+        "floor": "3",
+        "transparency": "true",
+        "low": "true",
+        "top": "false",
+        "selectedBuilding": "settlement-building-1",
+        "focus": {
+          "floorView": 3,
+          "camera": {
+            "x": 41.90872703066174,
+            "y": 5.523385734813868,
+            "z": 63.96349020067524
+          },
+          "target": {
+            "x": 23.931676608968086,
+            "y": -0.4052159999999998,
+            "z": 49.42885368951866
+          },
+          "dynamicCutawayIds": []
+        },
+        "view": {
+          "floorView": 3,
+          "cameraMode": "perspective",
+          "buildingTransparency": true,
+          "camera": {
+            "x": 41.90872703066174,
+            "y": 5.523385734813868,
+            "z": 63.96349020067524
+          },
+          "target": {
+            "x": 23.931676608968086,
+            "y": -0.4052159999999998,
+            "z": 49.42885368951866
+          },
+          "near": 0.1,
+          "far": 1591.056
+        }
+      },
+      "restoredExactly": true
+    },
+    {
+      "type": "facade",
+      "before": {
+        "status": "已返回原场景",
+        "floor": "cut",
+        "transparency": "false",
+        "low": "false",
+        "top": "true",
+        "selectedBuilding": "settlement-building-1",
+        "focus": {
+          "floorView": "cut",
+          "camera": {
+            "x": 165.53687999999994,
+            "y": 122.10096000000001,
+            "z": 159.01415999999995
+          },
+          "target": {
+            "x": 64.77,
+            "y": 0.11999999999999997,
+            "z": 50.292
+          },
+          "dynamicCutawayIds": []
+        },
+        "view": {
+          "floorView": "cut",
+          "cameraMode": "top",
+          "buildingTransparency": false,
+          "camera": {
+            "x": 165.53687999999994,
+            "y": 122.10096000000001,
+            "z": 159.01415999999995
+          },
+          "target": {
+            "x": 64.77,
+            "y": 0.11999999999999997,
+            "z": 50.292
+          },
+          "near": 0.1,
+          "far": 1591.056
+        }
+      },
+      "inside": {
+        "status": "已进入建筑内部",
+        "floor": "0",
+        "transparency": "false",
+        "low": "false",
+        "top": "false",
+        "selectedBuilding": "settlement-building-13",
+        "focus": {
+          "buildingId": "settlement-building-13",
+          "floorView": 0,
+          "camera": {
+            "x": 89.67659602992293,
+            "y": 9.67729701917705,
+            "z": 79.21443039642078
+          },
+          "target": {
+            "x": 71.3671199931749,
+            "y": 3.01272,
+            "z": 75.29498637104753
+          },
+          "dynamicCutawayIds": [
+            "settlement-building-13-focus-0-ground-public-east",
+            "settlement-building-13-focus-0-ground-public-south",
+            "settlement-building-13-focus-0-ground-service-1-east",
+            "settlement-building-13-focus-0-ground-service-1-south",
+            "settlement-building-13-focus-0-ground-service-1-west"
+          ]
+        },
+        "view": {
+          "floorView": 0,
+          "cameraMode": "perspective",
+          "buildingTransparency": false,
+          "camera": {
+            "x": 89.67659602992293,
+            "y": 9.67729701917705,
+            "z": 79.21443039642078
+          },
+          "target": {
+            "x": 71.3671199931749,
+            "y": 3.01272,
+            "z": 75.29498637104753
+          },
+          "near": 0.1,
+          "far": 317.36081043700227
+        }
+      },
+      "after": {
+        "status": "已返回原场景",
+        "floor": "cut",
+        "transparency": "false",
+        "low": "false",
+        "top": "true",
+        "selectedBuilding": "settlement-building-13",
+        "focus": {
+          "floorView": "cut",
+          "camera": {
+            "x": 89.67659602992293,
+            "y": 9.67729701917705,
+            "z": 79.21443039642078
+          },
+          "target": {
+            "x": 71.3671199931749,
+            "y": 3.01272,
+            "z": 75.29498637104753
+          },
+          "dynamicCutawayIds": []
+        },
+        "view": {
+          "floorView": "cut",
+          "cameraMode": "top",
+          "buildingTransparency": false,
+          "camera": {
+            "x": 89.67659602992293,
+            "y": 9.67729701917705,
+            "z": 79.21443039642078
+          },
+          "target": {
+            "x": 71.3671199931749,
+            "y": 3.01272,
+            "z": 75.29498637104753
+          },
+          "near": 0.1,
+          "far": 317.36081043700227
+        }
+      },
+      "restoredModeFloorTransparency": true
+    }
+  ],
+  "newSceneAfterExitClick": {
+    "status": "校验通过",
+    "floor": "0",
+    "transparency": "false",
+    "low": "false",
+    "top": "false",
+    "selectedBuilding": "settlement-building-1",
+    "focus": {
+      "floorView": 0,
+      "camera": {
+        "x": 169.05843697295734,
+        "y": 131.63297153650154,
+        "z": 162.5639441955775
+      },
+      "target": {
+        "x": 64.29526918193423,
+        "y": 4.814400000000001,
+        "z": 49.53
+      },
+      "dynamicCutawayIds": []
+    },
+    "view": {
+      "floorView": 0,
+      "cameraMode": "perspective",
+      "buildingTransparency": false,
+      "camera": {
+        "x": 169.05843697295734,
+        "y": 131.63297153650154,
+        "z": 162.5639441955775
+      },
+      "target": {
+        "x": 64.29526918193423,
+        "y": 4.814400000000001,
+        "z": 49.53
+      },
+      "near": 0.1,
+      "far": 1645.92
+    }
+  }
+}

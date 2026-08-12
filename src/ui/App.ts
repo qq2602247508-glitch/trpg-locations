@@ -4,6 +4,7 @@ import type { RenderStats } from "../render/SceneRenderer";
 import { GenerationClient } from "../workers/GenerationClient";
 import { generateAtomTestScene } from "../composition";
 import { planningSourcePresentation } from "./planningStatus";
+import { createBuildingEntrySession, type BuildingEntrySession } from "./buildingEntrySession";
 
 const KIND_LABELS: Record<SceneKind, string> = {
   adaptive: "自适应题材",
@@ -196,8 +197,8 @@ export async function mountApp(root: HTMLElement): Promise<void> {
               <select data-role="building-focus" aria-label="选择聚落建筑"><option value="">当前场景没有可选建筑</option></select>
             </label>
             <div class="building-focus-actions">
-              <button class="toggle-button" data-role="building-focus-button" type="button"><span><strong>聚焦内部</strong><small>按需显示该建筑的房间与交通</small></span></button>
-              <button class="toggle-button" data-role="building-focus-exit" type="button"><span><strong>返回聚落</strong><small>恢复完整屋顶与城市上下文</small></span></button>
+              <button class="toggle-button" data-role="building-focus-button" type="button"><span><strong>进入内部</strong><small>保存当前场景并进入该建筑</small></span></button>
+              <button class="toggle-button" data-role="building-focus-exit" type="button"><span><strong>返回原场景</strong><small>恢复进入前楼层、相机与城市上下文</small></span></button>
             </div>
             <div class="toggle-stack">
               <button class="toggle-button" data-role="routes-toggle" type="button" aria-pressed="false">
@@ -277,6 +278,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   let lastStats: RenderStats = renderer.getStats();
   let planningView: "all" | "roads" | "parcels" | "buildings" = "all";
   let forceLocalModel = false;
+  let buildingEntrySession: BuildingEntrySession | undefined;
 
   const auditParams = new URLSearchParams(window.location.search);
   const requestedDensity = Number(auditParams.get("density"));
@@ -327,6 +329,14 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   });
   elements.buildingFocusButton.addEventListener("click", () => {
     if (!activeScene || !elements.buildingFocus.value) return;
+    if (!buildingEntrySession) {
+      buildingEntrySession = createBuildingEntrySession(
+        elements.buildingFocus.value,
+        renderer.captureSceneView(),
+        elements.cameraToggle.getAttribute("aria-pressed") === "true",
+        elements.topCameraToggle.getAttribute("aria-pressed") === "true",
+      );
+    }
     const requestedFloor = elements.floor.value;
     renderer.setBuildingFocus(elements.buildingFocus.value);
     // Re-focusing is also the camera-fit action for a selected upper or
@@ -337,12 +347,17 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     renderer.setFloorView(Number(focusedFloor));
     setToggle(elements.topCameraToggle, false);
     setToggle(elements.cameraToggle, false);
-    setStatus(elements, "建筑内部聚焦", "ok");
+    setStatus(elements, "已进入建筑内部", "ok");
   });
   elements.buildingFocusExit.addEventListener("click", () => {
-    renderer.setBuildingFocus();
-    elements.floor.value = "roof";
-    setStatus(elements, "返回聚落总览", "ok");
+    if (!buildingEntrySession) return;
+    renderer.restoreSceneView(buildingEntrySession.view);
+    elements.floor.value = String(buildingEntrySession.view.floorView);
+    setToggle(elements.transparencyToggle, buildingEntrySession.view.buildingTransparency);
+    setToggle(elements.cameraToggle, buildingEntrySession.lowCameraActive);
+    setToggle(elements.topCameraToggle, buildingEntrySession.topCameraActive);
+    buildingEntrySession = undefined;
+    setStatus(elements, "已返回原场景", "ok");
   });
   elements.time.addEventListener("change", () => {
     renderer.setTimeOfDay(elements.time.value === "night" ? "night" : "day");
@@ -437,10 +452,12 @@ export async function mountApp(root: HTMLElement): Promise<void> {
         generationMs: Math.max(0, performance.now() - generationStartedAt),
       };
       activeScene = scene;
+      buildingEntrySession = undefined;
       // Read-only browser audit hook for visual regression tooling. It exposes
       // the exact generated contract without coupling tests to renderer state.
       Object.assign(window, { __TRPG_SCENE__: scene });
       Object.assign(window, { __TRPG_FOCUS_AUDIT__: () => renderer.getFocusAuditSnapshot() });
+      Object.assign(window, { __TRPG_VIEW_AUDIT__: () => renderer.captureSceneView() });
       renderer.setScene(scene);
       setToggle(elements.cameraToggle, false);
       setToggle(elements.topCameraToggle, false);
