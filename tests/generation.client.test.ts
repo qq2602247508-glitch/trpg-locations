@@ -43,4 +43,24 @@ describe("GenerationClient", () => {
     expect(scene.primitives.length).toBeGreaterThan(0);
     client.dispose();
   });
+
+  it("keeps forced local-model semantics on the in-thread fallback path", async () => {
+    vi.stubGlobal("Worker", undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      message: { content: JSON.stringify({ version: "v1", regions: [] }) },
+    }), { status: 200 })));
+    const client = new GenerationClient();
+    const scene = await client.generate({
+      prompt: "一个陌生的地下研究设施，有实验室、逃生路线和秘密档案室",
+      seed: "generation-client-forced-model",
+      size: "medium",
+      density: 0.6,
+      forceLocalModel: true,
+    }, "adaptive");
+    expect(scene.semantic?.status).toMatch(/^ollama-/);
+    expect(scene.semantic?.fallback).toBe("rule");
+    expect(scene.sceneProgram?.version).toBe(1);
+    expect(scene.diagnostics.valid).toBe(true);
+    client.dispose();
+  });
 });

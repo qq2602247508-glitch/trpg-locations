@@ -41,8 +41,7 @@ export class GenerationClient {
 
   async generate(request: GenerationRequest, kind: SceneKind): Promise<GeneratedScene> {
     if (!this.worker) {
-      const { generateScene } = await import("../generators");
-      return generateScene(request, kind);
+      return this.generateInThread(request, kind);
     }
     const id = this.nextId;
     this.nextId += 1;
@@ -88,10 +87,23 @@ export class GenerationClient {
     this.pending.delete(id);
     clearTimeout(pending.timeoutId);
     try {
-      const { generateScene } = await import("../generators");
-      pending.resolve(await generateScene(pending.request, pending.kind));
+      pending.resolve(await this.generateInThread(pending.request, pending.kind));
     } catch (error) {
       pending.reject(error instanceof Error ? error : new Error("Local scene planning fallback failed."));
     }
+  }
+
+  private async generateInThread(request: GenerationRequest, kind: SceneKind): Promise<GeneratedScene> {
+    const { generateScene } = await import("../generators");
+    if (!request.forceLocalModel) return generateScene(request, kind);
+    const { planSceneProgramLocally, planSceneProgramWithOllamaDetailed } = await import("../scene-program");
+    const localProgram = planSceneProgramLocally(request.prompt, kind);
+    const result = await planSceneProgramWithOllamaDetailed(request.prompt, { requestedKind: kind });
+    const program = result.program ?? localProgram;
+    const scene = generateScene(request, kind, undefined, program);
+    scene.semantic = result.status === "success"
+      ? { source: "ollama", model: result.model, status: "ollama-success" }
+      : { source: "local", model: result.model, status: `ollama-${result.status}`, fallback: "rule" };
+    return scene;
   }
 }
