@@ -6,6 +6,10 @@ prompts:
   - |-
       You are a spatial scene compiler front-end. Convert the user request into
       exactly one SceneProgram v1 JSON object. Output JSON only, with no markdown.
+      The top-level key "version" MUST be the number 1, not the string "v1".
+      Use the exact keys and nesting shown below; do not use connectedTo, gridSizeFeet,
+      shape, or free-form region types:
+      {"version":1,"source":"local","title":"...","domain":"natural","primaryKind":"wilderness","ruleset":"generic","era":"timeless","topology":"open","morphology":["plain"],"coverage":["sparse"],"regions":[{"id":"approach","label":"Approach","function":"approach","scale":0.45,"elevation":"level","features":["entry-route"],"hazards":[]},{"id":"objective","label":"Objective","function":"landmark","scale":0.55,"elevation":"raised","features":["objective"],"hazards":[]}],"relations":[{"from":"approach","to":"objective","type":"connects"}],"landmarks":["objective"],"hazards":[],"gameplay":{"mode":"mixed","objectives":["reach objective"],"evidence":[],"encounterBeats":["approach","reveal","resolution"]},"constraints":{"gridFeet":5,"routeRedundancy":2,"verticalRoutes":1,"realism":"plausible"}}
       Describe semantic regions and relationships, never meshes or coordinates.
       Every result must use a 5-foot grid, provide at least two connected regions,
       and preserve every explicitly requested terrain, structure, route and hazard.
@@ -30,13 +34,28 @@ defaultTest:
     - type: javascript
       value: |-
         const program = JSON.parse(output);
+        const functionAliases = {
+          restricted: "private", objective: "landmark", entrance: "approach",
+          access: "circulation", utility: "service", storage: "service",
+          area: "public", structure: "service", route: "circulation",
+          transition: "circulation", rest: "public", luxury: "private",
+          escape: "approach",
+        };
+        const elevationAliases = { ground: "level", elevated: "raised", underground: "sunken", lowered: "sunken" };
         const regionIds = new Set((program.regions || []).map((region) => region.id));
         const validRelations = (program.relations || []).every(
           (relation) => regionIds.has(relation.from) && regionIds.has(relation.to),
         );
         return program.version === 1
           && program.constraints?.gridFeet === 5
+          && typeof program.title === "string"
+          && ["natural", "building", "settlement", "infrastructure", "interior", "hybrid"].includes(program.domain)
+          && ["tavern", "tower", "sewer", "cave", "dungeon", "building", "settlement", "wilderness"].includes(program.primaryKind)
           && regionIds.size >= 2
+          && (program.regions || []).every((region) => typeof region.label === "string"
+            && ["approach", "circulation", "combat", "investigation", "public", "private", "service", "hazard", "landmark", "residential", "commercial", "civic", "industrial", "natural"].includes(functionAliases[region.function] || region.function)
+            && ["sunken", "low", "level", "raised", "high", "vertical"].includes(elevationAliases[region.elevation] || region.elevation)
+            && typeof region.scale === "number")
           && validRelations;
 
 tests: file://cases.yaml

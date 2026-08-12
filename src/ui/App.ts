@@ -669,6 +669,14 @@ function renderDiagnostics(container: HTMLElement, scene: GeneratedScene): void 
   list.className = "diagnostic-list";
   const notes = [
     ...(scene.sceneProgram ? [{ type: "规划", text: `${scene.sceneProgram.domain} · ${scene.sceneProgram.ruleset.toUpperCase()} · ${scene.sceneProgram.era} · ${scene.sceneProgram.gameplay} · ${scene.sceneProgram.morphology.join(" + ")}` }] : []),
+    ...(scene.semantic?.status ? [{
+      type: "语义",
+      text: scene.semantic.status === "ollama-success"
+        ? `Ollama schema 通过${scene.semantic.model ? ` · ${scene.semantic.model}` : ""}`
+        : scene.semantic.fallback === "rule"
+          ? `Ollama ${scene.semantic.status.replace("ollama-", "")} · 已回退确定性规则`
+          : scene.semantic.status,
+    }] : []),
     ...(scene.compositionProgram ? [{ type: "组合", text: `${scene.compositionProgram.grammarId} · ${scene.compositionProgram.motifIds.join(" + ") || "generic"} · 语义覆盖 ${scene.compositionProgram.semanticCoverage?.score ?? 100}% · 能力 ${scene.compositionProgram.capabilityIds.slice(0, 4).join(" + ") || "none"}` }] : []),
     ...(scene.viewProgram ? [{ type: "取景", text: `${scene.viewProgram.mode} · 中心 ${scene.viewProgram.focusCells.x.toFixed(1)}, ${scene.viewProgram.focusCells.z.toFixed(1)} · 半径 ${scene.viewProgram.radiusCells.toFixed(1)} 格 · ${scene.viewProgram.reason}` }] : []),
     ...diagnostics.warnings.map((note) => ({ type: "警告", text: note })),

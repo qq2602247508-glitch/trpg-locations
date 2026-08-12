@@ -191,6 +191,8 @@ export interface GeneratedScene {
   semantic?: {
     source: "local" | "ollama";
     model?: string;
+    status?: "deterministic" | "ollama-success" | "ollama-timeout" | "ollama-http-error" | "ollama-invalid-json" | "ollama-schema-rejected";
+    fallback?: "rule";
   };
   /** Auditable semantic plan compiled into this deterministic scene. */
   sceneProgram?: SceneProgramSummary;

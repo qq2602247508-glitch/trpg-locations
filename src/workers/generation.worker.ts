@@ -1,5 +1,5 @@
 import { generateScene } from "../generators";
-import { planSceneProgramLocally, planSceneProgramWithOllama, type SceneProgram } from "../scene-program";
+import { planSceneProgramLocally, planSceneProgramWithOllamaDetailed, type SceneProgram, type OllamaPlanningStatus } from "../scene-program";
 import type { GenerationRequest, SceneKind } from "../schema";
 import { compileSceneComposition, type SceneCompositionProgram } from "../composition";
 import { retrieveCapabilitiesWithBge } from "../semantic/bge";
@@ -24,10 +24,11 @@ interface WorkerScope {
 
 // Keep the main tsconfig on DOM types; Vite evaluates this module in a worker.
 const scope = globalThis as unknown as WorkerScope;
-const sceneProgramCache = new Map<string, SceneProgram>();
+type PlannedProgram = { program: SceneProgram; ollamaStatus?: OllamaPlanningStatus; model?: string };
+const sceneProgramCache = new Map<string, PlannedProgram>();
 const compositionCache = new Map<string, SceneCompositionProgram>();
 
-async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean, forceLocalModel = false): Promise<SceneProgram> {
+async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean, forceLocalModel = false): Promise<{ program: SceneProgram; ollamaStatus?: OllamaPlanningStatus; model?: string }> {
   const key = `${kind}|${forceLocalModel ? "forced-model" : "auto"}|${prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}`;
   const cached = sceneProgramCache.get(key);
   if (cached) return cached;
@@ -43,12 +44,14 @@ async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean
     && (forceLocalModel || !shouldComposeWildernessFacility(prompt))
     && (localProgram.primaryKind === "wilderness" || localProgram.primaryKind === "building")
     && (kind === "adaptive" || kind === "wilderness" || kind === "building" || kind === "settlement");
-  const program = shouldUseOllama
-    ? await planSceneProgramWithOllama(prompt, { requestedKind: kind }) ?? localProgram
-    : localProgram;
-  sceneProgramCache.set(key, program);
+  const ollamaResult = shouldUseOllama
+    ? await planSceneProgramWithOllamaDetailed(prompt, { requestedKind: kind })
+    : undefined;
+  const program = ollamaResult?.program ?? localProgram;
+  const planned = { program, ...(ollamaResult ? { ollamaStatus: ollamaResult.status, model: ollamaResult.model } : {}) };
+  sceneProgramCache.set(key, planned);
   if (sceneProgramCache.size > 32) sceneProgramCache.delete(sceneProgramCache.keys().next().value ?? key);
-  return program;
+  return planned;
 }
 
 async function planComposition(request: GenerationRequest): Promise<SceneCompositionProgram> {
@@ -77,8 +80,13 @@ scope.addEventListener("message", async (event: MessageEvent<GenerationWorkerReq
     // A successful BGE/lexical capability retrieval is sufficient for the
     // deterministic compiler. Qwen is the final ambiguity fallback, not a
     // mandatory step in every unknown prompt.
-    const program = await planProgram(request.prompt, kind, composition.capabilityIds.length === 0, request.forceLocalModel === true);
-    const scene = generateScene(request, kind, undefined, program, composition);
+    const planning = await planProgram(request.prompt, kind, composition.capabilityIds.length === 0, request.forceLocalModel === true);
+    const scene = generateScene(request, kind, undefined, planning.program, composition);
+    if (planning.ollamaStatus) {
+      scene.semantic = planning.ollamaStatus === "success"
+        ? { source: "ollama", model: planning.model, status: "ollama-success" }
+        : { source: "local", model: planning.model, status: `ollama-${planning.ollamaStatus}`, fallback: "rule" };
+    }
     scope.postMessage({ id, scene } satisfies GenerationWorkerResponse);
   } catch (error) {
     scope.postMessage({

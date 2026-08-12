@@ -4,6 +4,7 @@ import {
   SCENE_PROGRAM_RESPONSE_SCHEMA,
   parseSceneProgram,
   planSceneProgramLocally,
+  planSceneProgramWithOllamaDetailed,
   planSceneProgramWithOllama,
 } from "../src/scene-program";
 
@@ -53,6 +54,51 @@ describe("SceneProgram v1", () => {
     expect(result?.morphology).toEqual(["interior-partitions"]);
     expect(result?.regions[1]?.function).toBe("private");
     expect(result?.relations[0]?.type).toBe("below");
+  });
+
+  it("reports schema rejection instead of silently hiding an invalid model response", async () => {
+    const result = await planSceneProgramWithOllamaDetailed("陌生研究设施", {
+      fetcher: vi.fn(async () => new Response(JSON.stringify({
+        message: { content: JSON.stringify({ version: "v1", regions: [] }) },
+      }), { status: 200 })),
+      timeoutMs: 100,
+      model: "test-invalid-model",
+    });
+    expect(result).toMatchObject({ status: "schema-rejected", model: "test-invalid-model" });
+    expect(result.program).toBeUndefined();
+  });
+
+  it("reports timeout as a distinct forced-local-model outcome", async () => {
+    const result = await planSceneProgramWithOllamaDetailed("慢响应设施", {
+      fetcher: vi.fn((_input, init) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      })),
+      timeoutMs: 1,
+    });
+    expect(result.status).toBe("timeout");
+  });
+
+  it("normalizes bounded functional aliases emitted by local models", async () => {
+    const planned = planSceneProgramLocally("歌剧院与地下蒸汽浴场", "adaptive");
+    const nearValid = {
+      ...planned,
+      regions: planned.regions.map((region, index) => index === 0
+        ? { ...region, function: "area" }
+        : index === 1
+          ? { ...region, function: "structure", elevation: "lowered" }
+          : index === 2
+            ? { ...region, function: "route" }
+            : region),
+    };
+    const result = await planSceneProgramWithOllamaDetailed("歌剧院与地下蒸汽浴场", {
+      fetcher: vi.fn(async () => new Response(JSON.stringify({ message: { content: JSON.stringify(nearValid) } }), { status: 200 })),
+      timeoutMs: 100,
+    });
+    expect(result.status).toBe("success");
+    expect(result.program?.regions[0]?.function).toBe("public");
+    expect(result.program?.regions[1]?.function).toBe("service");
+    expect(result.program?.regions[1]?.elevation).toBe("sunken");
+    expect(result.program?.regions[2]?.function).toBe("circulation");
   });
 
   it("produces stable, interpretable local plans without hash-selected landforms", () => {

@@ -6,7 +6,7 @@
 
 - 连接器诊断：11 个目标场景全部 `OK`。
 - 目录与接口回归：68/68。
-- 全量 Vitest：272/272，13 个测试文件。
+- 全量 Vitest：275/275，13 个测试文件。
 - 生产构建：通过。
 - `git diff --check`：通过。
 
@@ -30,11 +30,12 @@
 
 ## 本地语义评测
 
-Promptfoo 已串行运行 10 个本地 Ollama 案例：
+Promptfoo 已串行运行 10 个本地 Ollama 案例，最终 10/10 通过：
 
-- 0/10 通过，0 errors。
-- 失败原因是模型输出没有遵守项目 `SceneProgram v1` schema（例如版本与字段形状不符合），不是本轮几何连接器回归失败。
-- 本轮不修改语义契约，也不把质量评测结果计作 Token 节省。
+- 评测提示已对齐当前 `SceneProgram v1` 合同：`version: 1`、`constraints.gridFeet`、严格 regions/relations 嵌套。
+- parser 只增加有限、可审计的 function/elevation 同义词映射，随后仍执行严格 schema 解析。
+- 运行时现在明确记录 Ollama 成功、超时、HTTP 错误、非法 JSON、schema 拒绝及规则回退来源；不再静默丢失失败原因。
+- 本地模型在规则回退时不会生成几何，几何仍由确定性编译器负责。
 
 ## Token 工具证据
 
@@ -43,3 +44,6 @@ Promptfoo 已串行运行 10 个本地 Ollama 案例：
 - `token-repomix`：按 8,000 Token 预算尝试有界打包，但当前包装器未透传 `--include`，实际包为 52,713 Token，工具拒绝；未使用该产物，也未记录节省。
 - `token-promptfoo` 命令未安装；使用项目现有 Promptfoo 进行语义质量评测，未虚报 Token 节省。
 
+## 当前交付限制
+
+浏览器连接器已在 `http://127.0.0.1:5241/` 完成场景生成、表单输入、相机切换、楼层控件和只读 `__TRPG_SCENE__` 审计，但 `screenshot()` 返回的 PNG 字节本轮没有落入仓库或 `/private/tmp`。因此本轮不宣称 PNG 截图已交付；下一轮仍需在真实可见边界补齐截图文件和报告证据。

@@ -25,6 +25,14 @@ export interface SceneProgramPlannerOptions {
   requestedKind?: SceneKind;
 }
 
+export type OllamaPlanningStatus = "success" | "timeout" | "http-error" | "invalid-json" | "schema-rejected";
+
+export interface OllamaPlanningResult {
+  program?: SceneProgram;
+  status: OllamaPlanningStatus;
+  model: string;
+}
+
 export const SCENE_PROGRAM_RESPONSE_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -99,11 +107,19 @@ function normalizeOllamaCandidate(value: unknown): unknown {
       access: "circulation",
       utility: "service",
       storage: "service",
+      area: "public",
+      structure: "service",
+      route: "circulation",
+      transition: "circulation",
+      rest: "public",
+      luxury: "private",
+      escape: "approach",
     };
     const elevationAliases: Readonly<Record<string, string>> = {
       ground: "level",
       elevated: "raised",
       underground: "sunken",
+      lowered: "sunken",
     };
     record.regions = record.regions.map((region) => {
       if (!region || typeof region !== "object" || Array.isArray(region)) return region;
@@ -135,6 +151,10 @@ function normalizeOllamaCandidate(value: unknown): unknown {
 }
 
 export async function planSceneProgramWithOllama(prompt: string, options: SceneProgramPlannerOptions = {}): Promise<SceneProgram | undefined> {
+  return (await planSceneProgramWithOllamaDetailed(prompt, options)).program;
+}
+
+export async function planSceneProgramWithOllamaDetailed(prompt: string, options: SceneProgramPlannerOptions = {}): Promise<OllamaPlanningResult> {
   const endpoint = (options.endpoint ?? DEFAULT_OLLAMA_ENDPOINT).replace(/\/$/, "");
   const model = options.model ?? DEFAULT_OLLAMA_MODEL;
   const controller = new AbortController();
@@ -161,12 +181,19 @@ Convert the user's request by replacing template values, never its keys or nesti
         ],
       }),
     });
-    if (!response.ok) return undefined;
+    if (!response.ok) return { status: "http-error", model };
     const body = await response.json() as { message?: { content?: unknown } };
-    if (typeof body.message?.content !== "string") return undefined;
-    return parseSceneProgram(normalizeOllamaCandidate(JSON.parse(body.message.content)), "ollama", model);
-  } catch {
-    return undefined;
+    if (typeof body.message?.content !== "string") return { status: "schema-rejected", model };
+    let candidate: unknown;
+    try {
+      candidate = JSON.parse(body.message.content);
+    } catch {
+      return { status: "invalid-json", model };
+    }
+    const program = parseSceneProgram(normalizeOllamaCandidate(candidate), "ollama", model);
+    return program ? { program, status: "success", model } : { status: "schema-rejected", model };
+  } catch (error) {
+    return { status: error instanceof DOMException && error.name === "AbortError" ? "timeout" : "http-error", model };
   } finally {
     clearTimeout(timeout);
   }
