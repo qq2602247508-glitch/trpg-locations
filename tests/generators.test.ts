@@ -831,6 +831,24 @@ describe("scene generators", () => {
     expect(sparse.diagnostics.valid && dense.diagnostics.valid).toBe(true);
   });
 
+  it("keeps dense forest canopy anchors paired after child-building pad cleanup", () => {
+    const scene = generateScene({
+      ...request("forest-canopy-anchor-cleanup", "medium", 0.9),
+      prompt: "森林中的猎人木屋，有起居室、地窖、门廊、柴堆和林间道路",
+    }, "adaptive");
+    const trunks = new Set(scene.primitives
+      .filter((primitive) => primitive.tags?.includes("tree-trunk"))
+      .flatMap((primitive) => primitive.tags?.filter((tag) => tag.startsWith("tree-anchor:")) ?? []));
+    const anchoredCanopies = scene.primitives.filter((primitive) => (
+      primitive.tags?.includes("tree-canopy")
+      && primitive.tags?.includes("canopy-layer")
+      && primitive.tags?.some((tag) => tag.startsWith("tree-anchor:"))
+    ));
+    expect(anchoredCanopies.length).toBeGreaterThan(20);
+    expect(anchoredCanopies.every((primitive) => primitive.tags?.some((tag) => trunks.has(tag)))).toBe(true);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+  });
+
   it("composes a river-bank cabin, supported dock, and bank descent into one site", () => {
     const scene = generateScene({ ...request("river-cabin-site", "medium", 0.72), prompt: "森林河湾中的猎人小屋，有真实木屋内部、前廊、储藏间、烟囱、河边小码头、上坡兽径、林间掩体和屋后地下储藏窖" }, "adaptive");
     expect(scene.archetype).toBe("river-valley");

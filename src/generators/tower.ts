@@ -323,7 +323,7 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
     const treeZ = center - profile.footprint * 0.08;
     const canopyY = topY + feetToMeters(8);
     scene.primitives.push(
-      cylinder("tower-giant-tree-trunk", 0, treeX, undergroundGreenhouse ? -feetToMeters(12) : 0, treeZ, Math.max(2.4, profile.footprint * 0.22), canopyY + feetToMeters(12), "wood", ["giant-tree", "vertical-landmark", "cover"]),
+      cylinder("tower-giant-tree-trunk", 0, treeX, undergroundGreenhouse ? -feetToMeters(12) : 0, treeZ, Math.max(2.4, profile.footprint * 0.22), canopyY + feetToMeters(12), "wood", ["giant-tree", "tree-trunk", "vertical-landmark", "cover"]),
       cylinder("tower-tree-canopy-platform", profile.floors - 1, treeX, canopyY, treeZ, Math.max(6, profile.footprint * 0.7), FLOOR_SLAB_METERS, "moss", ["floor", "platform", "tree-canopy", "standable", "high-ground"]),
       box("tower-canopy-bridge", profile.floors - 1, (center + treeX + profile.footprint * 0.42) / 2, topY + feetToMeters(2), (center + treeZ) / 2, Math.max(5, profile.footprint * 0.62), FLOOR_SLAB_METERS, 1.6, "wood", ["platform", "bridge", "terrain", "suspended-bridge", "standable", "vertical-opening"]),
       box("tower-tree-canopy-ladder", profile.floors - 1, treeX, topY, treeZ, 0.55, Math.max(feetToMeters(8), canopyY - topY), 0.55, "wood", ["ladder", "shaft-access", "climbable", "vertical-opening"]),

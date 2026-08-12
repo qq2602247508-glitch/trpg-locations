@@ -676,7 +676,10 @@ function validateGeometryInvariants(
     && !hasAnyTag(primitive, ["magical-floating", "levitating", "floating-island"])
   ))) {
     const attachmentRadius = Math.max(GRID_METERS, Math.min(canopy.size.x, canopy.size.z) * 0.45);
+    const anchor = canopy.tags?.find((tag) => tag.startsWith("tree-anchor:"));
     const attached = treeTrunks.some((trunk) => (
+      (anchor === undefined || trunk.tags?.includes(anchor))
+      &&
       Math.hypot(canopy.position.x - trunk.position.x, canopy.position.z - trunk.position.z) <= attachmentRadius
       && primitiveVerticalSpan(trunk).max >= primitiveVerticalSpan(canopy).min - GRID_METERS
     ));

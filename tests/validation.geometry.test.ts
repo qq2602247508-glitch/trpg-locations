@@ -131,6 +131,27 @@ describe("geometry-level P1 validation", () => {
     expect(hasError(result, "crosses solid wall sealed-test-wall")).toBe(true);
   });
 
+  it("rejects an anchored canopy whose authored trunk is detached", () => {
+    const scene = generateScene({
+      ...request,
+      prompt: "森林中的古老树冠，有树干、封闭林冠和树冠战斗平台",
+      seed: "geometry-canopy-anchor",
+    }, "adaptive");
+    const canopy = scene.primitives.find((primitive) => primitive.tags?.includes("tree-canopy") && primitive.tags?.includes("canopy-layer"));
+    const trunk = scene.primitives.find((primitive) => primitive.tags?.includes("tree-trunk") && primitive.tags?.some((tag) => tag.startsWith("tree-anchor:")));
+    expect(canopy).toBeDefined();
+    expect(trunk).toBeDefined();
+    if (canopy && trunk) {
+      const anchor = canopy.tags?.find((tag) => tag.startsWith("tree-anchor:"));
+      canopy.tags = [...(canopy.tags ?? []), anchor ?? "tree-anchor:test"];
+      trunk.position.x += GRID_METERS * 10;
+      trunk.position.z += GRID_METERS * 10;
+    }
+    const result = validateScene(scene);
+    expect(result.valid).toBe(false);
+    expect(hasError(result, "has no attached trunk support")).toBe(true);
+  });
+
   it("rejects a floor-backed route that cuts through a solid wall", () => {
     const scene = generateScene({ ...request, seed: "geometry-route-wall" }, "tower");
     const room = scene.rooms.find((candidate) => candidate.level === 0 && candidate.role === "public");

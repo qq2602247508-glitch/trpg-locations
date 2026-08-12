@@ -2388,24 +2388,25 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
     const trunk = ecology.float(species === "understory" ? 0.2 : 0.34, species === "broadleaf" ? 0.82 : 0.66) * (density > 0.75 ? 1.08 : 1);
     const heightFeet = species === "understory" ? ecology.int(10, 20) : species === "snag" ? ecology.int(18, 34) : species === "conifer" ? ecology.int(28, 52) : ecology.int(24, 48);
     const height = feetToMeters(heightFeet); const y = surfaceY(x, z);
-    const treeTags = ["forest", "tree", "tree-cluster", "natural-cover", "cover", `tree-species:${species}`];
+    const treeAnchor = `tree-anchor:${trees}`;
+    const treeTags = ["forest", "tree", "tree-trunk", "tree-cluster", "natural-cover", "cover", treeAnchor, `tree-species:${species}`];
     scene.primitives.push(cylinder(`forest-tree-${trees}`, 0, x, y, z, trunk, height, "wood", [...treeTags, ...(species === "snag" ? ["deadwood", "snag"] : [])]));
     if (species === "broadleaf") {
       const crown = trunk * CELL * ecology.float(4.1, 5.8);
       scene.primitives.push(
-        primitive(`forest-canopy-${trees}-a`, "sphere", 0, x - 0.45, y + height * 0.78, z + 0.2, crown, height * ecology.float(0.28, 0.4), crown * 0.9, "moss", ["forest", "canopy", "closed-canopy", "cover", "broadleaf-crown"]),
-        primitive(`forest-canopy-${trees}-b`, "sphere", 0, x + 0.5, y + height * 0.83, z - 0.28, crown * 0.82, height * ecology.float(0.22, 0.34), crown, "moss", ["forest", "canopy", "closed-canopy", "cover", "broadleaf-crown"]),
+        primitive(`forest-canopy-${trees}-a`, "sphere", 0, x - 0.45, y + height * 0.78, z + 0.2, crown, height * ecology.float(0.28, 0.4), crown * 0.9, "moss", ["forest", "canopy", "tree-canopy", "canopy-layer", treeAnchor, "closed-canopy", "cover", "broadleaf-crown"]),
+        primitive(`forest-canopy-${trees}-b`, "sphere", 0, x + 0.5, y + height * 0.83, z - 0.28, crown * 0.82, height * ecology.float(0.22, 0.34), crown, "moss", ["forest", "canopy", "tree-canopy", "canopy-layer", treeAnchor, "closed-canopy", "cover", "broadleaf-crown"]),
       );
       if (trees % 7 === 0) for (const angle of [0.3, 2.4, 4.5]) scene.primitives.push(box(`forest-root-flare-${trees}-${angle}`, 0, x + Math.cos(angle) * 0.7, y + feetToMeters(0.7), z + Math.sin(angle) * 0.7, 0.42, feetToMeters(1.4), 1.8, "wood", ["forest", "root-flare", "cover"], angle));
     } else if (species === "conifer") {
       const crown = trunk * CELL * ecology.float(4.2, 5.2);
       scene.primitives.push(
-        primitive(`forest-canopy-${trees}-lower`, "cone", 0, x, y + height * 0.6, z, crown, height * 0.5, crown, "moss", ["forest", "canopy", "closed-canopy", "conifer-crown"]),
-        primitive(`forest-canopy-${trees}-upper`, "cone", 0, x, y + height * 0.82, z, crown * 0.68, height * 0.34, crown * 0.68, "moss", ["forest", "canopy", "closed-canopy", "conifer-crown"]),
+        primitive(`forest-canopy-${trees}-lower`, "cone", 0, x, y + height * 0.6, z, crown, height * 0.5, crown, "moss", ["forest", "canopy", "tree-canopy", "canopy-layer", treeAnchor, "closed-canopy", "conifer-crown"]),
+        primitive(`forest-canopy-${trees}-upper`, "cone", 0, x, y + height * 0.82, z, crown * 0.68, height * 0.34, crown * 0.68, "moss", ["forest", "canopy", "tree-canopy", "canopy-layer", treeAnchor, "closed-canopy", "conifer-crown"]),
       );
     } else if (species === "understory") {
       const crown = trunk * CELL * ecology.float(3.8, 4.8);
-      scene.primitives.push(primitive(`forest-canopy-${trees}`, "sphere", 0, x, y + height * 0.74, z, crown, height * 0.38, crown, "moss", ["forest", "canopy", "understory-tree", "young-tree"]));
+      scene.primitives.push(primitive(`forest-canopy-${trees}`, "sphere", 0, x, y + height * 0.74, z, crown, height * 0.38, crown, "moss", ["forest", "canopy", "tree-canopy", "canopy-layer", treeAnchor, "understory-tree", "young-tree"]));
     } else {
       for (const [branchIndex, angle] of [0.25, 2.3].entries()) scene.primitives.push(box(`forest-snag-branch-${trees}-${branchIndex}`, 0, x + Math.cos(angle) * 0.38, y + height * (0.5 + branchIndex * 0.16), z + Math.sin(angle) * 0.38, 1.15, feetToMeters(0.36), 0.16, "wood", ["forest", "snag", "deadwood", "cover"], angle));
     }
@@ -2442,8 +2443,8 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
   for (let index = 0; index < ancientCount; index += 1) {
     const anchor = clearings[index % clearings.length]!; const x = anchor.x + anchor.rx * 0.72; const z = anchor.z - anchor.rz * 0.46; const y = surfaceY(x, z); const height = feetToMeters(45 + index * 4); const platformY = y + feetToMeters(15 + index * 3);
     ancientPlatforms.push({ x, z, y, platformY });
-    scene.primitives.push(cylinder(`forest-ancient-tree-${index}`, 0, x, y, z, 2.2 + index * 0.15, height, "wood", ["forest", "tree", "giant-tree", "landmark", "support"]));
-    for (const [lobe, dx, dz, scale] of [[0, -1.8, 0.8, 1], [1, 1.5, -0.5, 0.88], [2, 0.4, 1.8, 0.72]] as const) scene.primitives.push(primitive(`forest-ancient-canopy-${index}-${lobe}`, "sphere", 0, x + dx, y + height * (0.73 + lobe * 0.035), z + dz, feetToMeters(30) * scale, feetToMeters(18) * (0.72 + scale * 0.24), feetToMeters(30) * scale, "moss", ["forest", "canopy", "closed-canopy", "landmark", "ancient-crown-lobe"]));
+    scene.primitives.push(cylinder(`forest-ancient-tree-${index}`, 0, x, y, z, 2.2 + index * 0.15, height, "wood", ["forest", "tree", "tree-trunk", "giant-tree", "landmark", "support"]));
+    for (const [lobe, dx, dz, scale] of [[0, -1.8, 0.8, 1], [1, 1.5, -0.5, 0.88], [2, 0.4, 1.8, 0.72]] as const) scene.primitives.push(primitive(`forest-ancient-canopy-${index}-${lobe}`, "sphere", 0, x + dx, y + height * (0.73 + lobe * 0.035), z + dz, feetToMeters(30) * scale, feetToMeters(18) * (0.72 + scale * 0.24), feetToMeters(30) * scale, "moss", ["forest", "canopy", "tree-canopy", "canopy-layer", "closed-canopy", "landmark", "ancient-crown-lobe"]));
     scene.primitives.push(cylinder(`forest-canopy-platform-${index}`, 0, x, platformY, z, 3.3, feetToMeters(1), "wood", ["forest", "canopy-platform", "platform", "high-ground", "standable", "supported"]));
     for (const [rootIndex, angle] of [0.2, 2.25, 4.3].entries()) {
       scene.primitives.push(box(`forest-ancient-root-${index}-${rootIndex}`, 0, x + Math.cos(angle) * 2.1, y + feetToMeters(1.2), z + Math.sin(angle) * 2.1, 1.05, feetToMeters(2.4), 4.8, "wood", ["forest", "giant-tree", "root-buttress", "cover", "climbable"], angle));
@@ -3022,6 +3023,26 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   const baseY = terrainBaseY + feetToMeters(raisedFoundationFeet);
   // Clear only procedural clutter in the building pad. Authored terrain,
   // rivers, cliffs and routes remain the owner of the surrounding site.
+  const treeAnchorGroups = new Map<string, typeof scene.primitives>();
+  for (const item of scene.primitives) {
+    const anchor = item.tags?.find((tag) => tag.startsWith("tree-anchor:"));
+    if (!anchor) continue;
+    const group = treeAnchorGroups.get(anchor) ?? [];
+    group.push(item);
+    treeAnchorGroups.set(anchor, group);
+  }
+  const clearanceX = archetype === "river-valley" ? 12 : 10.5;
+  const clearanceZ = archetype === "river-valley" ? 10 : 9.5;
+  const treeAnchorOutsidePad = new Map<string, boolean>();
+  for (const [anchor, group] of treeAnchorGroups) {
+    treeAnchorOutsidePad.set(anchor, group.every((item) => {
+      const px = item.position.x / CELL; const pz = item.position.z / CELL;
+      const halfWidth = Math.max(0.4, item.size.x / CELL / 2);
+      const halfDepth = Math.max(0.4, item.size.z / CELL / 2);
+      return Math.abs(px - x) - halfWidth > clearanceX
+        || Math.abs(pz - z) - halfDepth > clearanceZ;
+    }));
+  }
   scene.primitives = scene.primitives.filter((item) => {
     if (item.tags?.includes("floor") || item.tags?.includes("terrain")) return true;
     // Parent hydrology is structural terrain, not procedural clutter.  The
@@ -3033,11 +3054,11 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     // canopy route by deleting its stair or platform primitive.
     if (item.tags?.some((tag) => tag === "vertical-route" || tag === "canopy-platform" || tag === "giant-tree")) return true;
     if (!item.tags?.some((tag) => tag === "natural-detail" || tag === "natural-prop" || tag === "cover" || tag === "forest" || tag === "woodland-cover" || tag === "tree" || tag === "canopy" || tag === "fallen-log")) return true;
+    const anchor = item.tags?.find((tag) => tag.startsWith("tree-anchor:"));
+    if (anchor !== undefined) return treeAnchorOutsidePad.get(anchor) ?? true;
     const px = item.position.x / CELL; const pz = item.position.z / CELL;
     const halfWidth = Math.max(0.4, item.size.x / CELL / 2);
     const halfDepth = Math.max(0.4, item.size.z / CELL / 2);
-    const clearanceX = archetype === "river-valley" ? 12 : 10.5;
-    const clearanceZ = archetype === "river-valley" ? 10 : 9.5;
     // Clear by footprint intersection. Centre-only tests left huge crowns
     // hanging over a station even though their trunks were outside the pad.
     return Math.abs(px - x) - halfWidth > clearanceX
@@ -4658,8 +4679,8 @@ function addWoodlandCoverage(scene: GeneratedScene, width: number, depth: number
       const height = feetToMeters(rng.int(16, 34));
       const baseY = riverSurfaceY(x, z);
       scene.primitives.push(
-        cylinder(`woodland-grove-${grove}-tree-${index}`, 0, x, baseY, z, trunkRadius, height, "wood", ["woodland-cover", "tree", "cover", "blocks-sight", `grove:${grove}`]),
-        primitive(`woodland-grove-${grove}-canopy-${index}`, "cone", 0, x, baseY + height * 0.76, z, feetToMeters(rng.float(7, 13)), height * 0.42, feetToMeters(rng.float(7, 13)), "moss", ["woodland-cover", "canopy", `grove:${grove}`]),
+        cylinder(`woodland-grove-${grove}-tree-${index}`, 0, x, baseY, z, trunkRadius, height, "wood", ["woodland-cover", "tree", "tree-trunk", "cover", "blocks-sight", `grove:${grove}`]),
+        primitive(`woodland-grove-${grove}-canopy-${index}`, "cone", 0, x, baseY + height * 0.76, z, feetToMeters(rng.float(7, 13)), height * 0.42, feetToMeters(rng.float(7, 13)), "moss", ["woodland-cover", "canopy", "tree-canopy", "canopy-layer", `grove:${grove}`]),
       );
       if (index === 0) scene.tactical.push(tacticalFeature(`woodland-grove-cover-${grove}`, "cover", x, z, 0, 3, "A coherent tree grove blocks sight and creates a flanking pocket beside open terrain."));
     }
@@ -4681,8 +4702,8 @@ function addWoodlandCoverage(scene: GeneratedScene, width: number, depth: number
     const crown = rng.float(4.5, 7.5);
     const baseY = riverSurfaceY(x, z);
     scene.primitives.push(
-      cylinder(`woodland-ancient-tree-${index}`, 0, x, baseY, z, rng.float(1.2, 1.8), height, "wood", ["ancient-tree", "woodland-cover", "cover", "blocks-sight", "landmark"]),
-      primitive(`woodland-ancient-crown-${index}`, "sphere", 0, x, baseY + height * 0.72, z, crown * CELL, height * 0.42, crown * CELL, "moss", ["ancient-tree", "canopy", "landmark"]),
+      cylinder(`woodland-ancient-tree-${index}`, 0, x, baseY, z, rng.float(1.2, 1.8), height, "wood", ["ancient-tree", "tree-trunk", "woodland-cover", "cover", "blocks-sight", "landmark"]),
+      primitive(`woodland-ancient-crown-${index}`, "sphere", 0, x, baseY + height * 0.72, z, crown * CELL, height * 0.42, crown * CELL, "moss", ["ancient-tree", "canopy", "tree-canopy", "canopy-layer", "landmark"]),
       box(`woodland-ancient-platform-${index}`, 0, x, baseY + feetToMeters(15), z, 3.2, FLOOR_SLAB_METERS, 3.2, "wood", ["floor", "terrain", "standable", "ancient-tree-platform", "high-ground"]),
     );
     scene.tactical.push(tacticalFeature(`woodland-ancient-highground-${index}`, "highGround", x, z, baseY + feetToMeters(15), 2, "A broad ancient-tree fork forms a standable 15-ft tactical platform."));
