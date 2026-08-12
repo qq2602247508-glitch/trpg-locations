@@ -114,6 +114,19 @@ export function primitiveTouchesFloorContext(primitive: Pick<ScenePrimitive, "le
   return primitive.level === level || floorContextLevels(primitive).includes(level);
 }
 
+/** Decide whether a primitive owns a creature-facing 5-ft tactical surface.
+ * Water, lava, void and purely decorative props must never receive a grid,
+ * even when an upstream generator happens to tag them as terrain-like. */
+export function isTacticalGridSurface(primitive: Pick<ScenePrimitive, "shape" | "material" | "tags">): boolean {
+  const tags = new Set(primitive.tags ?? []);
+  if (primitive.shape === "stairs") return false;
+  if (primitive.material === "water" || tags.has("water") || tags.has("lava") || tags.has("void")) return false;
+  if (tags.has("decorative") || tags.has("natural-detail") || tags.has("natural-prop")) return false;
+  const standable = tags.has("standable") || tags.has("support-surface") || tags.has("stair-landing") || tags.has("buildable");
+  if (!standable) return false;
+  return primitive.shape === "box" || primitive.shape === "cylinder";
+}
+
 const MATERIAL_STYLE: Record<
   MaterialKey,
   {
@@ -987,7 +1000,7 @@ export class SceneRenderer {
         && (!blueprintFocus || primitive.tags?.includes("focus-interior") === true));
     const addSurfaceGrid = (surface: ScenePrimitive): void => {
       if (!belongsToFocus(surface)) return;
-      if (surface.shape !== "box" || !surface.tags?.some((tag) => surfaceTags.has(tag))) return;
+      if (!isTacticalGridSurface(surface) || !surface.tags?.some((tag) => surfaceTags.has(tag))) return;
       if (surface.id === "site-terrain-base") return;
       // Site terrain is still tactical terrain. Only omit cells that cannot
       // carry a creature: void, water, lava and decorative context. Earlier

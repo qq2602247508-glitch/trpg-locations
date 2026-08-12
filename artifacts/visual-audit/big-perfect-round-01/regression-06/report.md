@@ -6,7 +6,7 @@
 
 - 连接器诊断：11 个目标场景全部 `OK`。
 - 目录与接口回归：68/68。
-- 全量 Vitest：278/278，13 个测试文件。
+- 全量 Vitest：279/279，13 个测试文件。
 - 生产构建：通过。
 - `git diff --check`：通过。
 
@@ -19,6 +19,8 @@
 5. 修复 `GenerationClient` 在无 Worker、Worker 超时或 Worker 崩溃时绕过 `forceLocalModel` 的问题；现在所有 fallback 路径都执行严格 SceneProgram 规划，并保留 Ollama 成功/失败/规则回退状态。
 6. 森林树干与树冠统一使用 `tree-anchor:<id>`，组合后校验按 anchor 精确验证冠层支撑；建筑 pad 清理改为整组保留或整组移除，禁止删除树干后留下孤立冠层。
 7. 新增脱离树干的 anchored canopy 几何回归，以及高密度森林子建筑 pad 清理后的 anchor 配对不变量回归。
+8. 新增 `isTacticalGridSurface` 网格分类合同：真实 standable/support/buildable 的 box/cylinder 表面纳入 5-ft 网格；楼梯由 tread 网格单独处理；水、熔岩、虚空、装饰和自然细节明确排除。
+9. 新增网格分类回归，覆盖圆形可站立平台和禁铺面。
 
 ## 浏览器验收
 
@@ -46,6 +48,7 @@ Promptfoo 已串行运行 10 个本地 Ollama 案例，最终 10/10 通过：
 - `token-ast-grep`：用于结构化定位垂直连接器构造；未记录节省，因为没有可靠原始 Token 基线。
 - `token-repomix`：按 8,000 Token 预算尝试有界打包，但当前包装器未透传 `--include`，实际包为 52,713 Token，工具拒绝；未使用该产物，也未记录节省。
 - 本轮再次用 12,000 Token 预算和严格文件白名单尝试交接包，仍被包装器预算保护拒绝；无产物、无节省记录。
+- 本轮对渲染器、生成器和 schema 使用更窄白名单再次尝试 Repomix，仍被包装器拒绝；无产物、无节省记录。
 - `token-promptfoo` 命令未安装；使用项目现有 Promptfoo 进行语义质量评测，未虚报 Token 节省。
 
 ## 当前交付限制

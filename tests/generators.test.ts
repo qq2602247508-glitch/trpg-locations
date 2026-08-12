@@ -4,7 +4,7 @@ import { SeededRandom } from "../src/core/random";
 import { instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
-import { floorBaseY, floorContextLevels, focusedCameraFactors, fogDensityForSpan, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
+import { floorBaseY, floorContextLevels, focusedCameraFactors, fogDensityForSpan, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
 import { planSettlementSite } from "../src/site-program";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
@@ -46,6 +46,16 @@ describe("scene generators", () => {
       expect(levelForY(scene, baseY)).toBe(level);
       expect(baseY).toBeCloseTo((level === 0 ? 0 : scene.floorHeightFeet.slice(0, level).reduce((sum, feet) => sum + feet, 0) * 0.3048));
     }
+  });
+
+  it("classifies only real standable surfaces for the 5-ft tactical grid", () => {
+    expect(isTacticalGridSurface({ shape: "box", material: "wood", tags: ["floor", "standable"] })).toBe(true);
+    expect(isTacticalGridSurface({ shape: "cylinder", material: "stone", tags: ["platform", "standable"] })).toBe(true);
+    expect(isTacticalGridSurface({ shape: "box", material: "water", tags: ["terrain", "standable"] })).toBe(false);
+    expect(isTacticalGridSurface({ shape: "box", material: "warmLight", tags: ["lava", "standable"] })).toBe(false);
+    expect(isTacticalGridSurface({ shape: "box", material: "rock", tags: ["void", "standable"] })).toBe(false);
+    expect(isTacticalGridSurface({ shape: "sphere", material: "moss", tags: ["natural-detail", "standable"] })).toBe(false);
+    expect(isTacticalGridSurface({ shape: "box", material: "wood", tags: ["cover"] })).toBe(false);
   });
 
   it("reduces fog density as generated maps grow", () => {
