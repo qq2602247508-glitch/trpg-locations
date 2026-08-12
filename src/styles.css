@@ -500,6 +500,42 @@ textarea:focus-visible {
 }
 .model-assist-button[aria-pressed="true"] small { color: #d9b77e; }
 
+.planning-source-card {
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  border: 1px solid rgba(142, 185, 163, 0.22);
+  border-left: 3px solid #789889;
+  border-radius: 3px;
+  background: rgba(7, 16, 15, 0.66);
+}
+
+.planning-source-card > span {
+  color: #759083;
+  font-size: 0.58rem;
+  font-weight: 720;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.planning-source-card strong {
+  color: #dce9e0;
+  font-size: 0.71rem;
+}
+
+.planning-source-card small {
+  color: #789087;
+  font-size: 0.61rem;
+  line-height: 1.45;
+}
+
+.planning-source-card[data-state="working"] { border-left-color: #d9ad62; }
+.planning-source-card[data-state="success"] { border-left-color: #65c79a; }
+.planning-source-card[data-state="timeout"],
+.planning-source-card[data-state="schema-rejected"],
+.planning-source-card[data-state="invalid-json"] { border-left-color: #d9a45e; }
+.planning-source-card[data-state="http-error"] { border-left-color: #d77467; }
+
 .button-orbit {
   width: 13px;
   height: 13px;

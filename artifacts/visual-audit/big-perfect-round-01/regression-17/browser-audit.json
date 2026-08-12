@@ -1,0 +1,127 @@
+{
+  "prompt": "陌生的地下研究设施，有实验室、逃生路线和秘密档案室",
+  "audits": [
+    {
+      "mode": "success",
+      "status": "校验通过",
+      "planningState": "success",
+      "planningLabel": "Ollama 规划成功",
+      "planningDetail": "SceneProgram Schema 已通过 · qwen3.6:35b-mlx；几何仍由确定性生成器构筑。",
+      "semantic": {
+        "source": "ollama",
+        "model": "qwen3.6:35b-mlx",
+        "status": "ollama-success"
+      },
+      "sceneProgram": {
+        "version": 1,
+        "source": "ollama",
+        "model": "qwen3.6:35b-mlx",
+        "domain": "building",
+        "ruleset": "generic",
+        "era": "modern",
+        "gameplay": "investigation",
+        "regionCount": 3,
+        "morphology": [
+          "interior-partitions",
+          "vertical-stack"
+        ],
+        "coverage": [
+          "institutional-rooms",
+          "evidence"
+        ]
+      },
+      "valid": true,
+      "warnings": []
+    },
+    {
+      "mode": "schema",
+      "status": "校验通过",
+      "planningState": "schema-rejected",
+      "planningLabel": "Ollama Schema 拒绝 · 规则回退",
+      "planningDetail": "模型响应不符合 SceneProgram v1 · qwen3.6:35b-mlx；未采用模型内容。",
+      "semantic": {
+        "source": "local",
+        "model": "qwen3.6:35b-mlx",
+        "status": "ollama-schema-rejected",
+        "fallback": "rule"
+      },
+      "sceneProgram": {
+        "version": 1,
+        "source": "local",
+        "domain": "building",
+        "ruleset": "generic",
+        "era": "timeless",
+        "gameplay": "mixed",
+        "regionCount": 4,
+        "morphology": [
+          "plain"
+        ],
+        "coverage": [
+          "sparse"
+        ]
+      },
+      "valid": true,
+      "warnings": []
+    },
+    {
+      "mode": "http",
+      "status": "校验通过",
+      "planningState": "http-error",
+      "planningLabel": "Ollama 连接失败 · 规则回退",
+      "planningDetail": "本地模型服务不可用 · qwen3.6:35b-mlx；当前场景来自确定性规则。",
+      "semantic": {
+        "source": "local",
+        "model": "qwen3.6:35b-mlx",
+        "status": "ollama-http-error",
+        "fallback": "rule"
+      },
+      "sceneProgram": {
+        "version": 1,
+        "source": "local",
+        "domain": "building",
+        "ruleset": "generic",
+        "era": "timeless",
+        "gameplay": "mixed",
+        "regionCount": 4,
+        "morphology": [
+          "plain"
+        ],
+        "coverage": [
+          "sparse"
+        ]
+      },
+      "valid": true,
+      "warnings": []
+    },
+    {
+      "mode": "timeout",
+      "status": "校验通过",
+      "planningState": "timeout",
+      "planningLabel": "Ollama 超时 · 规则回退",
+      "planningDetail": "本地模型未在时限内返回 · qwen3.6:35b-mlx；当前场景来自确定性规则。",
+      "semantic": {
+        "source": "local",
+        "model": "qwen3.6:35b-mlx",
+        "status": "ollama-timeout",
+        "fallback": "rule"
+      },
+      "sceneProgram": {
+        "version": 1,
+        "source": "local",
+        "domain": "building",
+        "ruleset": "generic",
+        "era": "timeless",
+        "gameplay": "mixed",
+        "regionCount": 4,
+        "morphology": [
+          "plain"
+        ],
+        "coverage": [
+          "sparse"
+        ]
+      },
+      "valid": true,
+      "warnings": []
+    }
+  ]
+}

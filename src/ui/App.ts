@@ -3,6 +3,7 @@ import type { GeneratedScene, GenerationRequest, SceneKind } from "../schema";
 import type { RenderStats } from "../render/SceneRenderer";
 import { GenerationClient } from "../workers/GenerationClient";
 import { generateAtomTestScene } from "../composition";
+import { planningSourcePresentation } from "./planningStatus";
 
 const KIND_LABELS: Record<SceneKind, string> = {
   adaptive: "自适应题材",
@@ -28,6 +29,9 @@ interface AppElements {
   density: HTMLInputElement;
   densityValue: HTMLElement;
   forceLocalModel: HTMLButtonElement;
+  planningSource: HTMLElement;
+  planningSourceLabel: HTMLElement;
+  planningSourceDetail: HTMLElement;
   generate: HTMLButtonElement;
   status: HTMLElement;
   statusDetail: HTMLElement;
@@ -136,6 +140,11 @@ export async function mountApp(root: HTMLElement): Promise<void> {
             <button data-role="force-local-model" class="model-assist-button" type="button" aria-pressed="false">
               <span>本地模型语义增强</span><small>关闭 · 默认优先使用确定性规则与 BGE</small>
             </button>
+            <div class="planning-source-card" data-role="planning-source" data-state="deterministic" aria-live="polite">
+              <span>规划来源</span>
+              <strong data-role="planning-source-label">确定性规则规划</strong>
+              <small data-role="planning-source-detail">当前场景由本地规则与 BGE 构筑，未静默调用生成式模型。</small>
+            </div>
           </form>
 
           <div class="composer-note">
@@ -309,6 +318,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     elements.forceLocalModel.setAttribute("aria-pressed", String(forceLocalModel));
     const detail = elements.forceLocalModel.querySelector("small");
     if (detail) detail.textContent = forceLocalModel ? "开启 · 强制调用受 Schema 约束的本地 Qwen 规划" : "关闭 · 默认优先使用确定性规则与 BGE";
+    renderPlanningSource(elements, undefined, forceLocalModel);
     setStatus(elements, forceLocalModel ? "本地模型增强已开启" : "本地优先自动策略", "ok");
   });
   elements.floor.addEventListener("change", () => {
@@ -413,6 +423,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     elements.seed.value = request.seed;
     elements.generate.disabled = true;
     elements.generate.classList.add("is-generating");
+    renderPlanningSource(elements, undefined, forceLocalModel, true);
     setStatus(elements, "生成布局中", "working");
     elements.statusDetail.textContent = forceLocalModel ? "正在请求本地语义规划，再由确定性生成器构筑几何…" : "正在布置房间、路线与战术节点…";
 
@@ -442,6 +453,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       renderer.setRouteVisibility(routeDebug);
       renderer.setTacticalVisibility(tacticalDebug);
       renderSceneDetails(elements, scene, lastStats, elements.prompt.value);
+      renderPlanningSource(elements, scene, forceLocalModel);
       if (scene.siteProgram && elements.floor.value === "cut") elements.floor.value = "roof";
       const floorView = elements.floor.value;
       renderer.setFloorView(floorView === "cut" || floorView === "roof" ? floorView : Number(floorView));
@@ -456,6 +468,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       setStatus(elements, "生成失败", "error");
       elements.statusDetail.textContent = description;
       elements.stageDescription.textContent = "生成器未返回有效场景。请调整提示或尝试新的 Seed。";
+      renderPlanningSource(elements, undefined, forceLocalModel);
     } finally {
       elements.generate.disabled = false;
       elements.generate.classList.remove("is-generating");
@@ -476,6 +489,9 @@ function getElements(root: HTMLElement): AppElements {
     density: query(root, '[data-role="density"]'),
     densityValue: query(root, '[data-role="density-value"]'),
     forceLocalModel: query(root, '[data-role="force-local-model"]'),
+    planningSource: query(root, '[data-role="planning-source"]'),
+    planningSourceLabel: query(root, '[data-role="planning-source-label"]'),
+    planningSourceDetail: query(root, '[data-role="planning-source-detail"]'),
     generate: query(root, '[data-role="generate"]'),
     status: query(root, '[data-role="status"]'),
     statusDetail: query(root, '[data-role="status-detail"]'),
@@ -499,6 +515,18 @@ function getElements(root: HTMLElement): AppElements {
     roomList: query(root, '[data-role="room-list"]'),
     viewport: query(root, '[data-role="viewport"]'),
   };
+}
+
+function renderPlanningSource(
+  elements: Pick<AppElements, "planningSource" | "planningSourceLabel" | "planningSourceDetail">,
+  scene?: GeneratedScene,
+  forced = false,
+  working = false,
+): void {
+  const presentation = planningSourcePresentation(scene, forced, working);
+  elements.planningSource.dataset.state = presentation.state;
+  elements.planningSourceLabel.textContent = presentation.label;
+  elements.planningSourceDetail.textContent = presentation.detail;
 }
 
 function query<T extends HTMLElement>(root: HTMLElement, selector: string): T {
