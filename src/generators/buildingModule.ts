@@ -1931,26 +1931,41 @@ function addFocusInteriorBlueprint(scene: GeneratedScene, lot: BuildingLot, gene
     }
     y += floorHeight;
   }
-  const cellarY = Math.min(baseY - feetToMeters(12), FLOOR_SLAB_METERS - feetToMeters(9));
-  const cellarLocalX = primary.offset.x - primary.size.x * 0.08;
-  const cellarLocalZ = primary.offset.z + primary.size.z * 0.08;
-  const cellarWidth = primary.size.x * 0.62;
-  const cellarDepth = primary.size.z * 0.55;
-  const cellar = point(cellarLocalX, cellarLocalZ);
-  const cellarStair = point(cellarLocalX - primary.size.x * 0.22, cellarLocalZ);
-  const cellarWallHeight = feetToMeters(8);
-  const addCellarWall = (id: string, localX: number, localZ: number, widthCells: number, depthCells: number, extra: string[] = []) => {
-    const position = point(localX, localZ);
-    scene.primitives.push(box(`${lot.id}-focus-cellar-${id}`, 3, position.x, cellarY, position.z, widthCells, cellarWallHeight, depthCells, "darkStone", [...tags, "wall", "underground", ...extra], lot.rotation));
-  };
-  scene.primitives.push(
-    box(`${lot.id}-focus-cellar-floor`, 3, cellar.x, cellarY, cellar.z, cellarWidth, FLOOR_SLAB_METERS, cellarDepth, "stone", [...tags, "floor", "underground", "standable"], lot.rotation),
-    stairs(`${lot.id}-focus-cellar-stair`, 3, cellarStair.x, cellarY, cellarStair.z, 1.05, baseY - cellarY, Math.max(3, primary.size.z * 0.45), "stone", [...tags, "building-stair", "vertical-opening", "underground", "standable"], lot.rotation),
-  );
-  addCellarWall("north", cellarLocalX, cellarLocalZ - cellarDepth / 2, cellarWidth, 0.18);
-  addCellarWall("west", cellarLocalX - cellarWidth / 2, cellarLocalZ, 0.18, cellarDepth);
-  addCellarWall("east", cellarLocalX + cellarWidth / 2, cellarLocalZ, 0.18, cellarDepth, ["focus-cutaway"]);
-  addCellarWall("south", cellarLocalX, cellarLocalZ + cellarDepth / 2, cellarWidth, 0.18, ["focus-cutaway"]);
+  const hasDedicatedBasementModule = interiorProgram.rooms.some((room) => room.level === 3 && room.id !== "basement");
+  if (!hasDedicatedBasementModule) {
+    const cellarY = Math.min(baseY - feetToMeters(12), FLOOR_SLAB_METERS - feetToMeters(9));
+    const cellarLocalX = primary.offset.x - primary.size.x * 0.08;
+    const cellarLocalZ = primary.offset.z + primary.size.z * 0.08;
+    const cellarWidth = primary.size.x * 0.62;
+    const cellarDepth = primary.size.z * 0.55;
+    const cellar = point(cellarLocalX, cellarLocalZ);
+    const cellarFlightRun = Math.max(3, primary.size.z * 0.45);
+    const cellarFlightOffsetX = Math.min(0.62, primary.size.x * 0.1);
+    const cellarLowerStair = point(cellarLocalX + cellarFlightOffsetX, cellarLocalZ);
+    const cellarUpperStair = point(cellarLocalX - cellarFlightOffsetX, cellarLocalZ);
+    const cellarLanding = point(cellarLocalX, cellarLocalZ + cellarFlightRun / 2);
+    const cellarLandingSupportWest = point(cellarLocalX - cellarFlightOffsetX, cellarLocalZ + cellarFlightRun / 2);
+    const cellarLandingSupportEast = point(cellarLocalX + cellarFlightOffsetX, cellarLocalZ + cellarFlightRun / 2);
+    const cellarRise = baseY - cellarY;
+    const cellarFlightRise = cellarRise / 2;
+    const cellarWallHeight = feetToMeters(8);
+    const addCellarWall = (id: string, localX: number, localZ: number, widthCells: number, depthCells: number, extra: string[] = []) => {
+      const position = point(localX, localZ);
+      scene.primitives.push(box(`${lot.id}-focus-cellar-${id}`, 3, position.x, cellarY, position.z, widthCells, cellarWallHeight, depthCells, "darkStone", [...tags, "wall", "underground", ...extra], lot.rotation));
+    };
+    scene.primitives.push(
+      box(`${lot.id}-focus-cellar-floor`, 3, cellar.x, cellarY, cellar.z, cellarWidth, FLOOR_SLAB_METERS, cellarDepth, "stone", [...tags, "floor", "underground", "standable"], lot.rotation),
+      stairs(`${lot.id}-focus-cellar-stair-lower`, 3, cellarLowerStair.x, cellarY, cellarLowerStair.z, 1.05, cellarFlightRise, cellarFlightRun, "stone", [...tags, "building-stair", "stair-flight", "vertical-opening", "underground", "standable"], lot.rotation),
+      box(`${lot.id}-focus-cellar-stair-support-west`, 3, cellarLandingSupportWest.x, cellarY, cellarLandingSupportWest.z, 0.18, cellarFlightRise, 0.18, "darkStone", [...tags, "building-stair", "landing-support", "structural-support", "underground"], lot.rotation),
+      box(`${lot.id}-focus-cellar-stair-support-east`, 3, cellarLandingSupportEast.x, cellarY, cellarLandingSupportEast.z, 0.18, cellarFlightRise, 0.18, "darkStone", [...tags, "building-stair", "landing-support", "structural-support", "underground"], lot.rotation),
+      box(`${lot.id}-focus-cellar-stair-landing`, 3, cellarLanding.x, cellarY + cellarFlightRise, cellarLanding.z, Math.max(1.8, cellarFlightOffsetX * 2 + 1.05), FLOOR_SLAB_METERS, 1.05, "stone", [...tags, "building-stair", "stair-landing", "support-surface", "vertical-opening", "underground", "standable"], lot.rotation),
+      stairs(`${lot.id}-focus-cellar-stair-upper`, 3, cellarUpperStair.x, cellarY + cellarFlightRise, cellarUpperStair.z, 1.05, cellarFlightRise, cellarFlightRun, "stone", [...tags, "building-stair", "stair-flight", "vertical-opening", "underground", "standable"], lot.rotation + Math.PI),
+    );
+    addCellarWall("north", cellarLocalX, cellarLocalZ - cellarDepth / 2, cellarWidth, 0.18);
+    addCellarWall("west", cellarLocalX - cellarWidth / 2, cellarLocalZ, 0.18, cellarDepth);
+    addCellarWall("east", cellarLocalX + cellarWidth / 2, cellarLocalZ, 0.18, cellarDepth, ["focus-cutaway"]);
+    addCellarWall("south", cellarLocalX, cellarLocalZ + cellarDepth / 2, cellarWidth, 0.18, ["focus-cutaway"]);
+  }
 }
 
 /** Independent exterior grammar consumed by settlement planners. */

@@ -4,7 +4,7 @@ import { SeededRandom } from "../src/core/random";
 import { instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
-import { floorBaseY, floorContextLevels, focusedCameraFactors, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
+import { floorBaseY, floorContextLevels, focusedCameraFactors, focusClusterForFloor, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
 import { planSettlementSite } from "../src/site-program";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
@@ -133,6 +133,45 @@ describe("scene generators", () => {
     expect(primitiveTouchesFloorContext(linked, 3)).toBe(true);
     expect(primitiveTouchesFloorContext(linked, 2)).toBe(false);
     expect(primitiveTouchesFloorContext(ordinary, 3)).toBe(false);
+  });
+
+  it("does not let a neighbouring basement focus cluster hide the selected building", () => {
+    const primitives = [
+      { level: 3, tags: ["building-instance:archive", "focus-cluster:records:archive"] },
+      { level: 3, tags: ["building-instance:archive", "focus-cluster:records:archive"] },
+      { level: 3, tags: ["building-instance:tower", "focus-interior", "floor", "underground"] },
+    ];
+    expect(focusClusterForFloor(primitives, 3)).toBe("focus-cluster:records:archive");
+    expect(focusClusterForFloor(primitives, 3, "tower")).toBeUndefined();
+    expect(focusClusterForFloor([
+      ...primitives,
+      { level: 3, tags: ["building-instance:tower", "focus-cluster:vault:tower"] },
+    ], 3, "tower")).toBe("focus-cluster:vault:tower");
+  });
+
+  it("splits elevated settlement focus-cellar access into supported return flights", () => {
+    const scene = generateScene({
+      prompt: "奇幻运河城，神殿、巡逻塔、旅店、仓库、地下档案库、屋顶连桥和水上市集",
+      seed: "browser-focus-canal-city",
+      size: "large",
+      density: 0.82,
+    }, "settlement");
+    const tower = scene.buildingInstances?.find((building) => building.id === "settlement-building-4");
+    expect(tower?.archetype).toBe("tower");
+    expect(tower?.detailLevel).not.toBe("full-interior");
+    const lower = scene.primitives.find((primitive) => primitive.id === `${tower?.id}-focus-cellar-stair-lower`);
+    const landing = scene.primitives.find((primitive) => primitive.id === `${tower?.id}-focus-cellar-stair-landing`);
+    const supports = scene.primitives.filter((primitive) => primitive.id.startsWith(`${tower?.id}-focus-cellar-stair-support-`));
+    const upper = scene.primitives.find((primitive) => primitive.id === `${tower?.id}-focus-cellar-stair-upper`);
+    expect(lower?.shape).toBe("stairs");
+    expect(upper?.shape).toBe("stairs");
+    expect(landing?.tags).toEqual(expect.arrayContaining(["stair-landing", "support-surface", "standable"]));
+    expect(supports).toHaveLength(2);
+    expect(supports.every((support) => support.tags?.includes("structural-support")
+      && support.size.y === lower?.size.y)).toBe(true);
+    expect(lower?.size.y).toBeCloseTo(upper?.size.y ?? -1);
+    expect((lower?.size.y ?? Number.POSITIVE_INFINITY) * 2).toBeCloseTo((tower?.baseYMeters ?? 0) - (lower?.position.y ?? 0));
+    expect((upper?.rotationY ?? 0) - (lower?.rotationY ?? 0)).toBeCloseTo(Math.PI);
   });
 
   it("registers each fixed topology", () => {
@@ -1044,6 +1083,11 @@ describe("scene generators", () => {
     expect(first.routes.some((route) => route.id.includes("archive-route"))).toBe(true);
     expect(first.routes.some((route) => route.id.includes("greenhouse-route"))).toBe(true);
     expect(first.tactical.some((feature) => feature.id.includes("greenhouse-cover"))).toBe(true);
+    const dedicatedBasementBuildings = new Set(first.primitives
+      .filter((primitive) => primitive.level === 3 && primitive.tags?.includes("functional-module"))
+      .flatMap((primitive) => primitive.tags?.filter((tag) => tag.startsWith("building-instance:")) ?? []));
+    expect(first.primitives.some((primitive) => primitive.id.includes("focus-cellar-stair")
+      && primitive.tags?.some((tag) => dedicatedBasementBuildings.has(tag)))).toBe(false);
     expect(first.diagnostics.valid).toBe(true);
     expect(first).toEqual(replay);
     expect(first.primitives.filter((primitive) => primitive.tags?.includes("functional-module")).map((primitive) => primitive.position))

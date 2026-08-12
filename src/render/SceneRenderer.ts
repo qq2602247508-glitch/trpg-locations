@@ -150,6 +150,27 @@ function focusClusterTag(primitive: ScenePrimitive): string | undefined {
 }
 
 /**
+ * Select the dominant inspection cluster for one logical floor. When a
+ * building is focused, clusters owned by neighbouring buildings must not hide
+ * the selected building's ordinary cellar blueprint.
+ */
+export function focusClusterForFloor(
+  primitives: readonly Pick<ScenePrimitive, "level" | "tags">[],
+  level: number,
+  focusedBuildingId?: string,
+): string | undefined {
+  const focusedTag = focusedBuildingId ? `building-instance:${focusedBuildingId}` : undefined;
+  const counts = new Map<string, number>();
+  for (const primitive of primitives) {
+    if (primitive.level !== level) continue;
+    if (focusedTag && primitive.tags?.includes(focusedTag) !== true) continue;
+    const tag = primitive.tags?.find((candidate) => candidate.startsWith("focus-cluster:"));
+    if (tag) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+}
+
+/**
  * Explicitly authored cross-storey context. A basement inspection may need to
  * retain the one catwalk, bridge or stair landing that explains how it reaches
  * the surface, without making the renderer show the whole surface storey.
@@ -1482,13 +1503,7 @@ export class SceneRenderer {
 
   private activeFloorFocusClusterTag(level: number): string | undefined {
     if (!this.currentScene) return undefined;
-    const counts = new Map<string, number>();
-    for (const primitive of this.currentScene.primitives) {
-      if (primitive.level !== level) continue;
-      const tag = focusClusterTag(primitive);
-      if (tag) counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
-    return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0];
+    return focusClusterForFloor(this.currentScene.primitives, level, this.focusedBuildingId);
   }
 
   private floorInspectionPrimitives(level: number): ScenePrimitive[] {

@@ -1,0 +1,968 @@
+{
+  "generatedAt": "2026-08-12T13:34:26.938Z",
+  "results": [
+    {
+      "id": "canal-full-guild",
+      "steps": [
+        {
+          "label": "settlement-overview",
+          "status": "校验通过",
+          "statusDetail": "7694 个可批处理图元 · 134 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-5",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-5",
+            "archetype": "guild",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "guild-hall",
+              "workshop",
+              "archive",
+              "vault",
+              "archive",
+              "archive",
+              "reserve-vault",
+              "shelf",
+              "restricted"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 79,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "210 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "221",
+              "detail": "91,518 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "17 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "focused-ground",
+          "status": "建筑内部聚焦",
+          "statusDetail": "7694 个可批处理图元 · 134 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-5",
+          "floor": "0",
+          "floorLabel": "仅查看 地面/1F",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-5",
+            "archetype": "guild",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "guild-hall",
+              "workshop",
+              "archive",
+              "vault",
+              "archive",
+              "archive",
+              "reserve-vault",
+              "shelf",
+              "restricted"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 79,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "29 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "12",
+              "detail": "348 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "9 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "focused-upper",
+          "status": "建筑内部聚焦",
+          "statusDetail": "7694 个可批处理图元 · 134 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-5",
+          "floor": "1",
+          "floorLabel": "仅查看 主要上层",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-5",
+            "archetype": "guild",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "guild-hall",
+              "workshop",
+              "archive",
+              "vault",
+              "archive",
+              "archive",
+              "reserve-vault",
+              "shelf",
+              "restricted"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 79,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "29 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "9",
+              "detail": "312 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "11 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "focused-basement",
+          "status": "建筑内部聚焦",
+          "statusDetail": "7694 个可批处理图元 · 134 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-5",
+          "floor": "3",
+          "floorLabel": "仅查看 B1",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-5",
+            "archetype": "guild",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "guild-hall",
+              "workshop",
+              "archive",
+              "vault",
+              "archive",
+              "archive",
+              "reserve-vault",
+              "shelf",
+              "restricted"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 79,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "29 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "8",
+              "detail": "456 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "13 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "returned-settlement",
+          "status": "返回聚落总览",
+          "statusDetail": "7694 个可批处理图元 · 134 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-5",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-5",
+            "archetype": "guild",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "guild-hall",
+              "workshop",
+              "archive",
+              "vault",
+              "archive",
+              "archive",
+              "reserve-vault",
+              "shelf",
+              "restricted"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 79,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "210 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "221",
+              "detail": "91,518 triangles"
+            },
+            "fps": {
+              "value": "118 FPS",
+              "detail": "17 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "canal-demand-tower",
+      "steps": [
+        {
+          "label": "settlement-overview",
+          "status": "校验通过",
+          "statusDetail": "7694 个可批处理图元 · 126 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-5",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-4",
+            "archetype": "tower",
+            "detailLevel": "facade",
+            "floors": 3,
+            "requiredFeatures": [
+              "guard-post",
+              "storage",
+              "high-ground",
+              "underground"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 61,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 41
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "210 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "221",
+              "detail": "91,518 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "17 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "focused-ground",
+          "status": "建筑内部聚焦",
+          "statusDetail": "7694 个可批处理图元 · 126 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-4",
+          "floor": "0",
+          "floorLabel": "仅查看 地面/1F",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-4",
+            "archetype": "tower",
+            "detailLevel": "facade",
+            "floors": 3,
+            "requiredFeatures": [
+              "guard-post",
+              "storage",
+              "high-ground",
+              "underground"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 61,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 41
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "13 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "8",
+              "detail": "276 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "9 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "focused-upper",
+          "status": "建筑内部聚焦",
+          "statusDetail": "7694 个可批处理图元 · 126 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-4",
+          "floor": "1",
+          "floorLabel": "仅查看 主要上层",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-4",
+            "archetype": "tower",
+            "detailLevel": "facade",
+            "floors": 3,
+            "requiredFeatures": [
+              "guard-post",
+              "storage",
+              "high-ground",
+              "underground"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 61,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 41
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "13 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "6",
+              "detail": "216 triangles"
+            },
+            "fps": {
+              "value": "122 FPS",
+              "detail": "11 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "focused-basement",
+          "status": "建筑内部聚焦",
+          "statusDetail": "7694 个可批处理图元 · 126 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-4",
+          "floor": "3",
+          "floorLabel": "仅查看 B1",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-4",
+            "archetype": "tower",
+            "detailLevel": "facade",
+            "floors": 3,
+            "requiredFeatures": [
+              "guard-post",
+              "storage",
+              "high-ground",
+              "underground"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 61,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 41
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "13 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "6",
+              "detail": "360 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "13 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "returned-settlement",
+          "status": "返回聚落总览",
+          "statusDetail": "7694 个可批处理图元 · 126 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-4",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7694,
+            "rooms": 56,
+            "routes": 32,
+            "buildings": 23
+          },
+          "building": {
+            "id": "settlement-building-4",
+            "archetype": "tower",
+            "detailLevel": "facade",
+            "floors": 3,
+            "requiredFeatures": [
+              "guard-post",
+              "storage",
+              "high-ground",
+              "underground"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 61,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 41
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,694",
+              "detail": "210 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "221",
+              "detail": "91,518 triangles"
+            },
+            "fps": {
+              "value": "122 FPS",
+              "detail": "17 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "mangrove-full-tavern",
+      "steps": [
+        {
+          "label": "settlement-overview",
+          "status": "校验通过",
+          "statusDetail": "7322 个可批处理图元 · 103 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-12",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7322,
+            "rooms": 35,
+            "routes": 16,
+            "buildings": 18
+          },
+          "building": {
+            "id": "settlement-building-14",
+            "archetype": "tavern",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "taproom",
+              "kitchen",
+              "guest-room",
+              "cellar"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 66,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,322",
+              "detail": "137 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "146",
+              "detail": "98,514 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "16 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "focused-ground",
+          "status": "建筑内部聚焦",
+          "statusDetail": "7322 个可批处理图元 · 103 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-14",
+          "floor": "0",
+          "floorLabel": "仅查看 地面/1F",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7322,
+            "rooms": 35,
+            "routes": 16,
+            "buildings": 18
+          },
+          "building": {
+            "id": "settlement-building-14",
+            "archetype": "tavern",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "taproom",
+              "kitchen",
+              "guest-room",
+              "cellar"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 66,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,322",
+              "detail": "20 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "10",
+              "detail": "576 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "10 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "focused-upper",
+          "status": "建筑内部聚焦",
+          "statusDetail": "7322 个可批处理图元 · 103 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-14",
+          "floor": "1",
+          "floorLabel": "仅查看 主要上层",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7322,
+            "rooms": 35,
+            "routes": 16,
+            "buildings": 18
+          },
+          "building": {
+            "id": "settlement-building-14",
+            "archetype": "tavern",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "taproom",
+              "kitchen",
+              "guest-room",
+              "cellar"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 66,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,322",
+              "detail": "20 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "8",
+              "detail": "312 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "12 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "focused-basement",
+          "status": "建筑内部聚焦",
+          "statusDetail": "7322 个可批处理图元 · 103 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-14",
+          "floor": "3",
+          "floorLabel": "仅查看 B1",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7322,
+            "rooms": 35,
+            "routes": 16,
+            "buildings": 18
+          },
+          "building": {
+            "id": "settlement-building-14",
+            "archetype": "tavern",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "taproom",
+              "kitchen",
+              "guest-room",
+              "cellar"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 66,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,322",
+              "detail": "20 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "10",
+              "detail": "420 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "14 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "returned-settlement",
+          "status": "返回聚落总览",
+          "statusDetail": "7322 个可批处理图元 · 103 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · LOCAL",
+          "selectedBuilding": "settlement-building-14",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "top": "false",
+          "low": "false",
+          "sceneSummary": {
+            "valid": true,
+            "primitives": 7322,
+            "rooms": 35,
+            "routes": 16,
+            "buildings": 18
+          },
+          "building": {
+            "id": "settlement-building-14",
+            "archetype": "tavern",
+            "detailLevel": "full-interior",
+            "floors": 3,
+            "requiredFeatures": [
+              "taproom",
+              "kitchen",
+              "guest-room",
+              "cellar"
+            ],
+            "interiorLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "taggedPrimitiveCount": 66,
+            "taggedPrimitiveLevels": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "focusPrimitiveCount": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "7,322",
+              "detail": "137 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "146",
+              "detail": "98,514 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "16 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    }
+  ],
+  "totalNetworkFailures": 0,
+  "totalConsoleErrors": 0
+}
