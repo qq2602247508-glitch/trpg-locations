@@ -50,7 +50,7 @@ export interface ProgramConnection {
 }
 
 export type BuildingState = "ruined" | "abandoned" | "collapsed" | "fire" | "flooded" | "overgrown" | "infernal" | "war-damaged" | "sealed" | "temporary-conversion";
-export type ExteriorStyle = "sacred-close" | "defensive-approach" | "institutional-street" | "coastal-cliff" | "service-yard" | "estate-drive" | "station-platform" | "academy-court";
+export type ExteriorStyle = "sacred-close" | "defensive-approach" | "institutional-street" | "coastal-cliff" | "service-yard" | "estate-drive" | "station-platform" | "academy-court" | "opera-service-court";
 export type FacadeStyle = "sacred" | "fortified" | "civic" | "industrial" | "domestic" | "academic";
 
 export interface BuildingProgram {
@@ -171,6 +171,28 @@ function addExterior(scene: GeneratedScene, program: BuildingProgram): void {
   const style = program.exteriorStyle;
   if (!style) return;
   const addApproach = (id: string, x: number, z: number, w: number, d: number, material: MaterialKey, tags: string[] = []) => scene.primitives.push(box(id, 0, x, 0, z, w, FLOOR_SLAB_METERS, d, material, ["floor", "exterior", "approach", ...tags]));
+  const roomFor = (predicate: (room: Room) => boolean): Room | undefined => scene.rooms.find((room) => room.level === 0 && predicate(room));
+  const roomCells = (room: Room) => ({
+    x: room.center.x / GRID_METERS,
+    z: room.center.z / GRID_METERS,
+    width: room.sizeCells.x,
+    depth: room.sizeCells.z,
+  });
+  const addFrontApproach = (id: string, room: Room, material: MaterialKey, tags: string[] = []) => {
+    const footprint = roomCells(room);
+    const depth = Math.min(4, Math.max(2.5, footprint.z));
+    addApproach(id, footprint.x, Math.max(depth / 2, footprint.z - footprint.depth / 2 - depth / 2), Math.min(footprint.width, program.bounds.x - 2), depth, material, tags);
+  };
+  const addRearApproach = (id: string, room: Room, material: MaterialKey, tags: string[] = []) => {
+    const footprint = roomCells(room);
+    const depth = Math.min(8, Math.max(4, footprint.depth));
+    const onWest = footprint.x < program.bounds.x / 2;
+    const width = Math.min(6, Math.max(4, footprint.width));
+    const x = onWest
+      ? Math.max(width / 2, footprint.x - footprint.width / 2 - width / 2 + width * 0.25)
+      : Math.min(program.bounds.x - width / 2, footprint.x + footprint.width / 2 + width / 2 - width * 0.25);
+    addApproach(id, x, footprint.z, width, depth, material, tags);
+  };
   if (style === "sacred-close") {
     addApproach("sacred-forecourt", cx, 2.2, 14, 5, "stone", ["forecourt"]);
     for (let index = 0; index < 8; index += 1) scene.primitives.push(box(`grave-marker-${index}`, 0, 3 + (index % 4) * 2.1, FLOOR_SLAB_METERS, 5 + Math.floor(index / 4) * 2.4, 0.55, feetToMeters(3.2), 1.1, "stone", ["graveyard", "cover"]));
@@ -178,8 +200,15 @@ function addExterior(scene: GeneratedScene, program: BuildingProgram): void {
     addApproach("fortress-kill-approach", cx, 1.8, 18, 8, "earth", ["kill-zone"]);
     scene.primitives.push(box("fortress-ditch", 0, cx, -0.45, 5.5, 22, 0.35, 3.5, "hazard", ["ditch", "hazard", "exterior"]));
   } else if (style === "institutional-street") {
-    addApproach("civic-front-street", cx, 2, 20, 5, "stone", ["street"]);
-    addApproach("civic-rear-alley", program.bounds.x - 4, program.bounds.z - 4, 7, 15, "stone", ["rear-alley", "service-route"]);
+    const entrance = roomFor((room) => room.id === "front" || room.id === "opera-foyer" || room.role === "public");
+    const service = roomFor((room) => room.role === "service");
+    if (entrance) addFrontApproach("civic-front-street", entrance, "stone", ["street"]);
+    if (service) addRearApproach("civic-rear-alley", service, "stone", ["rear-alley", "service-route"]);
+  } else if (style === "opera-service-court") {
+    const foyer = roomFor((room) => room.id === "opera-foyer");
+    const backstage = roomFor((room) => room.id === "opera-backstage");
+    if (foyer) addFrontApproach("opera-foyer-approach", foyer, "stone", ["front-approach", "service-route"]);
+    if (backstage) addRearApproach("opera-backstage-service-court", backstage, "stone", ["loading-approach", "service-route"]);
   } else if (style === "coastal-cliff") {
     addApproach("cliff-maintenance-road", cx, program.bounds.z - 2, 22, 4, "rock", ["cliff-road", "high-ground"]);
     scene.primitives.push(box("cliff-drop", 0, cx, -feetToMeters(8), program.bounds.z + 1, 26, feetToMeters(8), 5, "rock", ["cliff", "vertical-face", "hazard"]));

@@ -1595,6 +1595,32 @@ describe("scene generators", () => {
     expect(scene.diagnostics.warnings).toEqual([]);
   });
 
+  it("anchors opera exterior approaches to compiled foyer and backstage footprints", () => {
+    const scene = generateScene({
+      ...request("browser-r12-opera", "large", 0.76),
+      prompt: "被洪水淹没的歌剧院，有门厅、马蹄形观众席、下沉乐池、主舞台、后台、化妆间、半淹道具库和屋顶逃生路线",
+    }, "adaptive");
+    const bounds = { x: scene.boundsCells.x * GRID_METERS, z: scene.boundsCells.z * GRID_METERS };
+    const approaches = scene.primitives.filter((primitive) => primitive.tags?.includes("approach"));
+    const floors = scene.primitives.filter((primitive) => primitive.tags?.includes("floor"));
+    const shellFloors = floors.filter((primitive) => primitive.tags?.includes("building-shell") || primitive.tags?.includes("program-room"));
+    const overlaps = (first: typeof approaches[number], second: typeof floors[number]) => (
+      Math.abs(first.position.x - second.position.x) <= (first.size.x + second.size.x) / 2
+      && Math.abs(first.position.z - second.position.z) <= (first.size.z + second.size.z) / 2
+    );
+    expect(approaches).toHaveLength(2);
+    expect(approaches.map((primitive) => primitive.id)).not.toContain("civic-rear-alley");
+    for (const approach of approaches) {
+      expect(approach.position.x - approach.size.x / 2).toBeGreaterThanOrEqual(0);
+      expect(approach.position.x + approach.size.x / 2).toBeLessThanOrEqual(bounds.x);
+      expect(approach.position.z - approach.size.z / 2).toBeGreaterThanOrEqual(0);
+      expect(approach.position.z + approach.size.z / 2).toBeLessThanOrEqual(bounds.z);
+      expect(shellFloors.some((floor) => overlaps(approach, floor))).toBe(true);
+    }
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+    expect(scene.diagnostics.warnings).toEqual([]);
+  });
+
   it("embeds a diplomatic compound, rope bridge and supported cliff lift into a dry canyon", () => {
     const scene = generateScene({
       ...request("canyon-embassy-regression-12", "large", 0.72),

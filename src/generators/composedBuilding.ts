@@ -111,7 +111,7 @@ function programFor(context: GeneratorContext): BuildingProgram {
       floorMaterial: "wood",
       wallMaterial: "plaster",
       states,
-      exteriorStyle: "institutional-street",
+      exteriorStyle: "opera-service-court",
       facadeStyle: "civic",
     };
   }

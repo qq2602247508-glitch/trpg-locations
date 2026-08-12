@@ -1,0 +1,16 @@
+{
+  "overview": {
+    "status": "校验通过",
+    "detail": "138 个可批处理图元 · 1931 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
+    "metrics": "占地\n260 × 240 ft\n79.2 × 73.2m\n楼层\n4 层\n层高 21 / 14 / 10 / 11 ft\n战术格\n2,496 格\n每格 5 ft\n图元\n138\n18 个渲染批次\nDraw calls\n20\n2,030 triangles\n帧率\n125 FPS\n7 几何体 · 1 纹理",
+    "diagnostics": "拓扑与可达性已通过验证 · 8 条路线已建立。\n\n规划\nbuilding · GENERIC · timeless · mixed · interior-partitions + vertical-stack\n组合\ngrammar.generic-v1 · generic · 语义覆盖 0% · 能力 structure.medical-space + structure.roof-system + state.collapse + state.flood",
+    "bodyHasCivicRearAlley": false
+  },
+  "finalState": {
+    "status": "校验通过",
+    "detail": "138 个可批处理图元 · 1931 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
+    "transparency": "true",
+    "floor": "cut",
+    "bodyTail": "wned Orpheum\n\nA purpose-built opera house preserves its foyer, horseshoe auditorium, orchestra pit, proscenium stage, backstage circulation, dressing rooms, flooded prop cellar, balcony and roof escape route. Compiled from 4 semantic regions for mixed play.\n\nSEED browser-r12-opera\n5 FT\n每格 · 1.524m\n↻\n拖拽旋转 · 滚轮缩放\n138 个可批处理图元 · 1931 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE\n5 英尺网格已锁定\n\n02 · 视图\n\n楼层与调试\n观察层\n剖切 · 隐藏屋顶\n完整 · 显示屋顶\n仅查看 1F观众厅\n仅查看 包厢与楼座\n仅查看 屋顶逃生层\n仅查看 B1道具库\n进入建筑\n当前场景没有可选建筑\n聚焦内部\n按需显示该建筑的房间与交通\n返回聚落\n恢复完整屋顶与城市上下文\n路线调试\n主路线、备用路径与水流\n战术标记\n掩体、高点、陷阱与入口\n↓\n导出场景 JSON\n保存 Seed、图元、房间与路线\n◈\n建筑半透明\n查看墙体、楼板与内部战斗关系\n◲\n低角度体量\n检查高差、立面与悬空\n▦\n正交规划顶视图\n检查道路、节点、街区、地块与朝向\n⌗\n规划分层 · 全部\n循环查看道路、街区地块与建筑轮廓\n\n03 · 读数\n\n尺寸与性能\nLIVE\n占地\n260 × 240 ft\n79.2 × 73.2m\n楼层\n4 层\n层高 21 / 14 / 10 / 11 ft\n战术格\n2,496 格\n每格 5 ft\n图元\n138\n22 个渲染批次\nDraw calls\n24\n2,030 triangles\n帧率\n14 FPS\n7 几何体 · 1 纹理\n\n04 · 校验\n\n场景诊断\n66 / 100\n\n拓扑与可达性已通过验证 · 8 条路线已建立。\n\n规划\nbuilding · GENERIC · timeless · mixed · interior-partitions + vertical-stack\n组合\ngrammar.generic-v1 · generic · 语义覆盖 0% · 能力 structure.medical-space + structure.roof-system + state.collapse + state.flood\n\n房间索引\n\n空间构成\n9 间\n01\nGrand entrance foyer\n1F观众厅 · 18.9 × 8.3 格\npublic\n02\nHorseshoe auditorium and stalls\n1F观众厅 · 26 × 16.5 格\npublic\n03\nSunken orchestra pit\n1F观众厅 · 14.2 × 5.3 格\ncombat\n04\nMain proscenium stage\n1F观众厅 · 21.2 × 9.4 格\ncombat\n05\nBackstage scenery and fly-floor access\n1F观众厅 · 9.4 × 11.8 格\nservice\n06\nDressing rooms and performers' corridor\n1F观众厅 · 9.4 × 11.8 格\nprivate"
+  }
+}
