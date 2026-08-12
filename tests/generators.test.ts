@@ -4,7 +4,7 @@ import { SeededRandom } from "../src/core/random";
 import { instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
-import { floorBaseY, floorContextLevels, focusedCameraFactors, fogDensityForSpan, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
+import { floorBaseY, floorContextLevels, focusedCameraFactors, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
 import { planSettlementSite } from "../src/site-program";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
@@ -86,6 +86,43 @@ describe("scene generators", () => {
     expect(routeMatchesTime("day", "night")).toBe(false);
     expect(routeMatchesTime("night", "night")).toBe(true);
     expect(routeMatchesTime("all", "night")).toBe(true);
+  });
+
+  it("ghosts settlement envelopes and owned floors without fading interior fixtures", () => {
+    expect(isArchitecturalGhostPrimitive({ tags: ["settlement-building", "building-shell", "building-instance:inn"] }, true, false)).toBe(true);
+    expect(isArchitecturalGhostPrimitive({ tags: ["floor", "standable", "building-instance:inn"] }, true, false)).toBe(true);
+    expect(isArchitecturalGhostPrimitive({ tags: ["furniture", "cover", "building-instance:inn"] }, true, false)).toBe(false);
+    expect(isArchitecturalGhostPrimitive({ tags: ["wall"] }, true, true)).toBe(true);
+    expect(isArchitecturalGhostPrimitive({ tags: ["wall", "building-instance:inn"] }, false, false)).toBe(false);
+  });
+
+  it("keeps focused-building routes local and restores all routes outside focus", () => {
+    const building = {
+      id: "harbor-inn",
+      positionCells: { x: 10, z: 8 },
+      footprintCells: { x: 6, z: 5 },
+    };
+    const owned = { id: "harbor-inn-entry-route", points: [{ x: 0, y: 0, z: 0 }, { x: 100, y: 0, z: 100 }] };
+    const legacyLocal = {
+      id: "wilderness-building-access",
+      points: [
+        { x: 10 * GRID_METERS - 2, y: 0, z: 8 * GRID_METERS },
+        { x: 10 * GRID_METERS, y: 0, z: 8 * GRID_METERS },
+        { x: 10 * GRID_METERS + 2, y: 0, z: 8 * GRID_METERS },
+      ],
+    };
+    const districtRoad = {
+      id: "district-arterial",
+      points: [
+        { x: 0, y: 0, z: 0 },
+        { x: 10 * GRID_METERS, y: 0, z: 8 * GRID_METERS },
+        { x: 80, y: 0, z: 70 },
+      ],
+    };
+    expect(routeBelongsToBuildingFocus(owned, building)).toBe(true);
+    expect(routeBelongsToBuildingFocus(legacyLocal, building)).toBe(true);
+    expect(routeBelongsToBuildingFocus(districtRoad, building)).toBe(false);
+    expect(routeBelongsToBuildingFocus(districtRoad)).toBe(true);
   });
 
   it("keeps only explicitly linked cross-storey interface pieces in numeric floor context", () => {

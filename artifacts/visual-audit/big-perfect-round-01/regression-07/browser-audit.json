@@ -1,0 +1,599 @@
+{
+  "url": "http://127.0.0.1:5241/?prompt=D%26D%20%E6%B7%B1%E6%B0%B4%E5%9F%8E%E6%B8%AF%E5%8C%BA%EF%BC%8C%E5%BC%AF%E6%9B%B2%E7%9F%B3%E6%9D%BF%E4%B8%BB%E8%A1%97%E3%80%81%E9%B1%BC%E5%B8%82%E7%A0%81%E5%A4%B4%E3%80%81%E6%B3%95%E5%B8%88%E5%A1%94%E3%80%81%E7%A5%9E%E6%AE%BF%E3%80%81%E9%85%92%E9%A6%86%E3%80%81%E4%BB%93%E5%BA%93%E5%92%8C%E8%B7%A8%E8%BF%90%E6%B2%B3%E7%9F%B3%E6%A1%A5&seed=regression-07-focus-transparency&kind=settlement&size=large&density=72",
+  "generatedAt": "2026-08-12T11:56:59.403Z",
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "audits": [
+    {
+      "label": "settlement-overview",
+      "title": "The Waterwoven Quarter",
+      "status": "校验通过",
+      "statusDetail": "9727 个可批处理图元 · 1198 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 0 母题 · BGE",
+      "selectedFloor": "roof",
+      "selectedBuilding": "settlement-building-1",
+      "buildingOptions": [
+        {
+          "value": "settlement-building-1",
+          "text": "1. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-2",
+          "text": "2. tavern · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-3",
+          "text": "3. shrine · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-4",
+          "text": "4. tower · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-9",
+          "text": "5. warehouse · industrial · 按需内部"
+        },
+        {
+          "value": "settlement-building-10",
+          "text": "6. guild · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-11",
+          "text": "7. home · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-12",
+          "text": "8. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-13",
+          "text": "9. home · service · 按需内部"
+        },
+        {
+          "value": "settlement-building-14",
+          "text": "10. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-15",
+          "text": "11. warehouse · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-16",
+          "text": "12. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-17",
+          "text": "13. home · residential · 远景/按需"
+        },
+        {
+          "value": "settlement-building-18",
+          "text": "14. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-19",
+          "text": "15. home · service · 远景/按需"
+        },
+        {
+          "value": "settlement-building-20",
+          "text": "16. tavern · commercial · 完整"
+        },
+        {
+          "value": "settlement-building-21",
+          "text": "17. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-22",
+          "text": "18. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-23",
+          "text": "19. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-25",
+          "text": "20. factory · harbor · 远景/按需"
+        },
+        {
+          "value": "settlement-building-27",
+          "text": "21. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-28",
+          "text": "22. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-29",
+          "text": "23. warehouse · harbor · 按需内部"
+        }
+      ],
+      "routeDebug": "false",
+      "transparency": "false",
+      "canvas": {
+        "width": 1046,
+        "height": 809
+      },
+      "viewportChildren": 1,
+      "scene": {
+        "primitives": 9727,
+        "rooms": 54,
+        "routes": 36,
+        "buildings": 23,
+        "valid": true,
+        "focusInteriors": 471,
+        "focusCutaways": 195
+      }
+    },
+    {
+      "label": "transparent-overview",
+      "title": "The Waterwoven Quarter",
+      "status": "校验通过",
+      "statusDetail": "9727 个可批处理图元 · 1198 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 0 母题 · BGE",
+      "selectedFloor": "roof",
+      "selectedBuilding": "settlement-building-1",
+      "buildingOptions": [
+        {
+          "value": "settlement-building-1",
+          "text": "1. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-2",
+          "text": "2. tavern · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-3",
+          "text": "3. shrine · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-4",
+          "text": "4. tower · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-9",
+          "text": "5. warehouse · industrial · 按需内部"
+        },
+        {
+          "value": "settlement-building-10",
+          "text": "6. guild · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-11",
+          "text": "7. home · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-12",
+          "text": "8. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-13",
+          "text": "9. home · service · 按需内部"
+        },
+        {
+          "value": "settlement-building-14",
+          "text": "10. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-15",
+          "text": "11. warehouse · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-16",
+          "text": "12. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-17",
+          "text": "13. home · residential · 远景/按需"
+        },
+        {
+          "value": "settlement-building-18",
+          "text": "14. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-19",
+          "text": "15. home · service · 远景/按需"
+        },
+        {
+          "value": "settlement-building-20",
+          "text": "16. tavern · commercial · 完整"
+        },
+        {
+          "value": "settlement-building-21",
+          "text": "17. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-22",
+          "text": "18. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-23",
+          "text": "19. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-25",
+          "text": "20. factory · harbor · 远景/按需"
+        },
+        {
+          "value": "settlement-building-27",
+          "text": "21. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-28",
+          "text": "22. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-29",
+          "text": "23. warehouse · harbor · 按需内部"
+        }
+      ],
+      "routeDebug": "true",
+      "transparency": "true",
+      "canvas": {
+        "width": 1046,
+        "height": 809
+      },
+      "viewportChildren": 1,
+      "scene": {
+        "primitives": 9727,
+        "rooms": 54,
+        "routes": 36,
+        "buildings": 23,
+        "valid": true,
+        "focusInteriors": 471,
+        "focusCutaways": 195
+      }
+    },
+    {
+      "label": "focused-ground-floor",
+      "title": "The Waterwoven Quarter",
+      "status": "建筑内部聚焦",
+      "statusDetail": "9727 个可批处理图元 · 1198 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 0 母题 · BGE",
+      "selectedFloor": "0",
+      "selectedBuilding": "settlement-building-1",
+      "buildingOptions": [
+        {
+          "value": "settlement-building-1",
+          "text": "1. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-2",
+          "text": "2. tavern · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-3",
+          "text": "3. shrine · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-4",
+          "text": "4. tower · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-9",
+          "text": "5. warehouse · industrial · 按需内部"
+        },
+        {
+          "value": "settlement-building-10",
+          "text": "6. guild · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-11",
+          "text": "7. home · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-12",
+          "text": "8. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-13",
+          "text": "9. home · service · 按需内部"
+        },
+        {
+          "value": "settlement-building-14",
+          "text": "10. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-15",
+          "text": "11. warehouse · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-16",
+          "text": "12. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-17",
+          "text": "13. home · residential · 远景/按需"
+        },
+        {
+          "value": "settlement-building-18",
+          "text": "14. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-19",
+          "text": "15. home · service · 远景/按需"
+        },
+        {
+          "value": "settlement-building-20",
+          "text": "16. tavern · commercial · 完整"
+        },
+        {
+          "value": "settlement-building-21",
+          "text": "17. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-22",
+          "text": "18. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-23",
+          "text": "19. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-25",
+          "text": "20. factory · harbor · 远景/按需"
+        },
+        {
+          "value": "settlement-building-27",
+          "text": "21. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-28",
+          "text": "22. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-29",
+          "text": "23. warehouse · harbor · 按需内部"
+        }
+      ],
+      "routeDebug": "true",
+      "transparency": "true",
+      "canvas": {
+        "width": 1046,
+        "height": 809
+      },
+      "viewportChildren": 1,
+      "scene": {
+        "primitives": 9727,
+        "rooms": 54,
+        "routes": 36,
+        "buildings": 23,
+        "valid": true,
+        "focusInteriors": 471,
+        "focusCutaways": 195
+      }
+    },
+    {
+      "label": "focused-alternate-floor",
+      "title": "The Waterwoven Quarter",
+      "status": "建筑内部聚焦",
+      "statusDetail": "9727 个可批处理图元 · 1198 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 0 母题 · BGE",
+      "selectedFloor": "1",
+      "selectedBuilding": "settlement-building-1",
+      "buildingOptions": [
+        {
+          "value": "settlement-building-1",
+          "text": "1. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-2",
+          "text": "2. tavern · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-3",
+          "text": "3. shrine · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-4",
+          "text": "4. tower · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-9",
+          "text": "5. warehouse · industrial · 按需内部"
+        },
+        {
+          "value": "settlement-building-10",
+          "text": "6. guild · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-11",
+          "text": "7. home · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-12",
+          "text": "8. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-13",
+          "text": "9. home · service · 按需内部"
+        },
+        {
+          "value": "settlement-building-14",
+          "text": "10. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-15",
+          "text": "11. warehouse · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-16",
+          "text": "12. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-17",
+          "text": "13. home · residential · 远景/按需"
+        },
+        {
+          "value": "settlement-building-18",
+          "text": "14. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-19",
+          "text": "15. home · service · 远景/按需"
+        },
+        {
+          "value": "settlement-building-20",
+          "text": "16. tavern · commercial · 完整"
+        },
+        {
+          "value": "settlement-building-21",
+          "text": "17. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-22",
+          "text": "18. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-23",
+          "text": "19. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-25",
+          "text": "20. factory · harbor · 远景/按需"
+        },
+        {
+          "value": "settlement-building-27",
+          "text": "21. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-28",
+          "text": "22. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-29",
+          "text": "23. warehouse · harbor · 按需内部"
+        }
+      ],
+      "routeDebug": "true",
+      "transparency": "true",
+      "canvas": {
+        "width": 1046,
+        "height": 809
+      },
+      "viewportChildren": 1,
+      "scene": {
+        "primitives": 9727,
+        "rooms": 54,
+        "routes": 36,
+        "buildings": 23,
+        "valid": true,
+        "focusInteriors": 471,
+        "focusCutaways": 195
+      }
+    },
+    {
+      "label": "returned-settlement",
+      "title": "The Waterwoven Quarter",
+      "status": "返回聚落总览",
+      "statusDetail": "9727 个可批处理图元 · 1198 ms 生成 · SceneProgram v1 · 6 区域 · Composition v1 · 0 母题 · BGE",
+      "selectedFloor": "roof",
+      "selectedBuilding": "settlement-building-1",
+      "buildingOptions": [
+        {
+          "value": "settlement-building-1",
+          "text": "1. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-2",
+          "text": "2. tavern · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-3",
+          "text": "3. shrine · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-4",
+          "text": "4. tower · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-9",
+          "text": "5. warehouse · industrial · 按需内部"
+        },
+        {
+          "value": "settlement-building-10",
+          "text": "6. guild · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-11",
+          "text": "7. home · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-12",
+          "text": "8. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-13",
+          "text": "9. home · service · 按需内部"
+        },
+        {
+          "value": "settlement-building-14",
+          "text": "10. warehouse · harbor · 完整"
+        },
+        {
+          "value": "settlement-building-15",
+          "text": "11. warehouse · industrial · 完整"
+        },
+        {
+          "value": "settlement-building-16",
+          "text": "12. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-17",
+          "text": "13. home · residential · 远景/按需"
+        },
+        {
+          "value": "settlement-building-18",
+          "text": "14. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-19",
+          "text": "15. home · service · 远景/按需"
+        },
+        {
+          "value": "settlement-building-20",
+          "text": "16. tavern · commercial · 完整"
+        },
+        {
+          "value": "settlement-building-21",
+          "text": "17. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-22",
+          "text": "18. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-23",
+          "text": "19. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-25",
+          "text": "20. factory · harbor · 远景/按需"
+        },
+        {
+          "value": "settlement-building-27",
+          "text": "21. warehouse · harbor · 按需内部"
+        },
+        {
+          "value": "settlement-building-28",
+          "text": "22. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-29",
+          "text": "23. warehouse · harbor · 按需内部"
+        }
+      ],
+      "routeDebug": "true",
+      "transparency": "true",
+      "canvas": {
+        "width": 1046,
+        "height": 809
+      },
+      "viewportChildren": 1,
+      "scene": {
+        "primitives": 9727,
+        "rooms": 54,
+        "routes": 36,
+        "buildings": 23,
+        "valid": true,
+        "focusInteriors": 471,
+        "focusCutaways": 195
+      }
+    }
+  ]
+}

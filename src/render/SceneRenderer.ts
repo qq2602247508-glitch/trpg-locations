@@ -6,6 +6,7 @@ import type {
   BuildingInstance,
   GeneratedScene,
   MaterialKey,
+  Route,
   ScenePrimitive,
   TacticalFeature,
 } from "../schema";
@@ -88,6 +89,60 @@ export function overlayTouchesFloor(levels: readonly number[], view: FloorView):
 
 export function routeMatchesTime(schedule: GeneratedScene["routes"][number]["schedule"], time: "day" | "night"): boolean {
   return schedule === undefined || schedule === "all" || schedule === time;
+}
+
+/**
+ * Building transparency is also meaningful inside a settlement scene. Keep
+ * room fixtures solid, but ghost owned floors and architectural envelopes so
+ * the authored interior blueprint can actually be inspected.
+ */
+export function isArchitecturalGhostPrimitive(
+  primitive: Pick<ScenePrimitive, "tags">,
+  enabled: boolean,
+  architecturalScene: boolean,
+): boolean {
+  if (!enabled) return false;
+  const tags = new Set(primitive.tags ?? []);
+  const buildingOwned = [...tags].some((tag) => tag.startsWith("building-instance:"));
+  const envelope = tags.has("wall")
+    || tags.has("settlement-building")
+    || tags.has("building-shell")
+    || tags.has("curtain-wall")
+    || tags.has("keep");
+  const floor = tags.has("floor-slab") || (buildingOwned && tags.has("floor"));
+  return ((buildingOwned || architecturalScene) && envelope)
+    || ((buildingOwned || architecturalScene) && floor);
+}
+
+/**
+ * Route records predate explicit owner metadata. Prefer the stable building-id
+ * prefix used by settlement generators, then accept only compact local routes
+ * that enter the selected footprint. This keeps focused interiors from being
+ * crossed by unrelated district roads while retaining legacy wilderness
+ * access and service routes.
+ */
+export function routeBelongsToBuildingFocus(
+  route: Pick<Route, "id" | "points">,
+  building?: Pick<BuildingInstance, "id" | "positionCells" | "footprintCells">,
+): boolean {
+  if (!building) return true;
+  if (route.id === building.id || route.id.startsWith(`${building.id}-`)) return true;
+  if (route.points.length === 0) return false;
+  const centerX = building.positionCells.x * GRID_METERS;
+  const centerZ = building.positionCells.z * GRID_METERS;
+  const halfWidth = building.footprintCells.x * GRID_METERS / 2;
+  const halfDepth = building.footprintCells.z * GRID_METERS / 2;
+  const contextPad = GRID_METERS * 2.5;
+  const inCore = (point: Route["points"][number]) => (
+    Math.abs(point.x - centerX) <= halfWidth + GRID_METERS * 0.35
+    && Math.abs(point.z - centerZ) <= halfDepth + GRID_METERS * 0.35
+  );
+  const inContext = (point: Route["points"][number]) => (
+    Math.abs(point.x - centerX) <= halfWidth + contextPad
+    && Math.abs(point.z - centerZ) <= halfDepth + contextPad
+  );
+  const contextPoints = route.points.filter(inContext).length;
+  return route.points.some(inCore) && contextPoints >= Math.ceil(route.points.length * 0.6);
 }
 
 function focusClusterTag(primitive: ScenePrimitive): string | undefined {
@@ -389,6 +444,7 @@ export class SceneRenderer {
     this.buildGrid(this.currentScene);
     this.buildPrimitiveBatches(this.currentScene);
     this.buildSemanticLights(this.currentScene);
+    this.buildRoutes(this.currentScene);
     if (!selected) {
       this.setFloorView("roof");
       this.positionCamera();
@@ -1115,7 +1171,7 @@ export class SceneRenderer {
       const instanceTag = primitive.tags?.find((tag) => tag.startsWith("building-instance:"));
       const primitiveBuildingId = instanceTag?.slice("building-instance:".length);
       const focusInterior = primitive.tags?.includes("focus-interior") === true;
-      if (!this.focusedBuildingId && focusInterior) continue;
+      if (!this.focusedBuildingId && focusInterior && !this.buildingTransparency) continue;
       if (this.focusedBuildingId) {
         if (primitiveBuildingId && primitiveBuildingId !== this.focusedBuildingId) continue;
         if (primitiveBuildingId === this.focusedBuildingId && blueprintFocus && !focusInterior) continue;
@@ -1151,14 +1207,7 @@ export class SceneRenderer {
       const isRoof = primitive.material === "roof"
         || primitive.tags?.includes("roof") === true
         || (primitive.tags?.includes("roof-platform") === true && primitive.tags?.includes("wall-walk") !== true);
-      const isBuilding = primitive.tags?.some((tag) => tag === "wall" || tag === "settlement-building" || tag === "building-shell" || tag === "curtain-wall" || tag === "keep") === true;
-      // In architectural scenes the slab itself is part of the inspection
-      // problem: opaque upper floors hide rooms and create the same stacked
-      // plate look that made the earlier screenshots unreadable. Ghost the
-      // floor surface together with walls, but leave tactical furniture solid.
-      const isArchitecturalFloor = (scene.kind === "building" || scene.kind === "dungeon" || scene.kind === "tower")
-        && primitive.tags?.includes("floor-slab") === true;
-      const ghost = architecturalScene && this.buildingTransparency && (isBuilding || isArchitecturalFloor);
+      const ghost = isArchitecturalGhostPrimitive(primitive, this.buildingTransparency, architecturalScene);
       const layer = this.floorLayers.get(primitive.level) ?? this.createFloorLayer(primitive.level);
       const host = isRoof ? layer.roof : layer.structure;
       const chunk = spatialBatchKey(primitive.position, this.worldBounds);
@@ -1297,8 +1346,12 @@ export class SceneRenderer {
 
   private buildRoutes(scene: GeneratedScene): void {
     this.disposeContents(this.routeRoot);
+    const focusedBuilding = this.focusedBuildingId
+      ? scene.buildingInstances?.find((building) => building.id === this.focusedBuildingId)
+      : undefined;
     for (const route of scene.routes) {
       if (route.points.length < 2) continue;
+      if (!routeBelongsToBuildingFocus(route, focusedBuilding)) continue;
       const points = route.points.map(
         (point) => new THREE.Vector3(point.x, point.y + FLOOR_OVERLAY_Y + 0.06, point.z),
       );
