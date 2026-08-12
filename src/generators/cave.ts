@@ -433,7 +433,7 @@ export function generateCave(context: GeneratorContext): GeneratedScene {
       : rng.pick(["Dripstone hall", "Collapsed gallery", "Moss grotto", "Wind chamber", "Crystal shelf", "Black pool room"]);
     scene.rooms.push(createRoom(id, name, "natural", 0, x, z, diameter, diameter, y));
     scene.primitives.push(
-      cylinder(`${id}-floor`, 0, x, y, z, diameter, FLOOR_SLAB_METERS, "rock", ["floor", "cavern", "natural"]),
+      cylinder(`${id}-floor`, 0, x, y, z, diameter, FLOOR_SLAB_METERS, "rock", ["floor", "cavern", "natural", "standable", "support-surface"]),
       primitive(
         `${id}-ceiling-rock`,
         "sphere",
@@ -507,7 +507,7 @@ export function generateCave(context: GeneratorContext): GeneratedScene {
     const ledgeX = clamp(chamber.x + chamber.diameter * 0.2, 1, width - 1);
     const ledgeZ = clamp(chamber.z - chamber.diameter * 0.18, 1, depth - 1);
     scene.primitives.push(
-      box(`${chamber.id}-rock-ledge`, 0, ledgeX, chamber.y + ledgeHeight, ledgeZ, Math.max(2, chamber.diameter * 0.42), FLOOR_SLAB_METERS * 2, Math.max(2, chamber.diameter * 0.28), "rock", ["ledge", "platform", "high-ground"]),
+      box(`${chamber.id}-rock-ledge`, 0, ledgeX, chamber.y + ledgeHeight, ledgeZ, Math.max(2, chamber.diameter * 0.42), FLOOR_SLAB_METERS * 2, Math.max(2, chamber.diameter * 0.28), "rock", ["ledge", "platform", "high-ground", "standable", "support-surface"]),
       stairs(`${chamber.id}-ledge-ramp`, 0, (chamber.x + ledgeX) / 2, chamber.y + FLOOR_SLAB_METERS, (chamber.z + ledgeZ) / 2, 1.4, ledgeHeight, 3.2, "rock", ["natural-ramp", "ledge-access"]),
     );
     scene.tactical.push(tacticalFeature(`${chamber.id}-ledge-ground`, "highGround", ledgeX, ledgeZ, chamber.y + ledgeHeight, 2, "A natural stone shelf gives a clear height advantage."));

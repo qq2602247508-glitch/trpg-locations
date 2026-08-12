@@ -1264,6 +1264,9 @@ describe("scene generators", () => {
     const waterflow = scene.routes.find((route) => route.kind === "waterflow");
     expect(waterflow).toBeDefined();
     expect(waterflow?.points.some((point, index, points) => index > 0 && point.y < (points[index - 1]?.y ?? point.y))).toBe(true);
+    for (let level = 0; level < scene.floors; level += 1) {
+      expect(scene.primitives.some((primitive) => primitive.level === level && isTacticalGridSurface(primitive))).toBe(true);
+    }
   });
 
   it("builds a cave as a connected elevated chamber graph with ledges and danger", () => {
@@ -1275,6 +1278,14 @@ describe("scene generators", () => {
     expect(hasTag(scene, "ledge")).toBe(true);
     expect(scene.tactical.some((feature) => feature.kind === "hazard")).toBe(true);
     expect(new Set(naturalRooms.map((room) => room.center.y)).size).toBeGreaterThan(1);
+    expect(scene.primitives.filter((primitive) => isTacticalGridSurface(primitive)).length).toBeGreaterThanOrEqual(naturalRooms.length);
+  });
+
+  it("gives every dungeon level at least one explicit tactical grid surface", () => {
+    const scene = generateScene({ ...request("dungeon-grid-surface-contract", "large", 0.84), prompt: "D&D 多层神殿地牢，有陷阱、隐藏房间、宝库、首领厅和地下墓穴" }, "dungeon");
+    for (let level = 0; level < scene.floors; level += 1) {
+      expect(scene.primitives.some((primitive) => primitive.level === level && isTacticalGridSurface(primitive))).toBe(true);
+    }
   });
 
   it("leaves visible entrance openings for enclosed structures", () => {
@@ -1424,6 +1435,7 @@ describe("scene generators", () => {
     expect(greenhouse?.level).toBe(scene.floors - 1);
     expect(greenhouse?.center.y).toBeLessThan(0);
     expect(scene.primitives.some((primitive) => primitive.tags?.includes("tree-canopy") && primitive.tags?.includes("standable"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.level === greenhouse?.level && isTacticalGridSurface(primitive))).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
   });
 

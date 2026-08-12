@@ -161,7 +161,7 @@ export function generateDungeon(context: GeneratorContext): GeneratedScene {
       scene.rooms.push(createRoom(id, roomLabel, role, level, x, z, w, d, baseY));
       const shellMaterial = level === levels - 1 ? "darkStone" : level === 0 ? "stone" : style === "arcane" ? "darkStone" : "rock";
       const height = feetToMeters((floorHeights[level] ?? 12) + (level === levels - 1 ? 5 : level === 0 ? -1 : 1)) - FLOOR_SLAB_METERS;
-      scene.primitives.push(...rectangularShell(`${id}-shell`, level, x, z, baseY, w, d, height, "stone", shellMaterial, ["dungeon", `dungeon-style:${style}`, `level-band:${level === 0 ? "descent" : level === levels - 1 ? "core" : "hazard"}`, `floor-role:${floorRole}`, hidden ? "secret-room" : "room", "door-frame"], {}));
+      scene.primitives.push(...rectangularShell(`${id}-shell`, level, x, z, baseY, w, d, height, "stone", shellMaterial, ["dungeon", `dungeon-style:${style}`, `level-band:${level === 0 ? "descent" : level === levels - 1 ? "core" : "hazard"}`, `floor-role:${floorRole}`, hidden ? "secret-room" : "room", "door-frame", "standable", "support-surface"], {}));
       const featureTags = style === "prison" ? ["bars", "cell"] : style === "temple" ? ["altar", "ritual"] : style === "lair" ? ["hoard", "bone-cover"] : style === "sewer" ? ["channel", "sluice"] : style === "arcane" ? ["arcane-node", "teleport-focus"] : style === "mine" ? ["ore-cart", "timber"] : ["sarcophagus", "grave-goods"];
       const featureHeight = level === levels - 1 ? 3.8 : level === 0 ? 1.8 : 2.5;
       scene.primitives.push(box(`${id}-feature`, level, x + context.rng.float(-w * 0.2, w * 0.2), baseY + FLOOR_SLAB_METERS, z + context.rng.float(-d * 0.2, d * 0.2), Math.max(1.2, w * (level === levels - 1 ? 0.3 : 0.22)), feetToMeters(hidden ? 5 : featureHeight), Math.max(1.2, d * (level === levels - 1 ? 0.28 : 0.2)), hidden ? "warmLight" : style === "mine" ? "wood" : style === "prison" ? "metal" : "darkStone", ["dungeon", hidden ? "secret" : "cover", `style:${style}`, `floor-role:${floorRole}`, ...featureTags]));
@@ -179,7 +179,7 @@ export function generateDungeon(context: GeneratorContext): GeneratedScene {
       const current = floorRooms[index];
       if (!previous || !current) continue;
       connectRooms(scene.rooms, previous.id, current.id);
-      scene.primitives.push(corridor(`${previous.id}-to-${current.id}`, level, previous.x, previous.z, current.x, current.z, (baseYs[level] ?? 0) + FLOOR_SLAB_METERS, 1.2, style === "sewer" ? "stone" : "wood", ["dungeon", "combat-route"]));
+      scene.primitives.push(corridor(`${previous.id}-to-${current.id}`, level, previous.x, previous.z, current.x, current.z, (baseYs[level] ?? 0) + FLOOR_SLAB_METERS, 1.2, style === "sewer" ? "stone" : "wood", ["dungeon", "combat-route", "standable", "support-surface"]));
     }
     if (floorRooms.length > 3) {
       const first = floorRooms[0];

@@ -1,0 +1,400 @@
+{
+  "generatedAt": "2026-08-12T12:34:04.917Z",
+  "results": [
+    {
+      "id": "program-building",
+      "title": "Police precinct Replanned",
+      "status": "校验通过",
+      "floorOptions": [
+        {
+          "value": "cut",
+          "label": "剖切 · 隐藏屋顶"
+        },
+        {
+          "value": "roof",
+          "label": "完整 · 显示屋顶"
+        },
+        {
+          "value": "0",
+          "label": "仅查看 1F"
+        },
+        {
+          "value": "1",
+          "label": "仅查看 2F"
+        },
+        {
+          "value": "2",
+          "label": "仅查看 屋顶"
+        },
+        {
+          "value": "3",
+          "label": "仅查看 B1"
+        }
+      ],
+      "scene": {
+        "kind": "building",
+        "archetype": "police",
+        "floors": 4,
+        "floorLabels": [
+          "1F",
+          "2F",
+          "屋顶",
+          "B1"
+        ],
+        "primitives": 159,
+        "rooms": 14,
+        "routes": 13,
+        "valid": true,
+        "warnings": [],
+        "levelCounts": {
+          "0": 104,
+          "1": 28,
+          "2": 6,
+          "3": 21
+        },
+        "routeLevelCounts": {
+          "0": 11,
+          "1": 4,
+          "2": 1,
+          "3": 0
+        }
+      },
+      "floorAudits": [
+        {
+          "floor": "0",
+          "label": "1F",
+          "primitiveCount": 104,
+          "routeCount": 11,
+          "standableCount": 4,
+          "gridCandidates": 4
+        },
+        {
+          "floor": "1",
+          "label": "2F",
+          "primitiveCount": 28,
+          "routeCount": 4,
+          "standableCount": 4,
+          "gridCandidates": 4
+        },
+        {
+          "floor": "2",
+          "label": "屋顶",
+          "primitiveCount": 6,
+          "routeCount": 1,
+          "standableCount": 1,
+          "gridCandidates": 1
+        },
+        {
+          "floor": "3",
+          "label": "B1",
+          "primitiveCount": 21,
+          "routeCount": 0,
+          "standableCount": 1,
+          "gridCandidates": 1
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "wizard-tower-greenhouse",
+      "title": "The Starward Wizard Tower",
+      "status": "校验通过",
+      "floorOptions": [
+        {
+          "value": "cut",
+          "label": "剖切 · 隐藏屋顶"
+        },
+        {
+          "value": "roof",
+          "label": "完整 · 显示屋顶"
+        },
+        {
+          "value": "0",
+          "label": "仅查看 1F"
+        },
+        {
+          "value": "1",
+          "label": "仅查看 2F"
+        },
+        {
+          "value": "2",
+          "label": "仅查看 3F"
+        },
+        {
+          "value": "3",
+          "label": "仅查看 4F"
+        },
+        {
+          "value": "4",
+          "label": "仅查看 B1"
+        }
+      ],
+      "scene": {
+        "kind": "tower",
+        "floors": 5,
+        "floorLabels": [
+          "1F",
+          "2F",
+          "3F",
+          "4F",
+          "B1"
+        ],
+        "primitives": 189,
+        "rooms": 10,
+        "routes": 7,
+        "valid": true,
+        "warnings": [],
+        "levelCounts": {
+          "0": 36,
+          "1": 45,
+          "2": 43,
+          "3": 57,
+          "4": 8
+        },
+        "routeLevelCounts": {
+          "0": 4,
+          "1": 2,
+          "2": 2,
+          "3": 2,
+          "4": 1
+        }
+      },
+      "floorAudits": [
+        {
+          "floor": "0",
+          "label": "1F",
+          "primitiveCount": 36,
+          "routeCount": 4,
+          "standableCount": 18,
+          "gridCandidates": 18
+        },
+        {
+          "floor": "1",
+          "label": "2F",
+          "primitiveCount": 45,
+          "routeCount": 2,
+          "standableCount": 18,
+          "gridCandidates": 18
+        },
+        {
+          "floor": "2",
+          "label": "3F",
+          "primitiveCount": 43,
+          "routeCount": 2,
+          "standableCount": 18,
+          "gridCandidates": 18
+        },
+        {
+          "floor": "3",
+          "label": "4F",
+          "primitiveCount": 57,
+          "routeCount": 2,
+          "standableCount": 19,
+          "gridCandidates": 19
+        },
+        {
+          "floor": "4",
+          "label": "B1",
+          "primitiveCount": 8,
+          "routeCount": 1,
+          "standableCount": 6,
+          "gridCandidates": 6
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "temple-dungeon",
+      "title": "The Veiled Altar Depths",
+      "status": "校验通过",
+      "floorOptions": [
+        {
+          "value": "cut",
+          "label": "剖切 · 隐藏屋顶"
+        },
+        {
+          "value": "roof",
+          "label": "完整 · 显示屋顶"
+        },
+        {
+          "value": "0",
+          "label": "仅查看 1F"
+        },
+        {
+          "value": "1",
+          "label": "仅查看 2F"
+        },
+        {
+          "value": "2",
+          "label": "仅查看 3F"
+        },
+        {
+          "value": "3",
+          "label": "仅查看 4F"
+        }
+      ],
+      "scene": {
+        "kind": "dungeon",
+        "archetype": "dungeon:temple",
+        "floors": 4,
+        "primitives": 174,
+        "rooms": 25,
+        "routes": 8,
+        "valid": true,
+        "warnings": [],
+        "levelCounts": {
+          "0": 56,
+          "1": 42,
+          "2": 42,
+          "3": 34
+        },
+        "routeLevelCounts": {
+          "0": 3,
+          "1": 3,
+          "2": 3,
+          "3": 2
+        }
+      },
+      "floorAudits": [
+        {
+          "floor": "0",
+          "primitiveCount": 56,
+          "routeCount": 3,
+          "standableCount": 47,
+          "gridCandidates": 47
+        },
+        {
+          "floor": "1",
+          "primitiveCount": 42,
+          "routeCount": 3,
+          "standableCount": 35,
+          "gridCandidates": 35
+        },
+        {
+          "floor": "2",
+          "primitiveCount": 42,
+          "routeCount": 3,
+          "standableCount": 35,
+          "gridCandidates": 35
+        },
+        {
+          "floor": "3",
+          "primitiveCount": 34,
+          "routeCount": 2,
+          "standableCount": 29,
+          "gridCandidates": 29
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "connected-cave",
+      "title": "Mossfall Caverns",
+      "status": "校验通过",
+      "floorOptions": [
+        {
+          "value": "cut",
+          "label": "剖切 · 隐藏屋顶"
+        },
+        {
+          "value": "roof",
+          "label": "完整 · 显示屋顶"
+        },
+        {
+          "value": "0",
+          "label": "仅查看 1F"
+        }
+      ],
+      "scene": {
+        "kind": "cave",
+        "archetype": "cave",
+        "floors": 1,
+        "primitives": 239,
+        "rooms": 7,
+        "routes": 8,
+        "valid": true,
+        "warnings": [],
+        "levelCounts": {
+          "0": 239
+        },
+        "routeLevelCounts": {
+          "0": 4
+        }
+      },
+      "floorAudits": [
+        {
+          "floor": "0",
+          "primitiveCount": 239,
+          "routeCount": 4,
+          "standableCount": 9,
+          "gridCandidates": 9
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "sewer-cross-section",
+      "title": "The Brick Veins",
+      "status": "校验通过",
+      "floorOptions": [
+        {
+          "value": "cut",
+          "label": "剖切 · 隐藏屋顶"
+        },
+        {
+          "value": "roof",
+          "label": "完整 · 显示屋顶"
+        },
+        {
+          "value": "0",
+          "label": "仅查看 1F"
+        },
+        {
+          "value": "1",
+          "label": "仅查看 2F"
+        }
+      ],
+      "scene": {
+        "kind": "sewer",
+        "floors": 2,
+        "primitives": 39,
+        "rooms": 7,
+        "routes": 4,
+        "valid": true,
+        "warnings": [],
+        "levelCounts": {
+          "0": 18,
+          "1": 21
+        },
+        "routeLevelCounts": {
+          "0": 3,
+          "1": 3
+        }
+      },
+      "floorAudits": [
+        {
+          "floor": "0",
+          "primitiveCount": 18,
+          "routeCount": 3,
+          "standableCount": 1,
+          "gridCandidates": 1
+        },
+        {
+          "floor": "1",
+          "primitiveCount": 21,
+          "routeCount": 3,
+          "standableCount": 1,
+          "gridCandidates": 1
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    }
+  ],
+  "totalNetworkFailures": 0,
+  "totalConsoleErrors": 0
+}

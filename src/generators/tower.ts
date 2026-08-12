@@ -338,7 +338,7 @@ export function generateTower(context: GeneratorContext): GeneratedScene {
     const greenhouseY = -feetToMeters(12);
     const greenhouseX = center + profile.footprint * 0.75;
     const greenhouseZ = center + profile.footprint * 0.42;
-    scene.primitives.push(...rectangularShell("tower-underground-greenhouse", undergroundLevel, greenhouseX, greenhouseZ, greenhouseY, 8, 6, feetToMeters(9), "moss", "darkStone", ["underground", "greenhouse", "building-shell"], { west: { widthCells: 1.6 } }));
+    scene.primitives.push(...rectangularShell("tower-underground-greenhouse", undergroundLevel, greenhouseX, greenhouseZ, greenhouseY, 8, 6, feetToMeters(9), "moss", "darkStone", ["underground", "greenhouse", "building-shell", "standable", "support-surface"], { west: { widthCells: 1.6 } }));
     scene.rooms.push(createRoom("tower-underground-greenhouse-room", "Underground alchemical greenhouse", "service", undergroundLevel, greenhouseX, greenhouseZ, 7, 5, greenhouseY));
     connectRooms(scene.rooms, "tower-chamber-0", "tower-underground-greenhouse-room");
     const greenhouseStair = stairConnection("tower-greenhouse-stair", undergroundLevel, { xCells: greenhouseX - 3, zCells: greenhouseZ, yMeters: greenhouseY + FLOOR_SLAB_METERS }, { xCells: entranceX, zCells: center, yMeters: FLOOR_SLAB_METERS }, 1.5, "stone", ["underground", "greenhouse-access", "vertical-opening"]);
