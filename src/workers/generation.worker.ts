@@ -54,8 +54,8 @@ async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean
   return planned;
 }
 
-async function planComposition(request: GenerationRequest): Promise<SceneCompositionProgram> {
-  const key = `${request.prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}|${request.seed}|${request.density}`;
+async function planComposition(request: GenerationRequest, kind: SceneKind): Promise<SceneCompositionProgram> {
+  const key = `${kind}|${request.prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}|${request.seed}|${request.density}`;
   const cached = compositionCache.get(key); if (cached) return cached;
   const local = compileSceneComposition(request);
   // Generic prompts need retrieval for domain resolution. Settlements also
@@ -63,9 +63,10 @@ async function planComposition(request: GenerationRequest): Promise<SceneComposi
   // fixed by compileSceneComposition: BGE may enrich child atoms without
   // replacing the settlement grammar.
   const wildernessFacility = shouldComposeWildernessFacility(request.prompt);
-  const retrieval = local.primaryDomain === "generic"
+  const fixedBuildingKind = ["building", "tower", "tavern", "dungeon", "sewer", "cave"].includes(kind);
+  const retrieval = !fixedBuildingKind && (local.primaryDomain === "generic"
     || local.primaryDomain === "settlement"
-    || wildernessFacility
+    || wildernessFacility)
     ? await retrieveCapabilitiesWithBge(request.prompt, { limit: wildernessFacility ? 10 : 6 })
     : undefined;
   const program = retrieval && retrieval.capabilityIds.length > 0 ? compileSceneComposition(request, retrieval.source === "bge" ? "bge" : "local", retrieval.capabilityIds) : local;
@@ -76,7 +77,7 @@ async function planComposition(request: GenerationRequest): Promise<SceneComposi
 scope.addEventListener("message", async (event: MessageEvent<GenerationWorkerRequest>) => {
   const { id, request, kind } = event.data;
   try {
-    const composition = await planComposition(request);
+    const composition = await planComposition(request, kind);
     // A successful BGE/lexical capability retrieval is sufficient for the
     // deterministic compiler. Qwen is the final ambiguity fallback, not a
     // mandatory step in every unknown prompt.

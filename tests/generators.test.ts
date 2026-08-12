@@ -480,6 +480,44 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
+  it("realizes forest settlement canopy platforms as supported tactical atoms", () => {
+    const scene = generateScene({
+      ...request("browser-08-forest-village-contract", "large", 0.82),
+      prompt: "森林村庄，木屋、林间小径、溪桥、多层树冠、巨树根系和树冠战斗平台",
+    }, "adaptive");
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("canopy-platform")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("canopy-support")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.routes.filter((route) => route.id.includes("forest-settlement-canopy-route")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.compositionProgram?.semanticCoverage?.missing).not.toContain("树冠战斗平台");
+    expect(scene.diagnostics.warnings.some((warning) => warning.includes("树冠战斗平台"))).toBe(false);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("realizes underdark settlement chambers, passages, and ledges", () => {
+    const scene = generateScene({
+      ...request("browser-08-underdark-lake-contract", "medium", 0.64),
+      prompt: "幽暗地域村庄，裂谷、地下湖、两座石桥、菌林、石屋、矿井入口和潮湿洞道",
+    }, "adaptive");
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("cavern") && primitive.tags?.includes("natural")).length).toBeGreaterThanOrEqual(3);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("cave-passage")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("ledge") && primitive.tags?.includes("high-ground")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.compositionProgram?.semanticCoverage?.missing).not.toEqual(expect.arrayContaining(["相连洞穴腔体", "洞穴通道", "洞穴高低岩架"]));
+    expect(scene.diagnostics.warnings.some((warning) => warning.includes("洞穴腔体") || warning.includes("洞穴通道") || warning.includes("岩架"))).toBe(false);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("keeps fixed tower composition ownership out of BGE forest retrieval", () => {
+    const scene = generateScene({
+      ...request("browser-08-multi-floor-tower-contract", "medium", 0.68),
+      prompt: "多层法师塔，螺旋楼梯、研究室、图书馆、地下档案室、屋顶观测台和外部维护平台",
+    }, "tower");
+    expect(scene.compositionProgram?.primaryDomain).toBe("generic");
+    expect(scene.compositionProgram?.source).toBe("local");
+    expect(scene.compositionProgram?.semanticCoverage?.missing).not.toContain("森林");
+    expect(scene.diagnostics.warnings.some((warning) => warning.includes("森林"))).toBe(false);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
   it("plans premodern settlements through an auditable organic morphology program", () => {
     const scene = generateScene({ ...request("r13-organic-waterdeep", "large", 0.76), prompt: "深水城旧港区，前现代弯曲街巷、码头、鱼市、酒馆、神殿与仓库" }, "adaptive");
     expect(scene.sceneProgram?.domain).toBe("settlement");

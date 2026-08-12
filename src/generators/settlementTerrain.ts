@@ -1,7 +1,7 @@
 import type { SeededRandom } from "../core/random";
 import type { GeneratedScene, MaterialKey } from "../schema";
 import type { SiteProgram, TerrainProgramSummary } from "../site-program";
-import { FLOOR_SLAB_METERS, box, corridor, createRoute, cylinder, feetToMeters, primitive, stairConnection, stairs, tacticalFeature, water } from "./shared";
+import { FLOOR_SLAB_METERS, box, corridor, createRoute, cylinder, feetToMeters, primitive, stairConnection, stairRoute, stairs, tacticalFeature, water } from "./shared";
 
 export type TerrainSurface = "ground" | "rock" | "water" | "lava" | "void" | "platform";
 
@@ -621,6 +621,30 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           treeIndex += 1;
         }
         scene.tactical.push(tacticalFeature("forest-settlement-canopy-cover", "cover", width * 0.18, depth * 0.2, feetToMeters(5), 4, "Dense forest belts bound the settlement clearings and constrain long sightlines."));
+        const canopyAnchors = [
+          { x: width * 0.28, z: depth * 0.28, level: 0 },
+          { x: width * 0.72, z: depth * 0.62, level: 1 },
+        ];
+        for (const [index, anchor] of canopyAnchors.entries()) {
+          const groundY = feetToMeters(cellAt(anchor.x, anchor.z).elevationFeet) + FLOOR_SLAB_METERS;
+          const platformY = groundY + feetToMeters(14 + index * 4);
+          scene.primitives.push(
+            cylinder(`forest-settlement-canopy-support-${index + 1}`, 0, anchor.x, groundY, anchor.z, 1.05, platformY - groundY, "wood", ["forest", "giant-tree", "tree-trunk", "canopy-support", "support", "terrain-program"]),
+            cylinder(`forest-settlement-canopy-platform-${index + 1}`, anchor.level, anchor.x, platformY, anchor.z, 3.1, FLOOR_SLAB_METERS, "wood", ["forest", "canopy-platform", "platform", "high-ground", "standable", "supported", "terrain-program"]),
+          );
+          const stair = stairConnection(
+            `forest-settlement-canopy-stair-${index + 1}`,
+            0,
+            { xCells: anchor.x + 3.8, zCells: anchor.z, yMeters: groundY + FLOOR_SLAB_METERS },
+            { xCells: anchor.x + 1.1, zCells: anchor.z, yMeters: platformY + FLOOR_SLAB_METERS },
+            1.1,
+            "wood",
+            ["forest", "canopy-platform", "vertical-route", "vertical-opening", "supported", "terrain-program"],
+          );
+          scene.primitives.push(stair.primitive);
+          scene.routes.push(stairRoute(`forest-settlement-canopy-route-${index + 1}`, stair));
+          scene.tactical.push(tacticalFeature(`forest-settlement-canopy-highground-${index + 1}`, "highGround", anchor.x, anchor.z, platformY, 2, "A supported canopy platform overlooks the forest settlement."));
+        }
       }
       if (kind === "river") {
         const bridgeRows = [depth * 0.28, depth * 0.56, depth * 0.81];
@@ -920,6 +944,23 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           primitive("underdark-lake-surface", "sphere", 0, width * 0.22, feetToMeters(-4.5), depth * 0.72, width * 0.27 * 1.524, 0.22, depth * 0.22 * 1.524, "water", ["terrain-program", "watercourse", "underdark", "underground-lake", "hazard", ...(isSaltCrystal ? ["salt-crystal", "cavern-tide-pool", "tidal-cavern"] : [])]),
           corridor("underdark-ravine-bridge-north", 0, ravineX - 4, depth * 0.3, ravineX + 4, depth * 0.3, feetToMeters(10) + FLOOR_SLAB_METERS, 1.8, "stone", ["underdark", "ravine-bridge", "bridge", "standable", "terrain-program"]),
           corridor("underdark-ravine-bridge-south", 0, ravineX - 4, depth * 0.72, ravineX + 4, depth * 0.72, feetToMeters(5) + FLOOR_SLAB_METERS, 1.5, "wood", ["underdark", "ravine-bridge", "bridge", "standable", "terrain-program"]),
+        );
+        const chambers = [
+          { id: "west", x: width * 0.2, z: depth * 0.28, y: feetToMeters(6), w: width * 0.22, d: depth * 0.2 },
+          { id: "north", x: width * 0.7, z: depth * 0.24, y: feetToMeters(10), w: width * 0.2, d: depth * 0.18 },
+          { id: "east", x: width * 0.78, z: depth * 0.68, y: feetToMeters(2), w: width * 0.18, d: depth * 0.22 },
+        ];
+        for (const chamber of chambers) {
+          scene.primitives.push(box(`underdark-chamber-${chamber.id}`, 0, chamber.x, chamber.y, chamber.z, chamber.w, FLOOR_SLAB_METERS, chamber.d, "rock", ["underdark", "cavern", "natural", "floor", "standable", "terrain-program"]));
+        }
+        for (let index = 1; index < chambers.length; index += 1) {
+          const from = chambers[index - 1]!;
+          const to = chambers[index]!;
+          scene.primitives.push(corridor(`underdark-chamber-passage-${index}`, 0, from.x, from.z, to.x, to.z, Math.max(from.y, to.y) + FLOOR_SLAB_METERS, 1.5, "rock", ["underdark", "cave-passage", "route", "standable", "terrain-program"]));
+        }
+        scene.primitives.push(
+          box("underdark-west-ledge", 0, width * 0.34, feetToMeters(14), depth * 0.48, width * 0.16, FLOOR_SLAB_METERS, depth * 0.14, "rock", ["underdark", "ledge", "platform", "high-ground", "standable", "terrain-program"]),
+          box("underdark-east-ledge", 0, width * 0.78, feetToMeters(12), depth * 0.46, width * 0.12, FLOOR_SLAB_METERS, depth * 0.16, "rock", ["underdark", "ledge", "platform", "high-ground", "standable", "terrain-program"]),
         );
         for (let index = 0; index < (isSaltCrystal ? 20 : 12); index += 1) {
           const x = width * (0.12 + ((index * 7) % 11) / 14);
