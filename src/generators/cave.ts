@@ -252,8 +252,19 @@ function addCavernMonasteryCompound(
   const escapeX = towerChamber.x + towerChamber.diameter * 0.42;
   const escapeZ = towerChamber.z;
   const escapeTop = towerChamber.y + feetToMeters(10);
+  const escapeConnection = stairConnection(
+    "tidal-monastery-cliff-escape-ladder",
+    0,
+    { xCells: towerChamber.x, zCells: escapeZ, yMeters: towerChamber.y + FLOOR_SLAB_METERS },
+    { xCells: escapeX, zCells: escapeZ, yMeters: escapeTop },
+    0.9,
+    "wood",
+    [...embeddedTags, "cliff-escape-ladder", "vertical-route", "standable"],
+  );
   scene.primitives.push(
-    stairs("tidal-monastery-cliff-escape-ladder", 0, escapeX, towerChamber.y + FLOOR_SLAB_METERS, escapeZ, 0.9, feetToMeters(10), 4.8, "wood", [...embeddedTags, "cliff-escape-ladder", "vertical-route", "standable"], Math.PI / 2),
+    escapeConnection.primitive,
+    box("tidal-monastery-cliff-escape-lower-landing", 0, escapeConnection.bottom.xCells, escapeConnection.bottom.yMeters, escapeConnection.bottom.zCells, 1.5, FLOOR_SLAB_METERS, 1.5, "stone", [...embeddedTags, "cliff-escape-ladder", "stair-landing", "standable"]),
+    box("tidal-monastery-cliff-escape-upper-landing", 1, escapeConnection.top.xCells, escapeConnection.top.yMeters, escapeConnection.top.zCells, 1.8, FLOOR_SLAB_METERS, 1.8, "stone", [...embeddedTags, "cliff-escape-ladder", "stair-landing", "standable", "high-ground"]),
   );
   scene.routes.push(createRoute("tidal-monastery-cliff-escape-route", "vertical", [
     { x: towerChamber.x, z: towerChamber.z, y: towerChamber.y + FLOOR_SLAB_METERS },

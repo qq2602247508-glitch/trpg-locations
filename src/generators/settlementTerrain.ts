@@ -680,20 +680,25 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
             const upperY = feetToMeters(cellAt(upperX, row).elevationFeet) + FLOOR_SLAB_METERS;
             const rise = Math.max(feetToMeters(5), upperY - lowerY);
             const centerX = (lowerX + upperX) / 2;
+            const firstPortal = { xCells: lowerX, zCells: row, yMeters: lowerY };
+            const secondPortal = { xCells: upperX, zCells: row, yMeters: upperY };
+            const bottomPortal = firstPortal.yMeters <= secondPortal.yMeters ? firstPortal : secondPortal;
+            const topPortal = firstPortal.yMeters <= secondPortal.yMeters ? secondPortal : firstPortal;
+            const connectorId = `coastal-cliff-switchback-${index + 1}`;
+            const hasMeaningfulRise = topPortal.yMeters - bottomPortal.yMeters > feetToMeters(1);
             scene.primitives.push(
-              stairs(
-                `coastal-cliff-switchback-${index + 1}`,
-                0,
-                centerX,
-                lowerY,
-                row,
-                1.35,
-                rise,
-                Math.max(4.5, Math.abs(upperX - lowerX) + 2.2),
-                "stone",
-                ["water-city", "coastal-cliff", "cliff-descent", "vertical-route", "standable", "terrain-program"],
-                cliffBankSide > 0 ? Math.PI / 2 : -Math.PI / 2,
-              ),
+              hasMeaningfulRise
+                ? stairConnection(
+                  connectorId,
+                  0,
+                  bottomPortal,
+                  topPortal,
+                  1.35,
+                  "stone",
+                  ["water-city", "coastal-cliff", "cliff-descent", "vertical-route", "standable", "terrain-program"],
+                ).primitive
+                : corridor(connectorId, 0, firstPortal.xCells, firstPortal.zCells, secondPortal.xCells, secondPortal.zCells, (firstPortal.yMeters + secondPortal.yMeters) / 2, 1.35, "stone", ["water-city", "coastal-cliff", "cliff-descent", "standable", "terrain-program"]),
+              box(`coastal-cliff-switchback-${index + 1}-landing-lower`, 0, bottomPortal.xCells, bottomPortal.yMeters, bottomPortal.zCells, 1.7, FLOOR_SLAB_METERS, 1.7, "stone", ["water-city", "coastal-cliff", "stair-landing", "standable", "terrain-program"]),
               ...[0, 0.5, 1].map((t) => box(
                 `coastal-cliff-switchback-${index + 1}-landing-${Math.round(t * 2) + 1}`,
                 0,
@@ -706,12 +711,18 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
                 "stone",
                 ["water-city", "coastal-cliff", "stair-landing", "stair-opening", "vertical-opening", "opening-frame", "standable", "terrain-program"],
               )),
+              box(`coastal-cliff-switchback-${index + 1}-landing-upper`, 0, topPortal.xCells, topPortal.yMeters, topPortal.zCells, 1.7, FLOOR_SLAB_METERS, 1.7, "stone", ["water-city", "coastal-cliff", "stair-landing", "standable", "terrain-program"]),
             );
-            scene.routes.push(createRoute(`coastal-cliff-access-route-${index + 1}`, "vertical", [
-              { x: lowerX, z: row, y: lowerY },
-              { x: centerX, z: row, y: lowerY + rise / 2 },
-              { x: upperX, z: row, y: upperY },
-            ], { purpose: "movement", traffic: 0.46, schedule: "all" }));
+            scene.routes.push(createRoute(
+              `coastal-cliff-access-route-${index + 1}`,
+              hasMeaningfulRise ? "vertical" : "alternate",
+              [
+                { x: firstPortal.xCells, z: row, y: firstPortal.yMeters },
+                { x: centerX, z: row, y: (firstPortal.yMeters + secondPortal.yMeters) / 2 },
+                { x: secondPortal.xCells, z: row, y: secondPortal.yMeters },
+              ],
+              { purpose: "movement", traffic: 0.46, schedule: "all" },
+            ));
           }
           scene.routes.push(createRoute("coastal-cliff-upper-route", "alternate", cliffRoutePoints, { purpose: "movement", traffic: 0.58, schedule: "all" }));
           scene.tactical.push(tacticalFeature("coastal-cliff-upper-overwatch", "highGround", cliffRoutePoints[Math.floor(cliffRoutePoints.length / 2)]?.x ?? width * 0.2, depth * 0.5, cliffRoutePoints[Math.floor(cliffRoutePoints.length / 2)]?.y ?? feetToMeters(15), 3, "The parapeted upper-bank road overlooks the canal and has two legal descents."));
@@ -986,6 +997,10 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           corridor("coastal-cliff-maintenance-walk", 1, width * 0.76, depth * 0.22, width * 0.9, depth * 0.72, feetToMeters(20) + FLOOR_SLAB_METERS, 1.4, "wood", ["coastal-cliff", "maintenance-boardwalk", "standable", "high-ground", "terrain-program"]),
           stairs("coastal-cliff-switchback-upper", 1, width * 0.72, feetToMeters(20), depth * 0.29, 2, feetToMeters(10), 7, "stone", ["coastal-cliff", "switchback", "vertical-opening", "standable", "terrain-program"], 0),
           stairs("coastal-cliff-switchback-lower", 0, width * 0.66, feetToMeters(10), depth * 0.56, 2, feetToMeters(10), 7, "stone", ["coastal-cliff", "switchback", "vertical-opening", "standable", "terrain-program"], 0),
+          box("coastal-cliff-switchback-upper-lower-landing", 1, width * 0.72, feetToMeters(20), depth * 0.29 - 3.5, 2.4, FLOOR_SLAB_METERS, 2.4, "stone", ["coastal-cliff", "switchback", "stair-landing", "standable", "terrain-program"]),
+          box("coastal-cliff-switchback-upper-upper-landing", 2, width * 0.72, feetToMeters(30), depth * 0.29 + 3.5, 2.4, FLOOR_SLAB_METERS, 2.4, "stone", ["coastal-cliff", "switchback", "stair-landing", "standable", "high-ground", "terrain-program"]),
+          box("coastal-cliff-switchback-lower-lower-landing", 0, width * 0.66, feetToMeters(10), depth * 0.56 - 3.5, 2.4, FLOOR_SLAB_METERS, 2.4, "stone", ["coastal-cliff", "switchback", "stair-landing", "standable", "terrain-program"]),
+          box("coastal-cliff-switchback-lower-upper-landing", 1, width * 0.66, feetToMeters(20), depth * 0.56 + 3.5, 2.4, FLOOR_SLAB_METERS, 2.4, "stone", ["coastal-cliff", "switchback", "stair-landing", "standable", "terrain-program"]),
         );
         if (program.requiredFeatures.includes("whalebone-landmark")) {
           const boneY = feetToMeters(23);

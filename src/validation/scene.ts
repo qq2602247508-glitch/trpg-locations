@@ -61,6 +61,7 @@ const BUILDING_DETAIL_LEVELS = ["mass", "facade", "full-interior"] as const sati
 const GEOMETRY_EPSILON = 0.000_1;
 const ROUTE_BOUNDS_MARGIN_METERS = GRID_METERS * 2.5;
 const ROUTE_SURFACE_MARGIN_METERS = GRID_METERS * 1.2;
+const CONNECTOR_LANDING_MARGIN_METERS = GRID_METERS * 0.35;
 const VERTICAL_ROUTE_MIN_RISE_METERS = GRID_METERS * 0.35;
 const CAVE_ELEVATION_MIN_RISE_METERS = GRID_METERS * 0.9;
 
@@ -165,6 +166,9 @@ function stairEndpoints(stair: ScenePrimitive): { lower: Vec3; upper: Vec3 } {
   const halfRun = stair.size.z / 2;
   const offset = (localZ: number): { x: number; z: number } => ({
     x: stair.position.x + localZ * sine,
+    // `stairConnection` uses atan2(dx, dz), while Three.js rotates a local
+    // +Z vector toward (+sin θ, +cos θ). Preserve that authored direction so
+    // the lower/upper endpoints remain the exact bottom/top portals.
     z: stair.position.z + localZ * cosine,
   });
   const lower = offset(-halfRun);
@@ -172,6 +176,51 @@ function stairEndpoints(stair: ScenePrimitive): { lower: Vec3; upper: Vec3 } {
   return {
     lower: { ...lower, y: stair.position.y },
     upper: { ...upper, y: stair.position.y + stair.size.y },
+  };
+}
+
+type VerticalConnector = {
+  primitive: ScenePrimitive;
+  kind: "stair" | "ladder";
+  endpointCandidates: Array<{ lower: Vec3; upper: Vec3 }>;
+};
+
+function verticalConnector(primitive: ScenePrimitive): VerticalConnector | undefined {
+  if (hasAnyTag(primitive, ["magical-floating", "levitating", "floating-island"])) return undefined;
+  // A few terrain grammars render natural slopes with the stairs primitive.
+  // Their support is validated by the cave/elevation contract below, not by
+  // artificial stair landing and doorway rules.
+  if (hasAnyTag(primitive, ["natural-ramp", "elevation-change", "ledge-ramp"])) return undefined;
+  if (primitive.shape === "stairs" && primitive.size.y >= VERTICAL_ROUTE_MIN_RISE_METERS) {
+    return {
+      primitive,
+      kind: "stair",
+      endpointCandidates: [stairEndpoints(primitive)],
+    };
+  }
+  const isExplicitLadder = hasAnyTag(primitive, ["ladder", "shaft-access", "vertical-route"])
+    || primitive.id.toLowerCase().includes("ladder");
+  if (!isExplicitLadder || primitive.size.y < VERTICAL_ROUTE_MIN_RISE_METERS) {
+    return undefined;
+  }
+
+  // Older ladder builders use both centre-Y and lower-surface-Y conventions.
+  // Keep both candidates while validation migrates generators to explicit
+  // endpoint-authored connectors.
+  const halfHeight = primitive.size.y / 2;
+  return {
+    primitive,
+    kind: "ladder",
+    endpointCandidates: [
+      {
+        lower: { x: primitive.position.x, y: primitive.position.y - halfHeight, z: primitive.position.z },
+        upper: { x: primitive.position.x, y: primitive.position.y + halfHeight, z: primitive.position.z },
+      },
+      {
+        lower: { x: primitive.position.x, y: primitive.position.y, z: primitive.position.z },
+        upper: { x: primitive.position.x, y: primitive.position.y + primitive.size.y, z: primitive.position.z },
+      },
+    ],
   };
 }
 
@@ -230,6 +279,9 @@ function isWalkablePrimitive(primitive: ScenePrimitive): boolean {
     "platform",
     "ledge",
     "entrance",
+    "standable",
+    "support-surface",
+    "stair-landing",
   ]);
 }
 
@@ -524,39 +576,94 @@ function validateGeometryInvariants(
     if (supportingColumns.length < 2) geometryError(`Elevated platform ${platform.id} lacks two grounded structural supports.`);
   }
 
-  // Site-scale stairs are especially prone to becoming detached when parent
-  // terrain, parcel placement, or a Seed changes. Validate their authored
-  // endpoints against real walkable surfaces instead of accepting the stair
-  // primitive itself as evidence.
-  const siteStairs = primitives.filter((primitive) => (
-    primitive.shape === "stairs"
-    && hasAnyTag(primitive, ["site-program", "terrain-program", "stilt-stair"])
-    && (hasAnyTag(primitive, ["cliff-descent", "cargo-lift", "switchback", "stilt-stair"])
-      || primitive.id.includes("megastructure-rise-"))
-    && !hasAnyTag(primitive, ["magical-floating", "levitating", "floating-island"])
-  ));
+  // Composition can move terrain, parcels and authored structures after their
+  // source generator has built a stair or ladder. Validate every meaningful
+  // vertical connector after composition, not only a short allow-list of site
+  // stairs, and never let the connector count as its own landing evidence.
+  const verticalConnectors = primitives
+    .map(verticalConnector)
+    .filter((connector): connector is VerticalConnector => connector !== undefined);
   const stairLandingSurfaces = primitives.filter((primitive) => (
     primitive.shape !== "stairs"
     && isWalkablePrimitive(primitive)
     && !hasAnyTag(primitive, ["water", "lava", "void"])
   ));
-  for (const stair of siteStairs) {
-    const endpoints = stairEndpoints(stair);
-    const lowerSupported = endpoints.lower.y <= ROUTE_SURFACE_MARGIN_METERS
-      || stairLandingSurfaces.some((surface) => pointNearPrimitiveSurface(
-        endpoints.lower,
-        surface,
-        GRID_METERS * 0.75,
-        ROUTE_SURFACE_MARGIN_METERS * 2,
-      ));
-    const upperSupported = stairLandingSurfaces.some((surface) => pointNearPrimitiveSurface(
-      endpoints.upper,
-      surface,
-      GRID_METERS * 0.75,
-      ROUTE_SURFACE_MARGIN_METERS * 2,
+  const pointAtWalkableHeight = (point: Vec3, surface: ScenePrimitive): boolean => {
+    // Most generators author a slab from its lower surface. Imported or older
+    // primitives may use centre-Y, and a few route-facing slabs expose their
+    // authored Y as the traversal datum. Accept those discrete surface datums,
+    // never any arbitrary point inside a tall walkable-tagged volume.
+    const candidateHeights = [
+      surface.position.y,
+      surface.position.y + surface.size.y / 2,
+      surface.position.y + surface.size.y,
+    ];
+    return candidateHeights.some((height) => Math.abs(point.y - height) <= CONNECTOR_LANDING_MARGIN_METERS);
+  };
+  const pointOnWalkableTop = (point: Vec3, surface: ScenePrimitive): boolean => (
+    pointNearPrimitiveFootprint(point, surface, GRID_METERS * 0.75)
+    && pointAtWalkableHeight(point, surface)
+  );
+  const pointAtOpenedLanding = (point: Vec3): boolean => openings.some((opening) => (
+    isVerticalOpeningEvidence(opening)
+    // Floor openings are represented by four narrow rim primitives around an
+    // intentionally empty centre. The centre of a normal 3 x 3.2-cell stair
+    // well can therefore be about 1.6 cells from every individual rim.
+    && pointNearPrimitiveFootprint(point, opening, GRID_METERS * 2)
+    && pointAtWalkableHeight(point, opening)
+  ));
+  const endpointSupported = (point: Vec3, connectorPrimitive: ScenePrimitive): boolean => (
+    point.y <= CONNECTOR_LANDING_MARGIN_METERS
+    || stairLandingSurfaces.some((surface) => surface !== connectorPrimitive && pointOnWalkableTop(point, surface))
+    || pointAtOpenedLanding(point)
+  );
+  for (const connector of verticalConnectors) {
+    const candidate = connector.endpointCandidates.find((endpoints) => (
+      endpointSupported(endpoints.lower, connector.primitive) && endpointSupported(endpoints.upper, connector.primitive)
     ));
-    if (!lowerSupported) geometryError(`Site stair ${stair.id} has a floating lower endpoint with no walkable landing.`);
-    if (!upperSupported) geometryError(`Site stair ${stair.id} has a floating upper endpoint with no walkable landing.`);
+    const lowerSupported = connector.endpointCandidates.some((endpoints) => endpointSupported(endpoints.lower, connector.primitive));
+    const upperSupported = connector.endpointCandidates.some((endpoints) => endpointSupported(endpoints.upper, connector.primitive));
+    const label = connector.kind === "stair" ? "Stair" : "Ladder";
+    if (!lowerSupported) geometryError(`${label} ${connector.primitive.id} has a floating lower endpoint with no walkable landing.`);
+    if (!upperSupported) geometryError(`${label} ${connector.primitive.id} has a floating upper endpoint with no walkable landing.`);
+    if (candidate === undefined) continue;
+
+    const connectorRoute: Route = {
+      id: `${connector.primitive.id}-clearance`,
+      kind: "vertical",
+      points: [candidate.lower, candidate.upper],
+    };
+    const connectorBuildingId = connector.primitive.tags
+      ?.find((tag) => tag.startsWith("building-instance:"))
+      ?.slice("building-instance:".length);
+    const blockingWall = solidWalls.find((wall) => (
+      (() => {
+        const wallBuildingId = wall.tags
+          ?.find((tag) => tag.startsWith("building-instance:"))
+          ?.slice("building-instance:".length);
+        // Focus/full interiors are dormant, per-building inspection scenes.
+        // Their underground walls may overlap in the settlement overview but
+        // cannot block another building's local stair graph.
+        return !(connectorBuildingId
+          && wallBuildingId
+          && connectorBuildingId !== wallBuildingId
+          && hasTag(wall, "underground"));
+      })()
+      &&
+      routeSamples(connectorRoute).slice(1, -1).some((sample) => pointNearPrimitiveSurface(
+        sample,
+        wall,
+        Math.max(GEOMETRY_EPSILON, connector.primitive.size.x * 0.3),
+        0,
+      ))
+      && !openings.some((opening) => (
+        opening.level === wall.level
+        && routeNearPrimitive(connectorRoute, opening, GRID_METERS * 0.65, ROUTE_SURFACE_MARGIN_METERS)
+      ))
+    ));
+    if (blockingWall !== undefined) {
+      geometryError(`${label} ${connector.primitive.id} crosses solid wall ${blockingWall.id} without nearby opening evidence.`);
+    }
   }
 
   // A tree canopy may overhang its trunk, but it cannot exist as an unrelated

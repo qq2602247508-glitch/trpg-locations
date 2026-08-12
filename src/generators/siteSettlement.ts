@@ -1191,6 +1191,23 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
         ["coastal-cliff", "stilt-foundation", "home", "supported", "standable", `parcel:${parcel.id}`, "site-program"],
         stairRotation,
       ));
+      const groundLanding = {
+        x: stairCenter.x - Math.sin(stairRotation) * stairRunCells / 2,
+        z: stairCenter.z - Math.cos(stairRotation) * stairRunCells / 2,
+      };
+      scene.primitives.push(box(
+        `coastal-stilt-home-entry-ground-landing-${parcel.id}`,
+        0,
+        groundLanding.x,
+        siteElevation,
+        groundLanding.z,
+        1.8,
+        FLOOR_SLAB_METERS,
+        1.8,
+        "wood",
+        ["coastal-cliff", "stilt-foundation", "stair-landing", "standable", `parcel:${parcel.id}`, "site-program"],
+        stairRotation,
+      ));
       scene.primitives.push(box(
         `coastal-stilt-home-entry-landing-${parcel.id}`,
         0,
@@ -1315,6 +1332,19 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
     if (isFlooded) {
       for (const [pierIndex, dx, dz] of [[0, -0.36, -0.36], [1, 0.36, -0.36], [2, -0.36, 0.36], [3, 0.36, 0.36]] as const) scene.primitives.push(cylinder(`flood-pier-${parcel.id}-${pierIndex}`, 0, parcel.center.x + parcel.size.x * dx, 0, parcel.center.z + parcel.size.z * dz, 0.55, siteElevation, "wood", ["stilt-foundation", "flooded-site", "site-program"]));
       scene.primitives.push(stairs(`flood-access-stair-${parcel.id}`, 0, parcel.entrance.x, 0, parcel.entrance.z, 1.2, siteElevation, 3.8, "wood", ["flooded-site", "vertical-opening", "site-program"], parcel.rotationY));
+      const halfRun = 3.8 / 2;
+      const lowerLanding = {
+        x: parcel.entrance.x - Math.sin(parcel.rotationY) * halfRun,
+        z: parcel.entrance.z - Math.cos(parcel.rotationY) * halfRun,
+      };
+      const upperLanding = {
+        x: parcel.entrance.x + Math.sin(parcel.rotationY) * halfRun,
+        z: parcel.entrance.z + Math.cos(parcel.rotationY) * halfRun,
+      };
+      scene.primitives.push(
+        box(`flood-access-stair-ground-landing-${parcel.id}`, 0, lowerLanding.x, 0, lowerLanding.z, 1.7, FLOOR_SLAB_METERS, 1.7, "wood", ["flooded-site", "stair-landing", "standable", "site-program"], parcel.rotationY),
+        box(`flood-access-stair-upper-landing-${parcel.id}`, 0, upperLanding.x, siteElevation, upperLanding.z, 1.7, FLOOR_SLAB_METERS, 1.7, "wood", ["flooded-site", "stair-landing", "standable", "stilt-foundation", "site-program"], parcel.rotationY),
+      );
     }
   }
   tagFunctionalInspectionClusters(scene);

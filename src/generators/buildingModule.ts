@@ -936,8 +936,12 @@ function addFunctionalModuleGeometry(
       addBox(module, "north-frame", level, greenhouseX, greenhouseY, localZ - depth / 2, width, feetToMeters(7), 0.16, "wood", ["greenhouse-frame", "wall"]);
       addBox(module, "south-frame", level, greenhouseX, greenhouseY, localZ + depth / 2, width, feetToMeters(7), 0.16, "wood", ["greenhouse-frame", "wall"]);
       if (submerged) {
-        addBox(module, "west-frame", level, greenhouseX - width / 2, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
-        addBox(module, "east-frame", level, greenhouseX + width / 2, greenhouseY, localZ, 0.16, feetToMeters(7), depth, "wood", ["greenhouse-frame", "wall"]);
+        const doorGap = Math.min(1.35, depth * 0.34);
+        const frameDepth = Math.max(0.55, (depth - doorGap) / 2);
+        for (const [frameSide, frameX] of [["west", greenhouseX - width / 2], ["east", greenhouseX + width / 2]] as const) {
+          addBox(module, `${frameSide}-frame-north`, level, frameX, greenhouseY, localZ - (doorGap + frameDepth) / 2, 0.16, feetToMeters(7), frameDepth, "wood", ["greenhouse-frame", "wall", "door-frame", "opening"]);
+          addBox(module, `${frameSide}-frame-south`, level, frameX, greenhouseY, localZ + (doorGap + frameDepth) / 2, 0.16, feetToMeters(7), frameDepth, "wood", ["greenhouse-frame", "wall", "door-frame", "opening"]);
+        }
       } else {
         const innerX = greenhouseX - side * width / 2;
         const outerX = greenhouseX + side * width / 2;
@@ -1914,8 +1918,16 @@ function addFocusInteriorBlueprint(scene: GeneratedScene, lot: BuildingLot, gene
       scene.primitives.push(corridor(`${lot.id}-focus-${level}-connection-${connectionIndex + 1}`, level, fromWorld.x, fromWorld.z, toWorld.x, toWorld.z, y + FLOOR_SLAB_METERS + 0.03, 0.9, "wood", [...tags, "room-connection", "door-route", "standable"]));
     }
     for (const core of interiorProgram.verticalCores.filter((entry) => entry.fromLevel === level && entry.toLevel === level + 1)) {
+      const runCells = Math.max(2.8, primary.size.z * 0.42);
       const stair = point(core.positionLocalCells.x, core.positionLocalCells.z);
-      scene.primitives.push(stairs(`${lot.id}-focus-${core.id}`, level, stair.x, y, stair.z, 1.05, floorHeight, Math.max(2.8, primary.size.z * 0.42), "wood", [...tags, "building-stair", "vertical-opening", "standable", `vertical-core:${core.id}`], lot.rotation));
+      const lowerLanding = point(core.positionLocalCells.x, core.positionLocalCells.z - runCells / 2);
+      const upperLanding = point(core.positionLocalCells.x, core.positionLocalCells.z + runCells / 2);
+      const coreTags = [...tags, "building-stair", "vertical-opening", "standable", `vertical-core:${core.id}`];
+      scene.primitives.push(
+        stairs(`${lot.id}-focus-${core.id}`, level, stair.x, y, stair.z, 1.05, floorHeight, runCells, "wood", coreTags, lot.rotation),
+        box(`${lot.id}-focus-${core.id}-lower-landing`, level, lowerLanding.x, y, lowerLanding.z, 1.35, FLOOR_SLAB_METERS, 1.35, "wood", [...coreTags, "stair-landing", "support-surface"], lot.rotation),
+        box(`${lot.id}-focus-${core.id}-upper-landing`, level + 1, upperLanding.x, y + floorHeight, upperLanding.z, 1.35, FLOOR_SLAB_METERS, 1.35, "wood", [...coreTags, "stair-landing", "support-surface"], lot.rotation),
+      );
     }
     y += floorHeight;
   }

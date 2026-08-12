@@ -552,7 +552,12 @@ function buildRift(scene: GeneratedScene, width: number, depth: number, density:
   for (const [index, bridge] of bridgePoints.entries()) scene.primitives.push(corridor(`rift-bridge-${index}`, 0, bridge.a.x, bridge.a.z, bridge.b.x, bridge.b.z, rendered.yOf(index === 0 ? 5 : 4), index === 0 ? 1.8 : 1.35, index === 0 ? "rock" : "wood", ["bridge", index === 0 ? "natural-bridge" : "rope-bridge", "supported", "rift-crossing", `rift-form:${form}`]));
   const descentT = detail.float(-tExtent * 0.18, tExtent * 0.18); const bottom = pointAt(descentT); const bank = pointAt(descentT, -halfGap - 1.2);
   const descent = stairConnection("rift-bottom-descent", 0, { xCells: bottom.x, zCells: bottom.z, yMeters: rendered.yOf(0) }, { xCells: bank.x, zCells: bank.z, yMeters: rendered.yOf(5) }, 1.4, "rock", ["vertical-route", "vertical-opening", "cliff-descent", "supported", "rift"]);
-  scene.primitives.push(descent.primitive); scene.routes.push(stairRoute("rift-bottom-route", descent));
+  scene.primitives.push(
+    descent.primitive,
+    box("rift-bottom-descent-lower-landing", 0, descent.bottom.xCells, descent.bottom.yMeters, descent.bottom.zCells, 1.9, FLOOR_SLAB_METERS, 1.9, "rock", ["rift", "cliff-descent", "stair-landing", "standable", "supported"]),
+    box("rift-bottom-descent-upper-landing", 0, descent.top.xCells, descent.top.yMeters, descent.top.zCells, 1.9, FLOOR_SLAB_METERS, 1.9, "rock", ["rift", "cliff-descent", "stair-landing", "standable", "supported", "high-ground"]),
+  );
+  scene.routes.push(stairRoute("rift-bottom-route", descent));
   const bankA = pointAt(0, -Math.min(cols, rows) * 0.23); const bankB = pointAt(0, Math.min(cols, rows) * 0.23);
   const bottomRoomCenter = pointAt(0);
   const westRoom = createRoom("rift-west-room", "Western broken bank", "natural", 0, bankA.x, bankA.z, cols * 0.3, rows * 0.42, rendered.yOf(5));
@@ -2341,7 +2346,12 @@ function buildForest(scene: GeneratedScene, width: number, depth: number, densit
       } else {
         const low = from.y <= to.y ? { xCells: from.x, zCells: from.z, yMeters: from.y } : { xCells: to.x, zCells: to.z, yMeters: to.y };
         const high = from.y <= to.y ? { xCells: to.x, zCells: to.z, yMeters: to.y } : { xCells: from.x, zCells: from.z, yMeters: from.y };
-        scene.primitives.push(stairConnection(`${id}-rise-${index}`, 0, low, high, widthCells, "earth", [...common, "vertical-route", "supported"]).primitive);
+        const connectorId = `${id}-rise-${index}`;
+        scene.primitives.push(
+          stairConnection(connectorId, 0, low, high, widthCells, "earth", [...common, "vertical-route", "supported"]).primitive,
+          box(`${connectorId}-lower-landing`, 0, low.xCells, low.yMeters, low.zCells, widthCells + 0.5, FLOOR_SLAB_METERS, widthCells + 0.5, "earth", [...common, "stair-landing", "standable", "supported"]),
+          box(`${connectorId}-upper-landing`, 0, high.xCells, high.yMeters, high.zCells, widthCells + 0.5, FLOOR_SLAB_METERS, widthCells + 0.5, "earth", [...common, "stair-landing", "standable", "supported"]),
+        );
       }
     }
   };
@@ -2579,7 +2589,13 @@ function rerouteParentTrailsAroundBuilding(
       } else {
         const lower = from.y <= to.y ? { xCells: from.x, zCells: from.z, yMeters: from.y } : { xCells: to.x, zCells: to.z, yMeters: to.y };
         const upper = from.y <= to.y ? { xCells: to.x, zCells: to.z, yMeters: to.y } : { xCells: from.x, zCells: from.z, yMeters: from.y };
-        scene.primitives.push(stairConnection(`${route.id}-rise-${index}`, 0, lower, upper, route.kind === "primary" ? 1.25 : 0.85, "earth", [...routeTags, "vertical-route", "supported"]).primitive);
+        const connectorId = `${route.id}-rise-${index}`;
+        const connectorWidth = route.kind === "primary" ? 1.25 : 0.85;
+        scene.primitives.push(
+          stairConnection(connectorId, 0, lower, upper, connectorWidth, "earth", [...routeTags, "vertical-route", "supported"]).primitive,
+          box(`${connectorId}-lower-landing`, 0, lower.xCells, lower.yMeters, lower.zCells, connectorWidth + 0.5, FLOOR_SLAB_METERS, connectorWidth + 0.5, "earth", [...routeTags, "stair-landing", "standable", "supported"]),
+          box(`${connectorId}-upper-landing`, 0, upper.xCells, upper.yMeters, upper.zCells, connectorWidth + 0.5, FLOOR_SLAB_METERS, connectorWidth + 0.5, "earth", [...routeTags, "stair-landing", "standable", "supported"]),
+        );
       }
     }
   }
@@ -2765,15 +2781,20 @@ function rerouteServiceRoutesAroundBuildingFootprint(
         const upper = from.y <= to.y
           ? { xCells: to.x, zCells: to.z, yMeters: to.y }
           : { xCells: from.x, zCells: from.z, yMeters: from.y };
-        scene.primitives.push(stairConnection(
-          `wilderness-service-loop-detour-${index}`,
+        const connectorId = `wilderness-service-loop-detour-${index}`;
+        scene.primitives.push(
+          stairConnection(
+          connectorId,
           0,
           lower,
           upper,
           1.15,
           "rock",
           [...tags, "vertical-route", "supported"],
-        ).primitive);
+          ).primitive,
+          box(`${connectorId}-lower-landing`, 0, lower.xCells, lower.yMeters, lower.zCells, 1.7, FLOOR_SLAB_METERS, 1.7, "rock", [...tags, "stair-landing", "standable", "supported"]),
+          box(`${connectorId}-upper-landing`, 0, upper.xCells, upper.yMeters, upper.zCells, 1.7, FLOOR_SLAB_METERS, 1.7, "rock", [...tags, "stair-landing", "standable", "supported"]),
+        );
       }
     }
   }
@@ -3483,13 +3504,16 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
   }
 
   if (quarantine && wantsIsolationShed) {
-    const shedX = Math.max(5, Math.min(width - 5, x + 9.5));
+    // The swamp reed route leaves the core parcel on its eastern side. Keep
+    // the detached ward west of the parcel so its closed north wall cannot be
+    // intersected by the long terrain-following rise back to the open marsh.
+    const shedX = Math.max(5, Math.min(width - 5, x - 9.5));
     // Keep the detached ward on the opposite side of the authored reed route;
     // a quarantine shed is a destination, not an obstacle placed over an
     // existing wetland traversal line.
     const shedZ = Math.max(5, Math.min(depth - 5, z - 7.5));
     const shedY = baseY;
-    const shedApproachX = x + 6.2;
+    const shedApproachX = x - 6.2;
     const shedApproachZ = z + 5.6;
     scene.primitives.push(
       box("wilderness-quarantine-shed-floor", 0, shedX, shedY, shedZ, 6.4, FLOOR_SLAB_METERS, 5.2, "wood", ["site-program", "quarantine-shed", "floor", "standable", "restricted"]),
@@ -3589,6 +3613,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       scene.primitives.push(
         cylinder("wilderness-communications-tower-mast", 0, towerX, towerBase, towerZ, 0.52, towerHeight, "metal", ["site-program", "communications-tower", "antenna", "vertical-landmark", "climbable"]),
         box("wilderness-communications-tower-yard", 0, towerX, towerBase, towerZ, 5.6, FLOOR_SLAB_METERS, 5.6, "rock", ["site-program", "communications-tower", "floor", "standable", "supported"]),
+        box("wilderness-communications-tower-service-platform", 1, towerX, towerBase + towerHeight, towerZ, 3.2, FLOOR_SLAB_METERS, 3.2, "metal", ["site-program", "communications-tower", "platform", "stair-landing", "standable", "supported", "high-ground"]),
         box("wilderness-communications-tower-ladder", 0, towerX, towerBase + towerHeight / 2, towerZ + 0.7, 0.45, towerHeight, 0.16, "metal", ["site-program", "communications-tower", "ladder", "vertical-route", "shaft-access", "climbable"]),
       );
       for (const [index, heightRatio] of [0.36, 0.62, 0.86].entries()) {
@@ -3750,6 +3775,8 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     );
     scene.primitives.push(
       accessStair.primitive,
+      box("wilderness-raised-access-lower-landing", 0, accessStair.bottom.xCells, accessStair.bottom.yMeters, accessStair.bottom.zCells, 2, FLOOR_SLAB_METERS, 2, "wood", ["parcel-access", "site-program", "raised-foundation", "stair-landing", "standable", "supported"]),
+      box("wilderness-raised-access-upper-landing", 0, accessStair.top.xCells, accessStair.top.yMeters, accessStair.top.zCells, 2, FLOOR_SLAB_METERS, 2, "wood", ["parcel-access", "site-program", "raised-foundation", "stair-landing", "standable", "supported"]),
       corridor("wilderness-access-path", 0, stairEnd.xCells, stairEnd.zCells, entrance.x, entrance.z, baseY, 1.6, "wood", ["road", "boardwalk", "bridge", "parcel-access", "site-program", "standable", "supported"]),
     );
     for (const [index, ratio] of [0.28, 0.56, 0.84].entries()) {
@@ -3843,7 +3870,11 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       "wood",
       ["river-access", "vertical-route", "supported", "site-program", "shaft-access", "vertical-opening"],
     );
-    scene.primitives.push(bankConnection.primitive);
+    scene.primitives.push(
+      bankConnection.primitive,
+      box("wilderness-river-bank-descent-lower-landing", 0, bankConnection.bottom.xCells, bankConnection.bottom.yMeters, bankConnection.bottom.zCells, 2, FLOOR_SLAB_METERS, 2, "wood", ["river-access", "stair-landing", "standable", "supported", "site-program"]),
+      box("wilderness-river-bank-descent-upper-landing", 0, bankConnection.top.xCells, bankConnection.top.yMeters, bankConnection.top.zCells, 2, FLOOR_SLAB_METERS, 2, "wood", ["river-access", "stair-landing", "standable", "supported", "site-program"]),
+    );
     scene.routes.push(
       stairRoute("wilderness-river-bank-route", bankConnection),
       createRoute("wilderness-dock-route", "alternate", [
@@ -4010,6 +4041,7 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     const towerHeight = feetToMeters(archetype === "swamp" ? 18 : 24);
     scene.primitives.push(
       cylinder("wilderness-site-lookout-tower", 0, towerX, towerBase + towerHeight / 2, towerZ, 1.35, towerHeight, "wood", ["site-program", "lookout-tower", "vertical-landmark", "cover"]),
+      box("wilderness-site-lookout-lower-landing", 0, towerX, towerBase, towerZ + 1.2, 2.2, FLOOR_SLAB_METERS, 2.2, "wood", ["site-program", "lookout-tower", "stair-landing", "standable", "supported"]),
       box("wilderness-site-lookout-platform", 1, towerX, towerBase + towerHeight, towerZ, 4.8, FLOOR_SLAB_METERS, 4.8, "wood", ["site-program", "lookout-tower", "platform", "high-ground", "standable", "surface-grid"]),
       box("wilderness-site-lookout-ladder", 0, towerX, towerBase + towerHeight / 2, towerZ + 1.2, 0.55, towerHeight, 0.18, "wood", ["site-program", "lookout-tower", "ladder", "climbable", "vertical-route", "shaft-access"]),
     );
@@ -4471,6 +4503,8 @@ function addTafoniWeathering(
     scene.primitives.push(
       box(`tafoni-wall-${cluster}-climb-step`, 0, ladderX, stepY, ladderZ, 1.4, FLOOR_SLAB_METERS, 1.4, "stone", ["tafoni", "tafoni-rib", "standable", "high-ground", "supported"]),
       box(`tafoni-wall-${cluster}-ladder`, 0, ladderX, 0, ladderZ - 0.48, 0.55, wallHeight, 0.16, "wood", ["tafoni", "tafoni-rib", "ladder", "climbable", "vertical-route", "shaft-access", "vertical-opening", "supported"]),
+      box(`tafoni-wall-${cluster}-ladder-lower-landing`, 0, ladderX, 0, ladderZ - 0.48, 1.6, FLOOR_SLAB_METERS, 1.6, "stone", ["tafoni", "tafoni-rib", "stair-landing", "standable", "supported"]),
+      box(`tafoni-wall-${cluster}-ladder-upper-landing`, 0, ladderX, wallHeight, ladderZ - 0.48, 1.6, FLOOR_SLAB_METERS, 1.6, "stone", ["tafoni", "tafoni-rib", "stair-landing", "standable", "supported", "high-ground"]),
     );
     scene.routes.push(createRoute(`tafoni-rib-climb-route-${cluster}`, "vertical", [
       { x: ladderX, z: ladderZ, y: FLOOR_SLAB_METERS },

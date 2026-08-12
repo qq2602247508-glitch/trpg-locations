@@ -255,8 +255,78 @@ describe("geometry-level P1 validation", () => {
     const result = validateScene(scene);
 
     expect(result.valid).toBe(false);
-    expect(hasError(result, "Site stair detached-site-stair has a floating lower endpoint")).toBe(true);
-    expect(hasError(result, "Site stair detached-site-stair has a floating upper endpoint")).toBe(true);
+    expect(hasError(result, "Stair detached-site-stair has a floating lower endpoint")).toBe(true);
+    expect(hasError(result, "Stair detached-site-stair has a floating upper endpoint")).toBe(true);
+  });
+
+  it("rejects a detached ladder even when it carries generic shaft-access tags", () => {
+    const scene = generateScene({
+      ...request,
+      prompt: "悬崖哨塔和维修梯",
+      seed: "geometry-floating-ladder",
+    }, "adaptive");
+    scene.primitives.push({
+      id: "detached-maintenance-ladder",
+      shape: "box",
+      position: { x: GRID_METERS * 24, y: GRID_METERS * 20, z: GRID_METERS * 24 },
+      size: { x: 0.45, y: GRID_METERS * 4, z: 0.18 },
+      material: "metal",
+      level: 1,
+      tags: ["ladder", "climbable", "shaft-access", "vertical-route"],
+    });
+
+    const result = validateScene(scene);
+
+    expect(result.valid).toBe(false);
+    expect(hasError(result, "Ladder detached-maintenance-ladder has a floating lower endpoint")).toBe(true);
+    expect(hasError(result, "Ladder detached-maintenance-ladder has a floating upper endpoint")).toBe(true);
+  });
+
+  it("rejects a supported stair whose run crosses a solid wall without an opening", () => {
+    const scene = generateScene({ ...request, seed: "geometry-stair-wall" }, "tower");
+    scene.primitives.push(
+      {
+        id: "connector-lower-landing",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 5 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 0,
+        tags: ["floor", "platform"],
+      },
+      {
+        id: "connector-upper-landing",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 3, z: GRID_METERS * 11 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 1,
+        tags: ["floor", "platform"],
+      },
+      {
+        id: "blocked-connector-stair",
+        shape: "stairs",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS, y: GRID_METERS * 3, z: GRID_METERS * 6 },
+        material: "stone",
+        level: 0,
+        tags: ["stairs", "vertical-opening"],
+      },
+      {
+        id: "connector-blocking-wall",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 1.5, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS * 4, y: GRID_METERS * 3, z: 0.35 },
+        material: "stone",
+        level: 0,
+        tags: ["wall"],
+      },
+    );
+
+    const result = validateScene(scene);
+
+    expect(result.valid).toBe(false);
+    expect(hasError(result, "Stair blocked-connector-stair crosses solid wall connector-blocking-wall")).toBe(true);
   });
 
   it("rejects a detached tree canopy while accepting its grounded trunked neighbors", () => {

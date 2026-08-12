@@ -590,6 +590,9 @@ describe("five-layer composition catalog", () => {
     expect(scene.buildingInstances?.some((building) => building.archetype === "home")).toBe(true);
     const tags = new Set(scene.primitives.flatMap((primitive) => primitive.tags ?? []));
     expect(tags.has("lookout-tower")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.id === "wilderness-site-lookout-lower-landing"
+      && primitive.tags?.includes("stair-landing")
+      && primitive.tags?.includes("standable"))).toBe(true);
     expect(tags.has("trench")).toBe(true);
     expect(tags.has("fallen-log-defense")).toBe(true);
   });
@@ -626,6 +629,9 @@ describe("five-layer composition catalog", () => {
     expect(tags.has("stilt-foundation")).toBe(true);
     expect(tags.has("boardwalk")).toBe(true);
     expect(tags.has("communications-tower")).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.id === "wilderness-communications-tower-service-platform"
+      && primitive.tags?.includes("stair-landing")
+      && primitive.tags?.includes("standable"))).toBe(true);
     expect(tags.has("generator-shed")).toBe(true);
     expect(tags.has("ice-fissure")).toBe(true);
     expect(tags.has("reserve-vault")).toBe(true);
