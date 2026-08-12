@@ -71,6 +71,51 @@ function programFor(context: GeneratorContext): BuildingProgram {
     return { id: "sacred", title: "The Broken Bell Sanctuary", description: "A cruciform sacred building with distinct prayer chambers, sanctuary, crypt descent, vestry route, and elevated bell platform.", archetype: has(text, ["教堂", "church", "chapel"]) ? "church" : "temple", seed: context.request.seed, bounds: { x: 37, z: 35 }, floorHeights: [19, 13, 10], floorLabels: ["1F", "钟楼", "B1"], rooms, connections: [link("nave-altar", "nave", "altar"), link("nave-west", "nave", "west-prayer"), link("nave-east", "nave", "east-prayer"), link("altar-vestry", "altar", "vestry", "service"), link("altar-crypt", "altar", "crypt", "stair"), link("prayer-bell", bellWest ? "west-prayer" : "east-prayer", "bell", "stair")], requiredFeatures: ["altar", "prayer-room", "crypt", "bell-platform"], floorMaterial: "stone", wallMaterial: "plaster", states, exteriorStyle: "sacred-close", facadeStyle: "sacred" };
   }
 
+  if (has(text, ["歌剧院", "剧院", "opera house", "opera theatre", "opera theater"])) {
+    const mirrored = context.rng.fork("opera-backstage-side").bool();
+    const backstageX = mirrored ? 33 : 9;
+    const dressingX = mirrored ? 9 : 33;
+    const rooms: ProgramRoom[] = [
+      room("opera-foyer", "Grand entrance foyer", 0, 21, 5.5, 16, 7, "public", ["entrance", "opera-house", "foyer", "front-desk"]),
+      room("opera-auditorium", "Horseshoe auditorium and stalls", 0, 21, 16, 22, 14, "public", ["opera-house", "auditorium", "seating"]),
+      room("opera-orchestra", "Sunken orchestra pit", 0, 21, 24, 12, 4.5, "combat", ["opera-house", "orchestra-pit", "sunken"]),
+      room("opera-stage", "Main proscenium stage", 0, 21, 31, 18, 8, "combat", ["opera-house", "stage", "proscenium", "high-ground"]),
+      room("opera-backstage", "Backstage scenery and fly-floor access", 0, backstageX, 31, 8, 10, "service", ["opera-house", "backstage", "service-route"]),
+      room("opera-dressing", "Dressing rooms and performers' corridor", 0, dressingX, 31, 8, 10, "private", ["opera-house", "dressing-room"]),
+      room("opera-balcony", "Upper balcony and private boxes", 1, 21, 15, 22, 8, "combat", ["opera-house", "balcony", "theatre-box", "high-ground"]),
+      { ...room("opera-props", "Half-flooded underground prop store", 3, backstageX, 34, 10, 8, "service", ["opera-house", "prop-store", "underground", "flooded"]), absoluteElevationFeet: -13 },
+      { ...room("opera-roof", "Roof escape route and fly-tower platform", 2, 21, 29, 18, 5, "combat", ["opera-house", "roof-platform", "roof-route", "escape-route", "high-ground"]), openAir: true },
+    ];
+    return {
+      id: "opera-house",
+      title: states.includes("flooded") ? "The Drowned Orpheum" : "The Orpheum Grand Theatre",
+      description: "A purpose-built opera house preserves its foyer, horseshoe auditorium, orchestra pit, proscenium stage, backstage circulation, dressing rooms, flooded prop cellar, balcony and roof escape route.",
+      archetype: "museum",
+      seed: context.request.seed,
+      bounds: { x: 44, z: 41 },
+      rooms,
+      connections: [
+        link("foyer-auditorium", "opera-foyer", "opera-auditorium", "door", 2.4),
+        link("auditorium-orchestra", "opera-auditorium", "opera-orchestra", "corridor", 2),
+        link("orchestra-stage", "opera-orchestra", "opera-stage", "corridor", 2),
+        link("stage-backstage", "opera-stage", "opera-backstage", "service", 1.8),
+        link("stage-dressing", "opera-stage", "opera-dressing", "service", 1.6),
+        link("auditorium-balcony", "opera-auditorium", "opera-balcony", "stair", 1.8),
+        link("backstage-props", "opera-backstage", "opera-props", "stair", 1.5),
+        link("balcony-roof", "opera-balcony", "opera-roof", "stair", 1.5),
+      ],
+      requiredFeatures: ["foyer", "auditorium", "stage", "orchestra-pit", "backstage", "dressing-room", "prop-store", "flooded", "roof-route"],
+      detailCount: Math.round(14 + context.request.density * 20),
+      floorHeights: [21, 14, 10, 11],
+      floorLabels: ["1F观众厅", "包厢与楼座", "屋顶逃生层", "B1道具库"],
+      floorMaterial: "wood",
+      wallMaterial: "plaster",
+      states,
+      exteriorStyle: "institutional-street",
+      facadeStyle: "civic",
+    };
+  }
+
   const mageAcademy = has(text, ["法师学院", "魔法学院", "mage academy", "wizard academy", "arcane academy"]);
   if (mageAcademy) {
     const mirrored = context.rng.fork("academy-variant").bool();

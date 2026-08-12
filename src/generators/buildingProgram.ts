@@ -439,6 +439,43 @@ export function compileBuildingProgram(program: BuildingProgram): GeneratedScene
     if (target.tags.includes("research-tower")) {
       scene.primitives.push(cylinder(`${target.id}-arcane-instrument`, target.level, target.x, y, target.z, 2.4, feetToMeters(7), "metal", ["arcane-instrument", "research", "landmark", `room:${target.id}`]));
     }
+    if (target.tags.includes("auditorium")) {
+      for (let row = 0; row < 6; row += 1) {
+        const rowWidth = target.width * (0.48 + row * 0.045);
+        for (const side of [-1, 1]) {
+          scene.primitives.push(box(`${target.id}-seat-row-${row}-${side < 0 ? "west" : "east"}`, target.level, target.x + side * rowWidth * 0.26, y, target.z - target.depth * 0.3 + row * target.depth * 0.1, rowWidth * 0.42, feetToMeters(2.8), 0.72, "wood", ["opera-house", "auditorium-seat", "cover", `room:${target.id}`]));
+        }
+      }
+    }
+    if (target.tags.includes("orchestra-pit")) {
+      scene.primitives.push(
+        box(`${target.id}-pit-floor`, target.level, target.x, y - feetToMeters(3), target.z, target.width * 0.86, FLOOR_SLAB_METERS, target.depth * 0.8, "wood", ["opera-house", "orchestra-pit", "sunken-floor", "standable", `room:${target.id}`]),
+        box(`${target.id}-music-stand-line`, target.level, target.x, y - feetToMeters(2.8), target.z, target.width * 0.62, feetToMeters(2.5), 0.6, "wood", ["opera-house", "music-stand", "cover", `room:${target.id}`]),
+      );
+    }
+    if (target.tags.includes("stage")) {
+      scene.primitives.push(
+        box(`${target.id}-stage-deck`, target.level, target.x, y + feetToMeters(3), target.z, target.width * 0.9, feetToMeters(3), target.depth * 0.82, "wood", ["opera-house", "stage", "platform", "standable", "high-ground", `room:${target.id}`]),
+        box(`${target.id}-proscenium-west`, target.level, target.x - target.width * 0.44, y, target.z - target.depth * 0.42, 0.8, feetToMeters(16), 1.2, "plaster", ["opera-house", "proscenium", "structural-support", `room:${target.id}`]),
+        box(`${target.id}-proscenium-east`, target.level, target.x + target.width * 0.44, y, target.z - target.depth * 0.42, 0.8, feetToMeters(16), 1.2, "plaster", ["opera-house", "proscenium", "structural-support", `room:${target.id}`]),
+      );
+    }
+    if (target.tags.includes("backstage")) {
+      for (let index = 0; index < 3; index += 1) {
+        scene.primitives.push(box(`${target.id}-scenery-flat-${index}`, target.level, target.x - target.width * 0.28 + index * target.width * 0.28, y, target.z, 0.5, feetToMeters(9), target.depth * 0.55, "wood", ["opera-house", "scenery-flat", "cover", `room:${target.id}`]));
+      }
+    }
+    if (target.tags.includes("dressing-room")) {
+      scene.primitives.push(
+        box(`${target.id}-costume-rack`, target.level, target.x - target.width * 0.22, y, target.z, 0.7, feetToMeters(6.5), target.depth * 0.54, "wood", ["opera-house", "costume-rack", "cover", `room:${target.id}`]),
+        box(`${target.id}-mirror-bank`, target.level, target.x + target.width * 0.2, y, target.z, 0.7, feetToMeters(5), target.depth * 0.48, "warmLight", ["opera-house", "dressing-mirror", `room:${target.id}`]),
+      );
+    }
+    if (target.tags.includes("prop-store")) {
+      for (let index = 0; index < 4; index += 1) {
+        scene.primitives.push(box(`${target.id}-prop-crate-${index}`, target.level, target.x - target.width * 0.3 + index * target.width * 0.2, y, target.z, 1.6, feetToMeters(3.2 + index * 0.35), 1.4, "wood", ["opera-house", "prop-crate", "cover", "flooded", `room:${target.id}`]));
+      }
+    }
   }
   if (program.archetype === "hospital") {
     for (const target of program.rooms.filter((room) => /clinical|treatment|patient ward/i.test(room.name))) {

@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-08-12T18:16:00Z",
+  "scene": {
+    "id": "ice-research",
+    "title": "SceneProgram · Whiteglass Expanse",
+    "archetype": "ice",
+    "seed": "browser-r12-ice",
+    "valid": true,
+    "warnings": [],
+    "diagnosticScore": 99,
+    "primitives": 339,
+    "rooms": 14,
+    "routes": 15,
+    "floors": 4,
+    "performance": {
+      "drawCalls": 73,
+      "triangles": 6618,
+      "fps": 75
+    }
+  },
+  "views": [
+    "ice-research-overview-fixed.png",
+    "ice-research-floor-3-fixed.png",
+    "ice-research-building-focus-fixed.png"
+  ],
+  "visualConclusion": {
+    "p0": [],
+    "p1": [],
+    "p2": [
+      "Building-focus framing remains heavily occluded by the exterior envelope."
+    ],
+    "resolved": [
+      "The right-side orange escape route no longer enters the solid side wall and now follows the exterior building envelope."
+    ]
+  },
+  "runtimeNotes": [
+    "The page showed 校验通过 and no route-through-solid-wall warning.",
+    "SwiftShader Chromium emitted browser-level software WebGL performance diagnostics; no application JavaScript exception was observed."
+  ]
+}

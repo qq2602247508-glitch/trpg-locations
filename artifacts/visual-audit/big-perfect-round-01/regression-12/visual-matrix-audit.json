@@ -1,0 +1,822 @@
+{
+  "generatedAt": "2026-08-12T17:05:16.709Z",
+  "results": [
+    {
+      "id": "drowned-opera",
+      "steps": [
+        {
+          "label": "overview",
+          "status": "校验通过",
+          "statusDetail": "138 个可批处理图元 · 849 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "cut",
+          "floorLabel": "剖切 · 隐藏屋顶",
+          "transparency": "false",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Drowned Orpheum",
+            "archetype": "museum",
+            "valid": true,
+            "warnings": [],
+            "primitives": 138,
+            "rooms": 9,
+            "routes": 8,
+            "floors": 4,
+            "buildings": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "138",
+              "detail": "18 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "20",
+              "detail": "2,030 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "7 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "low",
+          "status": "校验通过",
+          "statusDetail": "138 个可批处理图元 · 849 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "cut",
+          "floorLabel": "剖切 · 隐藏屋顶",
+          "transparency": "false",
+          "low": "true",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Drowned Orpheum",
+            "archetype": "museum",
+            "valid": true,
+            "warnings": [],
+            "primitives": 138,
+            "rooms": 9,
+            "routes": 8,
+            "floors": 4,
+            "buildings": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "138",
+              "detail": "18 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "20",
+              "detail": "2,030 triangles"
+            },
+            "fps": {
+              "value": "145 FPS",
+              "detail": "7 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "top",
+          "status": "校验通过",
+          "statusDetail": "138 个可批处理图元 · 849 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "cut",
+          "floorLabel": "剖切 · 隐藏屋顶",
+          "transparency": "false",
+          "low": "false",
+          "top": "true",
+          "sceneSummary": {
+            "title": "SceneProgram · The Drowned Orpheum",
+            "archetype": "museum",
+            "valid": true,
+            "warnings": [],
+            "primitives": 138,
+            "rooms": 9,
+            "routes": 8,
+            "floors": 4,
+            "buildings": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "138",
+              "detail": "18 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "20",
+              "detail": "2,030 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "7 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "transparent",
+          "status": "校验通过",
+          "statusDetail": "138 个可批处理图元 · 849 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "cut",
+          "floorLabel": "剖切 · 隐藏屋顶",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Drowned Orpheum",
+            "archetype": "museum",
+            "valid": true,
+            "warnings": [],
+            "primitives": 138,
+            "rooms": 9,
+            "routes": 8,
+            "floors": 4,
+            "buildings": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "138",
+              "detail": "22 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "24",
+              "detail": "2,030 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "7 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "floor-3",
+          "status": "校验通过",
+          "statusDetail": "138 个可批处理图元 · 849 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "3",
+          "floorLabel": "仅查看 B1道具库",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Drowned Orpheum",
+            "archetype": "museum",
+            "valid": true,
+            "warnings": [],
+            "primitives": 138,
+            "rooms": 9,
+            "routes": 8,
+            "floors": 4,
+            "buildings": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "138",
+              "detail": "22 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "9",
+              "detail": "324 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "9 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "near-grid",
+          "status": "校验通过",
+          "statusDetail": "138 个可批处理图元 · 849 ms 生成 · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "3",
+          "floorLabel": "仅查看 B1道具库",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Drowned Orpheum",
+            "archetype": "museum",
+            "valid": true,
+            "warnings": [],
+            "primitives": 138,
+            "rooms": 9,
+            "routes": 8,
+            "floors": 4,
+            "buildings": 0
+          },
+          "metrics": {
+            "primitives": {
+              "value": "138",
+              "detail": "22 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "9",
+              "detail": "324 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "9 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "canyon-embassy",
+      "steps": [
+        {
+          "label": "overview",
+          "status": "校验通过",
+          "statusDetail": "8650 个可批处理图元 · 940 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "false",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Split Earth",
+            "archetype": "rift",
+            "valid": true,
+            "warnings": [],
+            "primitives": 8650,
+            "rooms": 15,
+            "routes": 12,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "8,650",
+              "detail": "114 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "103",
+              "detail": "79,810 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "15 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "low",
+          "status": "校验通过",
+          "statusDetail": "8650 个可批处理图元 · 940 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "false",
+          "low": "true",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Split Earth",
+            "archetype": "rift",
+            "valid": true,
+            "warnings": [],
+            "primitives": 8650,
+            "rooms": 15,
+            "routes": 12,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "8,650",
+              "detail": "114 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "123",
+              "detail": "106,390 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "15 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "top",
+          "status": "校验通过",
+          "statusDetail": "8650 个可批处理图元 · 940 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "false",
+          "low": "false",
+          "top": "true",
+          "sceneSummary": {
+            "title": "SceneProgram · The Split Earth",
+            "archetype": "rift",
+            "valid": true,
+            "warnings": [],
+            "primitives": 8650,
+            "rooms": 15,
+            "routes": 12,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "8,650",
+              "detail": "114 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "102",
+              "detail": "80,294 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "15 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "transparent",
+          "status": "校验通过",
+          "statusDetail": "8650 个可批处理图元 · 940 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Split Earth",
+            "archetype": "rift",
+            "valid": true,
+            "warnings": [],
+            "primitives": 8650,
+            "rooms": 15,
+            "routes": 12,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "8,650",
+              "detail": "124 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "113",
+              "detail": "80,146 triangles"
+            },
+            "fps": {
+              "value": "122 FPS",
+              "detail": "15 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "floor-3",
+          "status": "校验通过",
+          "statusDetail": "8650 个可批处理图元 · 940 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "3",
+          "floorLabel": "仅查看 B1",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Split Earth",
+            "archetype": "rift",
+            "valid": true,
+            "warnings": [],
+            "primitives": 8650,
+            "rooms": 15,
+            "routes": 12,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "8,650",
+              "detail": "124 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "21",
+              "detail": "1,188 triangles"
+            },
+            "fps": {
+              "value": "122 FPS",
+              "detail": "15 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "building-focus",
+          "status": "建筑内部聚焦",
+          "statusDetail": "8650 个可批处理图元 · 940 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "3",
+          "floorLabel": "仅查看 B1",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Split Earth",
+            "archetype": "rift",
+            "valid": true,
+            "warnings": [],
+            "primitives": 8650,
+            "rooms": 15,
+            "routes": 12,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "8,650",
+              "detail": "124 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "21",
+              "detail": "1,188 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "15 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "near-grid",
+          "status": "返回聚落总览",
+          "statusDetail": "8650 个可批处理图元 · 940 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 0 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · The Split Earth",
+            "archetype": "rift",
+            "valid": true,
+            "warnings": [],
+            "primitives": 8650,
+            "rooms": 15,
+            "routes": 12,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "8,650",
+              "detail": "124 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "104",
+              "detail": "58,298 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "15 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "ice-research",
+      "steps": [
+        {
+          "label": "overview",
+          "status": "需要注意",
+          "statusDetail": "335 个可批处理图元 · 838 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "false",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · Whiteglass Expanse",
+            "archetype": "ice",
+            "valid": false,
+            "warnings": [
+              "Route wilderness-escape-route passes through solid wall wilderness-core-building-envelope-observation-node-back without nearby opening evidence."
+            ],
+            "primitives": 335,
+            "rooms": 14,
+            "routes": 15,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "335",
+              "detail": "69 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "70",
+              "detail": "6,306 triangles"
+            },
+            "fps": {
+              "value": "122 FPS",
+              "detail": "16 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "low",
+          "status": "需要注意",
+          "statusDetail": "335 个可批处理图元 · 838 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "false",
+          "low": "true",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · Whiteglass Expanse",
+            "archetype": "ice",
+            "valid": false,
+            "warnings": [
+              "Route wilderness-escape-route passes through solid wall wilderness-core-building-envelope-observation-node-back without nearby opening evidence."
+            ],
+            "primitives": 335,
+            "rooms": 14,
+            "routes": 15,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "335",
+              "detail": "69 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "78",
+              "detail": "6,782 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "16 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "top",
+          "status": "需要注意",
+          "statusDetail": "335 个可批处理图元 · 838 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "false",
+          "low": "false",
+          "top": "true",
+          "sceneSummary": {
+            "title": "SceneProgram · Whiteglass Expanse",
+            "archetype": "ice",
+            "valid": false,
+            "warnings": [
+              "Route wilderness-escape-route passes through solid wall wilderness-core-building-envelope-observation-node-back without nearby opening evidence."
+            ],
+            "primitives": 335,
+            "rooms": 14,
+            "routes": 15,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "335",
+              "detail": "69 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "70",
+              "detail": "6,306 triangles"
+            },
+            "fps": {
+              "value": "121 FPS",
+              "detail": "16 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "transparent",
+          "status": "需要注意",
+          "statusDetail": "335 个可批处理图元 · 838 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · Whiteglass Expanse",
+            "archetype": "ice",
+            "valid": false,
+            "warnings": [
+              "Route wilderness-escape-route passes through solid wall wilderness-core-building-envelope-observation-node-back without nearby opening evidence."
+            ],
+            "primitives": 335,
+            "rooms": 14,
+            "routes": 15,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "335",
+              "detail": "70 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "71",
+              "detail": "6,306 triangles"
+            },
+            "fps": {
+              "value": "126 FPS",
+              "detail": "16 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "floor-3",
+          "status": "需要注意",
+          "statusDetail": "335 个可批处理图元 · 838 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · BGE",
+          "floor": "3",
+          "floorLabel": "仅查看 B1",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · Whiteglass Expanse",
+            "archetype": "ice",
+            "valid": false,
+            "warnings": [
+              "Route wilderness-escape-route passes through solid wall wilderness-core-building-envelope-observation-node-back without nearby opening evidence."
+            ],
+            "primitives": 335,
+            "rooms": 14,
+            "routes": 15,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "335",
+              "detail": "70 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "71",
+              "detail": "6,306 triangles"
+            },
+            "fps": {
+              "value": "131 FPS",
+              "detail": "16 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "building-focus",
+          "status": "建筑内部聚焦",
+          "statusDetail": "335 个可批处理图元 · 838 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · BGE",
+          "floor": "3",
+          "floorLabel": "仅查看 B1",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · Whiteglass Expanse",
+            "archetype": "ice",
+            "valid": false,
+            "warnings": [
+              "Route wilderness-escape-route passes through solid wall wilderness-core-building-envelope-observation-node-back without nearby opening evidence."
+            ],
+            "primitives": 335,
+            "rooms": 14,
+            "routes": 15,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "335",
+              "detail": "37 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "13",
+              "detail": "720 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "10 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        },
+        {
+          "label": "near-grid",
+          "status": "返回聚落总览",
+          "statusDetail": "335 个可批处理图元 · 838 ms 生成 · SceneProgram v1 · 5 区域 · Composition v1 · 2 母题 · BGE",
+          "floor": "roof",
+          "floorLabel": "完整 · 显示屋顶",
+          "transparency": "true",
+          "low": "false",
+          "top": "false",
+          "sceneSummary": {
+            "title": "SceneProgram · Whiteglass Expanse",
+            "archetype": "ice",
+            "valid": false,
+            "warnings": [
+              "Route wilderness-escape-route passes through solid wall wilderness-core-building-envelope-observation-node-back without nearby opening evidence."
+            ],
+            "primitives": 335,
+            "rooms": 14,
+            "routes": 15,
+            "floors": 4,
+            "buildings": 1
+          },
+          "metrics": {
+            "primitives": {
+              "value": "335",
+              "detail": "70 个渲染批次"
+            },
+            "drawCalls": {
+              "value": "68",
+              "detail": "5,202 triangles"
+            },
+            "fps": {
+              "value": "120 FPS",
+              "detail": "16 几何体 · 1 纹理"
+            }
+          },
+          "canvas": {
+            "width": 1046,
+            "height": 809
+          }
+        }
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    }
+  ],
+  "totalNetworkFailures": 0,
+  "totalConsoleErrors": 0
+}

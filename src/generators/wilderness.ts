@@ -162,11 +162,20 @@ export function classifyWildernessArchetype(prompt: string, hints?: SemanticGene
   if (WILDERNESS_TERMS["underground-lake"].some((term) => normalized.includes(term))) return "underground-lake";
   if (WILDERNESS_TERMS.underdark.some((term) => normalized.includes(term))) return "underdark";
   const explicitRift = includesAny(normalized, ["裂谷", "地裂", "深裂隙", "rift", "chasm", "fissure"]);
+  const explicitDryCanyon = includesAny(normalized, [
+    "无水峡谷",
+    "干峡谷",
+    "干涸峡谷",
+    "无水深谷",
+    "dry canyon",
+    "dry gorge",
+    "dry ravine",
+  ]);
   const explicitVolcanicCrater = includesAny(normalized, ["火山口", "破火山口", "熔岩湖", "caldera", "volcanic crater", "lava lake"]);
   // In a phrase such as “火山裂谷中的铸造所”, the rift is the parent
   // topology and volcanic language is a material/hazard layer.  Selecting a
   // generic caldera here discards the requested two banks and crossings.
-  if (explicitRift && !explicitVolcanicCrater) return "rift";
+  if ((explicitRift || explicitDryCanyon) && !explicitVolcanicCrater) return "rift";
   if (morphology.crater) return "volcanic";
   if (morphology.burial) return "burial-ground";
   if (isSaltWastelandPrompt(normalized)) return "salt-waste";
@@ -2535,8 +2544,19 @@ function rerouteParentTrailsAroundBuilding(
   for (const route of scene.routes.filter((entry) => entry.kind === "primary"
     || entry.kind === "alternate"
     || (entry.kind === "vertical" && entry.id.startsWith("mountain-switchback-route-")))) {
-    if (route.id.startsWith("wilderness-") || route.id.includes("building") || route.id.includes("station") || route.id.startsWith("ice-main-crevasse-crossing-route-")) continue;
-    const cells = route.points.map((point) => ({ x: point.x / CELL, z: point.z / CELL, y: point.y }));
+    if ((route.id.startsWith("wilderness-") && route.id !== "wilderness-escape-route")
+      || route.id.includes("building")
+      || route.id.includes("station")
+      || route.id.startsWith("ice-main-crevasse-crossing-route-")) continue;
+    const cells = route.points.map((point) => ({
+      x: route.id === "wilderness-escape-route"
+        ? Math.max(1.25, Math.min(scene.boundsCells.x - 1.25, point.x / CELL))
+        : point.x / CELL,
+      z: route.id === "wilderness-escape-route"
+        ? Math.max(1.25, Math.min(scene.boundsCells.z - 1.25, point.z / CELL))
+        : point.z / CELL,
+      y: point.y,
+    }));
     const affectedSegments = cells.flatMap((point, index) => {
       const next = cells[index + 1];
       return next && crosses(point, next) ? [index] : [];
@@ -2555,22 +2575,40 @@ function rerouteParentTrailsAroundBuilding(
       [{ x: minX, z: minZ }, { x: minX, z: maxZ }],
       [{ x: maxX, z: minZ }, { x: maxX, z: maxZ }],
     ];
+    const inRouteBounds = (point: { x: number; z: number }) => (
+      point.x >= 1.25
+      && point.x <= scene.boundsCells.x - 1.25
+      && point.z >= 1.25
+      && point.z <= scene.boundsCells.z - 1.25
+    );
+    // Clamping an out-of-bounds side back onto the map can erase the
+    // building apron entirely. That turns a valid left/right choice into a
+    // stair running along the map edge and through the envelope. Keep only
+    // perimeter sides that genuinely fit inside the legal route bounds.
+    const inBoundsPerimeterEdges = perimeterEdges.filter((edge) => {
+      const [start, end] = edge;
+      return start !== undefined && end !== undefined && inRouteBounds(start) && inRouteBounds(end);
+    });
     // Each perimeter edge has two traversal directions. Considering only the
     // authoring order can select the correct edge but join its far corner to
     // the next route point, producing a diagonal that cuts back through the
     // building envelope.
-    const candidates = perimeterEdges.flatMap((corners) => [corners, [...corners].reverse()]).map((corners) => ({
+    const candidates = inBoundsPerimeterEdges.flatMap((corners) => [corners, [...corners].reverse()]).map((corners) => ({
       corners,
       length: Math.hypot(before.x - corners[0]!.x, before.z - corners[0]!.z)
         + Math.hypot(corners[0]!.x - corners[1]!.x, corners[0]!.z - corners[1]!.z)
         + Math.hypot(corners[1]!.x - after.x, corners[1]!.z - after.z),
     })).sort((left, right) => left.length - right.length);
-    const detour = candidates[0]!.corners.map((point) => ({
+    const selectedCorners = candidates[0]?.corners ?? [
+      { x: Math.max(1.25, Math.min(scene.boundsCells.x - 1.25, minX)), z: Math.max(1.25, Math.min(scene.boundsCells.z - 1.25, minZ)) },
+      { x: Math.max(1.25, Math.min(scene.boundsCells.x - 1.25, maxX)), z: Math.max(1.25, Math.min(scene.boundsCells.z - 1.25, maxZ)) },
+    ];
+    const detour = selectedCorners.map((point) => ({
       ...point,
       y: terrainSurfaceY(scene, point.x, point.z, fallbackY),
     }));
     const rebuilt = [
-      ...cells.slice(0, beforeIndex + 1),
+      ...cells.slice(0, beforeIndex + (inside(before) ? 0 : 1)),
       ...detour,
       ...cells.slice(afterIndex),
     ].filter((point, index, array) => index === 0 || Math.hypot(point.x - array[index - 1]!.x, point.z - array[index - 1]!.z) > 0.12);
@@ -2578,15 +2616,32 @@ function rerouteParentTrailsAroundBuilding(
     const authoredVerticalPrimitiveId = route.kind === "vertical" && route.id.endsWith("-route")
       ? route.id.slice(0, -"-route".length)
       : undefined;
-    scene.primitives = scene.primitives.filter((primitiveEntry) => !primitiveEntry.id.startsWith(`${route.id}-segment-`)
+    const authoredParentRouteTags = route.id === "wilderness-escape-route"
+      ? new Set(scene.primitives
+        .filter((primitiveEntry) => primitiveEntry.id === "wilderness-escape-path-a" || primitiveEntry.id === "wilderness-escape-path-b")
+        .flatMap((primitiveEntry) => primitiveEntry.tags ?? []))
+      : new Set<string>();
+    const authoredParentRoutePrimitiveIds = route.id === "wilderness-escape-route"
+      ? new Set(["wilderness-escape-path-a", "wilderness-escape-path-b"])
+      : new Set<string>();
+    scene.primitives = scene.primitives.filter((primitiveEntry) => !authoredParentRoutePrimitiveIds.has(primitiveEntry.id)
+      && !primitiveEntry.id.startsWith(`${route.id}-segment-`)
       && !primitiveEntry.id.startsWith(`${route.id}-rise-`)
       && primitiveEntry.id !== authoredVerticalPrimitiveId);
     for (let index = 1; index < rebuilt.length; index += 1) {
       const from = rebuilt[index - 1]!;
       const to = rebuilt[index]!;
-      const routeTags = ["route", "trail", "surface-grid", "terrain-following", "building-detour", ...(route.kind === "vertical" ? ["vertical-opening", "shaft-access"] : [])];
+      const routeTags = [...new Set([
+        "route",
+        "trail",
+        "surface-grid",
+        "terrain-following",
+        "building-detour",
+        ...authoredParentRouteTags,
+        ...(route.kind === "vertical" ? ["vertical-opening", "shaft-access"] : []),
+      ])];
       if (Math.abs(to.y - from.y) <= feetToMeters(1.25)) {
-        scene.primitives.push(corridor(`${route.id}-segment-${index}`, 0, from.x, from.z, to.x, to.z, (from.y + to.y) / 2 + 0.02, route.kind === "primary" ? 1.25 : 0.85, "earth", routeTags));
+      scene.primitives.push(corridor(`${route.id}-segment-${index}`, 0, from.x, from.z, to.x, to.z, (from.y + to.y) / 2 + 0.02, route.kind === "primary" ? 1.25 : 0.85, "earth", [...new Set(routeTags)]));
       } else {
         const lower = from.y <= to.y ? { xCells: from.x, zCells: from.z, yMeters: from.y } : { xCells: to.x, zCells: to.z, yMeters: to.y };
         const upper = from.y <= to.y ? { xCells: to.x, zCells: to.z, yMeters: to.y } : { xCells: from.x, zCells: from.z, yMeters: from.y };
@@ -2879,6 +2934,37 @@ function addCustomFacilityThemeAtoms(
       box("wilderness-custom-alchemy-bench", 0, x - 1.4, baseY + FLOOR_SLAB_METERS, z + 0.8, 3.2, feetToMeters(3.1), 1, "wood", [...common, "alchemy", "distillation-bench", "cover"]),
       cylinder("wilderness-custom-alembic-a", 0, x - 2.1, baseY + feetToMeters(3.2), z + 0.8, 0.72, feetToMeters(2.2), "metal", [...common, "alchemy", "alembic", "hazard"]),
       cylinder("wilderness-custom-alembic-b", 0, x - 0.7, baseY + feetToMeters(3.2), z + 0.8, 0.58, feetToMeters(2.8), "warmLight", [...common, "alchemy", "alembic", "hazard"]),
+    );
+  } else if (intent.theme === "diplomatic") {
+    const escapeY = baseY - feetToMeters(8);
+    const escapeZ = z + 4.4;
+    const liftX = x + 3.4;
+    const supportHeight = roofY - escapeY;
+    scene.primitives.push(
+      box("wilderness-custom-embassy-reception", 0, x - 1.6, baseY + FLOOR_SLAB_METERS, z + 0.8, 3.6, feetToMeters(3.6), 1.1, "wood", [...common, "embassy", "diplomatic", "reception-hall", "reception-desk", "cover"]),
+      box("wilderness-custom-embassy-visa-cabinet-west", 0, x + 2.2, baseY + FLOOR_SLAB_METERS, z - 1.25, 0.72, feetToMeters(6.5), 2.3, "metal", [...common, "embassy", "diplomatic", "visa-archive", "consular-records", "cover"]),
+      box("wilderness-custom-embassy-visa-cabinet-east", 0, x + 2.2, baseY + FLOOR_SLAB_METERS, z + 1.25, 0.72, feetToMeters(6.5), 2.3, "metal", [...common, "embassy", "diplomatic", "visa-archive", "consular-records", "cover"]),
+      box("wilderness-custom-embassy-hanging-office", 1, x, topFloorY, z, 6.4, FLOOR_SLAB_METERS, 5.2, "wood", [...common, "embassy", "diplomatic", "suspended-office", "hanging-office", "floor", "platform", "standable", "high-ground"]),
+      box("wilderness-custom-embassy-escape-platform", 3, x, escapeY, escapeZ, 5.8, FLOOR_SLAB_METERS, 3.6, "metal", [...common, "embassy", "diplomatic", "bridge-under-escape-platform", "escape-platform", "floor", "platform", "standable", "supported", "underground"]),
+      cylinder("wilderness-custom-embassy-tension-west", 3, x - 2.35, escapeY, escapeZ, 0.18, supportHeight, "metal", [...common, "embassy", "diplomatic", "suspension-rod", "structural-support", "supported"]),
+      cylinder("wilderness-custom-embassy-tension-east", 3, x + 2.35, escapeY, escapeZ, 0.18, supportHeight, "metal", [...common, "embassy", "diplomatic", "suspension-rod", "structural-support", "supported"]),
+      cylinder("wilderness-custom-embassy-cliff-lift-west-rail", 3, liftX - 0.55, escapeY, escapeZ - 0.6, 0.16, baseY - escapeY, "metal", [...common, "embassy", "cliff-lift", "lift-rail", "structural-support"]),
+      cylinder("wilderness-custom-embassy-cliff-lift-east-rail", 3, liftX + 0.55, escapeY, escapeZ - 0.6, 0.16, baseY - escapeY, "metal", [...common, "embassy", "cliff-lift", "lift-rail", "structural-support"]),
+      cylinder("wilderness-custom-embassy-cliff-lift-shaft", 3, liftX, escapeY, escapeZ - 0.6, 0.52, baseY - escapeY, "metal", [...common, "embassy", "cliff-lift", "shaft", "shaft-access", "vertical-route", "vertical-opening", "opening-frame", "supported"]),
+      box("wilderness-custom-embassy-cliff-lift-cage", 3, liftX, escapeY + feetToMeters(2), escapeZ - 0.6, 1.5, feetToMeters(4), 1.5, "metal", [...common, "embassy", "cliff-lift", "lift-cage", "vertical-route", "cover"]),
+      box("wilderness-custom-embassy-lift-upper-landing", 0, liftX, baseY, z + 3.8, 1.9, FLOOR_SLAB_METERS, 1.9, "metal", [...common, "embassy", "cliff-lift", "stair-landing", "standable", "supported"]),
+      box("wilderness-custom-embassy-lift-lower-landing", 3, liftX, escapeY, escapeZ - 0.6, 1.9, FLOOR_SLAB_METERS, 1.9, "metal", [...common, "embassy", "cliff-lift", "stair-landing", "standable", "supported", "underground"]),
+    );
+    scene.routes.push(createRoute("wilderness-custom-embassy-cliff-lift-route", "vertical", [
+      { x: liftX, z: escapeZ - 0.6, y: escapeY },
+      { x: liftX, z: z + 3.8, y: baseY },
+    ], { purpose: "escape", traffic: 0.24, schedule: "all" }));
+    scene.rooms.push(createRoom("wilderness-custom-embassy-escape-room", "Bridge-under embassy escape platform", "combat", 3, x, escapeZ, 5.8, 3.6, escapeY));
+    const embassyRoot = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
+    if (embassyRoot) connectRooms(scene.rooms, embassyRoot.id, "wilderness-custom-embassy-escape-room");
+    scene.tactical.push(
+      tacticalFeature("wilderness-custom-embassy-reception-cover", "cover", x - 1.6, z + 0.8, baseY, 1.4, "The visa counter and records cabinets divide the embassy reception hall."),
+      tacticalFeature("wilderness-custom-embassy-escape-choke", "chokepoint", liftX, escapeZ - 0.6, escapeY, 1, "The cliff lift is the narrow route between the hanging embassy and its bridge-under escape platform."),
     );
   }
 }
@@ -4123,6 +4209,10 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     terrainBaseY,
   );
   rerouteServiceRoutesAroundBuildingFootprint(scene, completeBuildingFootprint, terrainBaseY);
+  scene.primitives = scene.primitives.map((primitiveEntry) => ({
+    ...primitiveEntry,
+    tags: primitiveEntry.tags ? [...new Set(primitiveEntry.tags)] : primitiveEntry.tags,
+  }));
   scene.siteProgram = { version: 1, siteType: "wilderness-site", districtCount: 1, roadCount: siteRoadCount, junctionCount: 1, blockCount: 1, parcelCount: 1, fullInteriorCount: 1, facadeCount: 0, massCount: 0, roadLengthCells: siteRoadLength, parcelCoverage: (13 * 12) / (width * depth), buildingCoverage: (9 * 8) / (width * depth), averageParcelArea: 13 * 12, openSpaceRatio: 1 - (13 * 12) / (width * depth), roadPattern: "anchor-web", curvedRoadRatio: siteRoadCount > 0 ? 1 : 0, nonRectangularBlockRatio: 1, terrainKind: archetype === "forest" ? "forest-clearing" : archetype === "mountain" ? "valley" : "rolling" };
   scene.floors = Math.max(scene.floors, 4);
   scene.floorHeightFeet = [12, 10, 8, 10];

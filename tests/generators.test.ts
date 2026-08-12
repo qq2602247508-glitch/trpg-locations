@@ -1560,4 +1560,98 @@ describe("scene generators", () => {
     expect(inn.primitives.some((primitive) => primitive.shape === "gable" && primitive.tags?.includes("domestic"))).toBe(true);
     expect(church.diagnostics.valid && inn.diagnostics.valid).toBe(true);
   });
+
+  it("preserves a flooded opera house as an auditorium, stage complex, cellar and roof escape route", () => {
+    const scene = generateScene({
+      ...request("drowned-opera-regression-12", "large", 0.76),
+      prompt: "被洪水淹没的歌剧院，有门厅、马蹄形观众席、下沉乐池、主舞台、后台、化妆间、半淹道具库和屋顶逃生路线",
+    }, "adaptive");
+    expect(scene.title).toContain("Drowned Orpheum");
+    expect(scene.buildingProgram?.requiredFeatures).toEqual(expect.arrayContaining([
+      "foyer",
+      "auditorium",
+      "stage",
+      "orchestra-pit",
+      "backstage",
+      "dressing-room",
+      "prop-store",
+      "roof-route",
+    ]));
+    for (const roomId of [
+      "opera-foyer",
+      "opera-auditorium",
+      "opera-orchestra",
+      "opera-stage",
+      "opera-backstage",
+      "opera-dressing",
+      "opera-props",
+      "opera-roof",
+    ]) expect(scene.rooms.some((room) => room.id === roomId)).toBe(true);
+    for (const tag of ["opera-house", "auditorium-seat", "orchestra-pit", "stage", "prop-store", "flooded"]) {
+      expect(hasTag(scene, tag)).toBe(true);
+    }
+    expect(scene.floors).toBe(4);
+    expect(scene.diagnostics.valid).toBe(true);
+    expect(scene.diagnostics.warnings).toEqual([]);
+  });
+
+  it("embeds a diplomatic compound, rope bridge and supported cliff lift into a dry canyon", () => {
+    const scene = generateScene({
+      ...request("canyon-embassy-regression-12", "large", 0.72),
+      prompt: "建在无水峡谷下的使馆，有接待厅、签证档案、悬挂办公室、跨峡谷索桥、贴崖升降机和桥下逃生平台",
+    }, "adaptive");
+    expect(scene.archetype).toBe("rift");
+    expect(scene.buildingInstances?.some((building) => building.id === "wilderness-core-building")).toBe(true);
+    for (const tag of [
+      "embassy",
+      "visa-archive",
+      "suspended-office",
+      "escape-platform",
+      "cliff-lift",
+      "shaft-access",
+      "structural-support",
+      "rope-bridge",
+    ]) expect(hasTag(scene, tag)).toBe(true);
+    expect(scene.routes.some((route) => route.id === "wilderness-custom-embassy-cliff-lift-route" && route.kind === "vertical")).toBe(true);
+    const escapeRoom = scene.rooms.find((room) => room.id === "wilderness-custom-embassy-escape-room");
+    expect(escapeRoom?.connections).toContain("wilderness-core-building-room");
+    expect(scene.diagnostics.valid).toBe(true);
+    expect(scene.diagnostics.warnings).toEqual([]);
+  });
+
+  it("classifies dry canyon facilities as rifts without stealing river and waterfall canyons", () => {
+    const dry = generateScene({
+      ...request("dry-canyon-classification-r12"),
+      prompt: "无水峡谷中的外交使馆与索桥",
+    }, "wilderness");
+    const wet = generateScene({
+      ...request("wet-canyon-classification-r12"),
+      prompt: "有瀑布、河流与跨水桥梁的峡谷设施",
+    }, "wilderness");
+    expect(dry.archetype).toBe("rift");
+    expect(wet.archetype).toBe("river-valley");
+    expect(dry.diagnostics.valid && wet.diagnostics.valid).toBe(true);
+  });
+
+  it("reroutes an ice research escape route around the complete building envelope", () => {
+    const scene = generateScene({
+      prompt: "破碎冰原上的地下研究设施，有冰裂缝、冰桥、实验室、地下档案库、观测平台和双向垂直逃生路线",
+      seed: "browser-r12-ice",
+      size: "large",
+      density: 0.72,
+    }, "adaptive");
+    const escapeRoute = scene.routes.find((route) => route.id === "wilderness-escape-route");
+    const buildingRoom = scene.rooms.find((room) => room.id === "wilderness-core-building-room");
+    const escapeWarning = "Route wilderness-escape-route passes through solid wall wilderness-core-building-envelope-observation-node-back without nearby opening evidence.";
+
+    expect(scene.archetype).toBe("ice");
+    expect(escapeRoute).toBeDefined();
+    expect(escapeRoute?.points.length).toBeGreaterThanOrEqual(3);
+    expect(scene.primitives.some((primitive) => primitive.id === "wilderness-escape-path-a")).toBe(false);
+    expect(scene.primitives.some((primitive) => primitive.id === "wilderness-escape-path-b")).toBe(false);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+    expect(scene.diagnostics.warnings).not.toContain(escapeWarning);
+    expect(buildingRoom?.connections).toContain("ice-north-field");
+    expect(scene.rooms.find((room) => room.id === "ice-north-field")?.connections).toContain("wilderness-core-building-room");
+  });
 });
