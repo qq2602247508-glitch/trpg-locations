@@ -561,7 +561,7 @@ function addFunctionalModuleGeometry(
       const archiveDepth = Math.max(3.2, lot.depth * 0.36);
       const center = addBox(module, "floor", 3, archiveLocalX, archiveY, localZ, archiveWidth, FLOOR_SLAB_METERS, archiveDepth, "stone", ["floor", "standable", "archive-floor", "underground"]);
       for (let shelf = -1; shelf <= 1; shelf += 1) {
-        addBox(module, `shelf-${shelf + 2}`, 3, archiveLocalX + shelf * 1.05, archiveY + FLOOR_SLAB_METERS, localZ, 0.55, feetToMeters(6.2), Math.max(2.2, lot.depth * 0.27), "wood", ["archive-shelf", "cover", "restricted"]);
+        addBox(module, `shelf-${shelf + 2}`, 3, archiveLocalX + shelf * 1.05, archiveY + FLOOR_SLAB_METERS, localZ, 0.55, feetToMeters(6.2), Math.max(2.2, lot.depth * 0.27), "wood", ["archive-shelf", "cover", "restricted", ...(shelf === 1 ? ["focus-cutaway"] : [])]);
       }
       if (module.requiresWater) addBox(module, "floodwater", 3, archiveLocalX, archiveY + feetToMeters(1.1), localZ, Math.max(3, lot.width * 0.34), 0.14, Math.max(2.8, lot.depth * 0.3), "water", ["water", "flooded", "hazard"]);
       // A single full-rise stair is longer than most archive rooms and used

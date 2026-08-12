@@ -1675,7 +1675,14 @@ describe("scene generators", () => {
     expect(escapeRoute?.points.length).toBeGreaterThanOrEqual(3);
     expect(scene.primitives.some((primitive) => primitive.id === "wilderness-escape-path-a")).toBe(false);
     expect(scene.primitives.some((primitive) => primitive.id === "wilderness-escape-path-b")).toBe(false);
+    const archiveShelves = scene.primitives.filter((primitive) => primitive.tags?.includes("archive-shelf"));
+    expect(archiveShelves).toHaveLength(3);
+    expect(archiveShelves.every((primitive) => primitive.tags?.includes("cover"))).toBe(true);
+    expect(archiveShelves.filter((primitive) => primitive.tags?.includes("focus-cutaway"))).toHaveLength(1);
+    expect(archiveShelves.find((primitive) => primitive.id.endsWith("archive-shelf-3"))?.tags).toContain("focus-cutaway");
+    expect(archiveShelves.filter((primitive) => !primitive.tags?.includes("focus-cutaway"))).toHaveLength(2);
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+    expect(scene.diagnostics.warnings).toEqual([]);
     expect(scene.diagnostics.warnings).not.toContain(escapeWarning);
     expect(buildingRoom?.connections).toContain("ice-north-field");
     expect(scene.rooms.find((room) => room.id === "ice-north-field")?.connections).toContain("wilderness-core-building-room");
