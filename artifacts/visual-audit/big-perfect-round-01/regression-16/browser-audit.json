@@ -1,0 +1,82 @@
+{
+  "url": "http://127.0.0.1:5244/?prompt=%E7%A0%B4%E7%A2%8E%E5%86%B0%E5%8E%9F%E4%B8%8A%E7%9A%84%E5%9C%B0%E4%B8%8B%E7%A0%94%E7%A9%B6%E8%AE%BE%E6%96%BD%EF%BC%8C%E6%9C%89%E5%86%B0%E8%A3%82%E7%BC%9D%E3%80%81%E5%86%B0%E6%A1%A5%E3%80%81%E5%AE%9E%E9%AA%8C%E5%AE%A4%E3%80%81%E5%9C%B0%E4%B8%8B%E6%A1%A3%E6%A1%88%E5%BA%93%E3%80%81%E8%A7%82%E6%B5%8B%E5%B9%B3%E5%8F%B0%E5%92%8C%E5%8F%8C%E5%90%91%E5%9E%82%E7%9B%B4%E9%80%83%E7%94%9F%E8%B7%AF%E7%BA%BF&seed=browser-r12-ice&size=large&density=0.72&kind=adaptive",
+  "canvasRect": {
+    "left": 321,
+    "top": 213.109375,
+    "width": 1046,
+    "height": 809.890625
+  },
+  "audit": {
+    "status": "建筑内部聚焦",
+    "floor": "3",
+    "transparency": "true",
+    "selectedBuilding": "wilderness-core-building",
+    "metrics": "占地\n365 × 290 ft\n111.3 × 88.4m\n楼层\n4 层\n层高 12 / 10 / 8 / 10 ft\n战术格\n4,234 格\n每格 5 ft\n图元\n339\n38 个渲染批次\nDraw calls\n14\n720 triangles\n帧率\n29 FPS\n10 几何体 · 1 纹理",
+    "diagnostics": "拓扑与可达性已通过验证 · 15 条路线已建立。\n\n规划\nnatural · GENERIC · timeless · mixed · plain\n组合\ngrammar.ice-field-v1 · motif.eroded-ice-ridges + motif.embedded-building · 语义覆盖 100% · 能力 structure.embedded-building + route.surface-trail + structure.observation-platform + state.flood\n取景\nsite · 中心 13.5, 12.5 · 半径 19.6 格 · Frame the authored wilderness compound as the tactical subject while retaining enough parent terrain to explain access, hazards and elevation.",
+    "scene": {
+      "seed": "browser-r12-ice",
+      "valid": true,
+      "warnings": [],
+      "primitives": 339,
+      "routes": 15
+    }
+  },
+  "focusAudits": {
+    "default": {
+      "buildingId": "wilderness-core-building",
+      "floorView": 3,
+      "camera": {
+        "x": 29.643203863032543,
+        "y": 4.290600997721987,
+        "z": 25.797879531247197
+      },
+      "target": {
+        "x": 21.77164523126548,
+        "y": 0.795764197721988,
+        "z": 19.928643440399146
+      },
+      "dynamicCutawayIds": [
+        "wilderness-core-building-archive-shaft-wall-east",
+        "wilderness-core-building-archive-shaft-wall-landing",
+        "wilderness-core-building-basement-east",
+        "wilderness-core-building-basement-south"
+      ]
+    },
+    "left": {
+      "buildingId": "wilderness-core-building",
+      "floorView": 3,
+      "camera": {
+        "x": 22.0787022590945,
+        "y": 5.486976395645625,
+        "z": 10.62695026454091
+      },
+      "target": {
+        "x": 21.77164523126548,
+        "y": 0.795764197721988,
+        "z": 19.928643440399146
+      },
+      "dynamicCutawayIds": [
+        "wilderness-core-building-basement-north"
+      ]
+    },
+    "right": {
+      "buildingId": "wilderness-core-building",
+      "floorView": 3,
+      "camera": {
+        "x": 12.775739604749015,
+        "y": 5.493504680945031,
+        "z": 22.30101949684374
+      },
+      "target": {
+        "x": 21.77164523126548,
+        "y": 0.795764197721988,
+        "z": 19.928643440399146
+      },
+      "dynamicCutawayIds": [
+        "wilderness-core-building-archive-shaft-wall-west",
+        "wilderness-core-building-basement-west-north",
+        "wilderness-core-building-basement-west-south"
+      ]
+    }
+  }
+}

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { generateScene, generatorRegistry } from "../src/generators";
 import { SeededRandom } from "../src/core/random";
 import { instantiateBuildingModule } from "../src/generators/buildingModule";
-import { baseScene, rectangularShell } from "../src/generators/shared";
+import { baseScene, box, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
-import { floorBaseY, floorContextLevels, focusedCameraFactors, focusClusterForFloor, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
+import { dynamicFocusCutawayIds, floorBaseY, floorContextLevels, focusedCameraFactors, focusClusterForFloor, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
 import { planSettlementSite } from "../src/site-program";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
@@ -72,6 +72,30 @@ describe("scene generators", () => {
     expect(low.verticalSpanFactor).toBeLessThan(overview.verticalSpanFactor);
     expect(low.targetHeightFraction).toBeLessThan(overview.targetHeightFraction);
     expect(focusedCameraFactors("low", true).spanScale).toBeLessThan(low.spanScale);
+  });
+
+  it("cuts camera-facing boundary and stairwell walls while preserving partitions and supports", () => {
+    const walls = [
+      box("north", 0, 0, 0, -2, 5, 3, 0.18, "stone", ["wall", "building-shell"]),
+      box("south", 0, 0, 0, 2, 5, 3, 0.18, "stone", ["wall", "building-shell"]),
+      box("west", 0, -3, 0, 0, 0.18, 3, 4, "stone", ["wall", "building-shell"]),
+      box("east", 0, 3, 0, 0, 0.18, 3, 4, "stone", ["wall", "building-shell"]),
+      box("partition", 0, 0, 0, 0, 0.18, 3, 2, "wood", ["wall", "room-partition"]),
+      box("stairwell", 0, 1, 0, 0, 0.18, 3, 2, "stone", ["stairwell-wall", "structural-support"]),
+      box("support", 0, 2, 0, 0, 0.18, 3, 0.18, "stone", ["structural-support"]),
+    ];
+    const selected = dynamicFocusCutawayIds(walls, { x: 12, z: 10 }, { x: 0, z: 0 });
+    expect([...selected].sort()).toEqual(["east", "south", "stairwell"]);
+
+    const rotated = walls.map((wall) => ({
+      ...wall,
+      position: { ...wall.position, x: wall.position.z, z: -wall.position.x },
+      rotationY: (wall.rotationY ?? 0) + Math.PI / 2,
+    }));
+    const rotatedSelected = dynamicFocusCutawayIds(rotated, { x: 10, z: -12 }, { x: 0, z: 0 });
+    expect([...rotatedSelected].sort()).toEqual(["east", "south", "stairwell"]);
+    expect(selected.has("partition")).toBe(false);
+    expect(selected.has("support")).toBe(false);
   });
 
   it("keeps small maps in one render batch region and partitions large districts", () => {
@@ -1718,6 +1742,18 @@ describe("scene generators", () => {
     expect(archiveShelves.filter((primitive) => primitive.tags?.includes("focus-cutaway"))).toHaveLength(1);
     expect(archiveShelves.find((primitive) => primitive.id.endsWith("archive-shelf-3"))?.tags).toContain("focus-cutaway");
     expect(archiveShelves.filter((primitive) => !primitive.tags?.includes("focus-cutaway"))).toHaveLength(2);
+    const archiveFocusPrimitives = scene.primitives.filter((primitive) => primitive.tags?.includes("building-instance:wilderness-core-building")
+      && primitiveTouchesFloorContext(primitive, 3));
+    const archiveCenter = { x: 21.77, z: 19.93 };
+    const westCutaway = dynamicFocusCutawayIds(archiveFocusPrimitives, { x: 12.72, z: 22.09 }, archiveCenter);
+    expect(westCutaway.size).toBeGreaterThanOrEqual(3);
+    expect([...westCutaway]).toEqual(expect.arrayContaining([
+      "wilderness-core-building-basement-west-north",
+      "wilderness-core-building-basement-west-south",
+      "wilderness-core-building-archive-shaft-wall-west",
+    ]));
+    expect(westCutaway.has("wilderness-core-building-archive-landing-support-west")).toBe(false);
+    expect(westCutaway.has("wilderness-core-building-archive-shelf-1")).toBe(false);
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
     expect(scene.diagnostics.warnings).toEqual([]);
     expect(scene.diagnostics.warnings).not.toContain(escapeWarning);

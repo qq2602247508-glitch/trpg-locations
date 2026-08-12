@@ -22,6 +22,14 @@ export interface RenderStats {
   primitiveBatches: number;
 }
 
+export interface FocusAuditSnapshot {
+  buildingId?: string;
+  floorView: FloorView;
+  camera: { x: number; y: number; z: number };
+  target: { x: number; y: number; z: number };
+  dynamicCutawayIds: string[];
+}
+
 interface FloorLayer {
   structure: THREE.Group;
   roof: THREE.Group;
@@ -56,6 +64,76 @@ interface PrimitiveBatch {
 }
 
 const FEET_TO_METERS = 0.3048;
+const FOCUS_WALL_FACING_DOT = 0.38;
+
+function focusWallNormal(primitive: Pick<ScenePrimitive, "rotationY" | "size">): { x: number; z: number } {
+  const rotation = primitive.rotationY ?? 0;
+  const cosine = Math.cos(rotation);
+  const sine = Math.sin(rotation);
+  const thinAlongX = primitive.size.x <= primitive.size.z;
+  return thinAlongX
+    ? { x: cosine, z: -sine }
+    : { x: sine, z: cosine };
+}
+
+function isFocusBoundaryWall(primitive: Pick<ScenePrimitive, "shape" | "size" | "tags">): boolean {
+  const tags = new Set(primitive.tags ?? []);
+  if (primitive.shape !== "box" || (!tags.has("wall") && !tags.has("stairwell-wall"))) return false;
+  if (tags.has("room-partition")
+    || tags.has("quarters-partition")
+    || (tags.has("structural-support") && !tags.has("stairwell-wall"))
+    || tags.has("medical-screen")
+    || tags.has("privacy-screen")) return false;
+  const thin = Math.min(primitive.size.x, primitive.size.z);
+  const long = Math.max(primitive.size.x, primitive.size.z);
+  return thin <= GRID_METERS * 0.32 && long >= GRID_METERS * 0.55;
+}
+
+/**
+ * Select the visible building envelope that is closest to the current focus
+ * camera. Unlike authored `focus-cutaway` tags, this follows rotated and
+ * irregular walls and can be recomputed after the user orbits the view.
+ * Interior partitions, stairwell structure and supports remain intact.
+ */
+export function dynamicFocusCutawayIds(
+  primitives: readonly ScenePrimitive[],
+  camera: Pick<THREE.Vector3, "x" | "z">,
+  target: Pick<THREE.Vector3, "x" | "z">,
+): Set<string> {
+  const viewLength = Math.hypot(camera.x - target.x, camera.z - target.z);
+  if (viewLength < 0.001) return new Set();
+  const viewX = (camera.x - target.x) / viewLength;
+  const viewZ = (camera.z - target.z) / viewLength;
+  const walls = primitives.filter(isFocusBoundaryWall);
+  const selected = new Set<string>();
+  if (walls.length === 0) return selected;
+  const envelopeWalls = walls.filter((wall) => wall.tags?.includes("stairwell-wall") !== true);
+  const centerX = (Math.min(...envelopeWalls.map((wall) => wall.position.x)) + Math.max(...envelopeWalls.map((wall) => wall.position.x))) / 2;
+  const centerZ = (Math.min(...envelopeWalls.map((wall) => wall.position.z)) + Math.max(...envelopeWalls.map((wall) => wall.position.z))) / 2;
+
+  for (const wall of envelopeWalls) {
+    const normal = focusWallNormal(wall);
+    const centerToWallX = wall.position.x - centerX;
+    const centerToWallZ = wall.position.z - centerZ;
+    const outwardSign = normal.x * centerToWallX + normal.z * centerToWallZ >= 0 ? 1 : -1;
+    const outwardFacing = (normal.x * outwardSign) * viewX + (normal.z * outwardSign) * viewZ;
+    if (outwardFacing >= FOCUS_WALL_FACING_DOT) selected.add(wall.id);
+  }
+  const stairwellWalls = walls.filter((wall) => wall.tags?.includes("stairwell-wall") === true);
+  if (stairwellWalls.length > 0) {
+    const stairwellCenterX = (Math.min(...stairwellWalls.map((wall) => wall.position.x)) + Math.max(...stairwellWalls.map((wall) => wall.position.x))) / 2;
+    const stairwellCenterZ = (Math.min(...stairwellWalls.map((wall) => wall.position.z)) + Math.max(...stairwellWalls.map((wall) => wall.position.z))) / 2;
+    for (const wall of stairwellWalls) {
+      const normal = focusWallNormal(wall);
+      const centerToWallX = wall.position.x - stairwellCenterX;
+      const centerToWallZ = wall.position.z - stairwellCenterZ;
+      const outwardSign = normal.x * centerToWallX + normal.z * centerToWallZ >= 0 ? 1 : -1;
+      const outwardFacing = (normal.x * outwardSign) * viewX + (normal.z * outwardSign) * viewZ;
+      if (outwardFacing >= FOCUS_WALL_FACING_DOT) selected.add(wall.id);
+    }
+  }
+  return selected;
+}
 
 /** Resolve a world-space Y coordinate to the authored logical floor. */
 export function levelForY(scene: GeneratedScene, y: number): number {
@@ -384,6 +462,10 @@ export class SceneRenderer {
 
   private focusedBuildingId?: string;
 
+  private dynamicFocusCutaways = new Set<string>();
+
+  private lastFocusViewDirection?: THREE.Vector2;
+
   private worldBounds: WorldBounds = {
     minX: -8,
     maxX: 8,
@@ -418,6 +500,7 @@ export class SceneRenderer {
     this.controls.minDistance = 3;
     this.controls.maxDistance = 180;
     this.controls.target.set(0, 0, 0);
+    this.controls.addEventListener("change", this.handleFocusOrbitChange);
 
     this.modelRoot.name = "Generated primitives";
     this.gridRoot.name = "5 foot tactical grid";
@@ -438,6 +521,8 @@ export class SceneRenderer {
   setScene(scene: GeneratedScene): void {
     this.currentScene = scene;
     this.focusedBuildingId = undefined;
+    this.dynamicFocusCutaways.clear();
+    this.lastFocusViewDirection = undefined;
     this.floorLayers.clear();
     this.floorContextLayers.clear();
     this.modelRoot.clear();
@@ -458,6 +543,8 @@ export class SceneRenderer {
     if (!this.currentScene) return;
     const selected = buildingId ? this.currentScene.buildingInstances?.find((building) => building.id === buildingId) : undefined;
     this.focusedBuildingId = selected?.id;
+    this.dynamicFocusCutaways.clear();
+    this.lastFocusViewDirection = undefined;
     this.modelRoot.clear();
     this.floorLayers.clear();
     this.floorContextLayers.clear();
@@ -497,7 +584,7 @@ export class SceneRenderer {
     const buildingLevelPrimitives = this.currentScene?.primitives.filter((primitive) => (
       primitive.tags?.includes(selectedIdTag) === true
       && primitiveTouchesFloorContext(primitive, viewLevel)
-      && primitive.tags?.includes("focus-cutaway") !== true
+      && !(primitive.tags?.includes("focus-cutaway") === true && !isFocusBoundaryWall(primitive))
       && primitive.tags?.includes("roof") !== true
     )) ?? [];
     const buildingCluster = typeof view === "number" && isBasement
@@ -548,10 +635,17 @@ export class SceneRenderer {
     this.camera.lookAt(target);
     this.camera.updateProjectionMatrix();
     this.controls.update();
+    this.refreshDynamicFocusCutaway();
   }
 
   setFloorView(view: FloorView): void {
     this.activeFloorView = view;
+    if (this.focusedBuildingId) this.lastFocusViewDirection = undefined;
+    this.applyFloorViewVisibility(view);
+    this.recenterCameraForFloor(view);
+  }
+
+  private applyFloorViewVisibility(view: FloorView): void {
     const authoredRoofView = typeof view === "number" && this.currentScene?.floorLabels?.[view]?.includes("屋顶") === true;
     for (const [level, layer] of this.floorLayers) {
       if (view === "roof") {
@@ -582,7 +676,6 @@ export class SceneRenderer {
           && selected.every((primitive) => primitive.position.y + primitive.size.y <= 0.05 || primitive.tags?.includes("underground")));
       tacticalGround.visible = !undergroundOnly;
     }
-    this.recenterCameraForFloor(view);
   }
 
   setRouteVisibility(visible: boolean): void {
@@ -605,6 +698,35 @@ export class SceneRenderer {
     this.primitiveBatches = 0;
     this.buildPrimitiveBatches(this.currentScene);
     this.setFloorView(this.activeFloorView);
+  }
+
+  private handleFocusOrbitChange = (): void => {
+    this.refreshDynamicFocusCutaway();
+  };
+
+  private refreshDynamicFocusCutaway(): void {
+    if (!this.currentScene || !this.focusedBuildingId || this.cameraMode !== "perspective") return;
+    const horizontalDirection = new THREE.Vector2(
+      this.camera.position.x - this.controls.target.x,
+      this.camera.position.z - this.controls.target.z,
+    );
+    if (horizontalDirection.lengthSq() < 0.001) return;
+    horizontalDirection.normalize();
+    if (this.lastFocusViewDirection && this.lastFocusViewDirection.dot(horizontalDirection) > 0.985) return;
+
+    const selectedTag = `building-instance:${this.focusedBuildingId}`;
+    const selectedPrimitives = this.currentScene.primitives.filter((primitive) => (
+      primitive.tags?.includes(selectedTag) === true
+      && (typeof this.activeFloorView !== "number" || primitiveTouchesFloorContext(primitive, this.activeFloorView))
+    ));
+    this.dynamicFocusCutaways = dynamicFocusCutawayIds(selectedPrimitives, this.camera.position, this.controls.target);
+    this.lastFocusViewDirection = horizontalDirection;
+    this.modelRoot.clear();
+    this.floorLayers.clear();
+    this.floorContextLayers.clear();
+    this.primitiveBatches = 0;
+    this.buildPrimitiveBatches(this.currentScene);
+    this.applyFloorViewVisibility(this.activeFloorView);
   }
 
   setPlanningView(view: "all" | "roads" | "parcels" | "buildings"): void {
@@ -844,9 +966,22 @@ export class SceneRenderer {
     };
   }
 
+  getFocusAuditSnapshot(): FocusAuditSnapshot {
+    const camera = this.camera.position;
+    const target = this.controls.target;
+    return {
+      buildingId: this.focusedBuildingId,
+      floorView: this.activeFloorView,
+      camera: { x: camera.x, y: camera.y, z: camera.z },
+      target: { x: target.x, y: target.y, z: target.z },
+      dynamicCutawayIds: [...this.dynamicFocusCutaways].sort(),
+    };
+  }
+
   dispose(): void {
     cancelAnimationFrame(this.animationFrame);
     this.resizeObserver.disconnect();
+    this.controls.removeEventListener("change", this.handleFocusOrbitChange);
     this.controls.dispose();
     this.disposeContents(this.gridRoot);
     this.disposeContents(this.routeRoot);
@@ -1196,7 +1331,9 @@ export class SceneRenderer {
       if (this.focusedBuildingId) {
         if (primitiveBuildingId && primitiveBuildingId !== this.focusedBuildingId) continue;
         if (primitiveBuildingId === this.focusedBuildingId && blueprintFocus && !focusInterior) continue;
-        if (primitiveBuildingId === this.focusedBuildingId && primitive.tags?.includes("focus-cutaway")) continue;
+        if (primitiveBuildingId === this.focusedBuildingId
+          && ((primitive.tags?.includes("focus-cutaway") === true && !isFocusBoundaryWall(primitive))
+            || this.dynamicFocusCutaways.has(primitive.id))) continue;
         if (primitiveBuildingId === this.focusedBuildingId
           && !focusInterior
           && primitive.tags?.includes("full-interior") !== true
@@ -1648,7 +1785,7 @@ export class SceneRenderer {
       ? this.currentScene.primitives.filter((primitive) => primitive.tags?.includes(focusedIdTag) === true
         && (!blueprintFocus || primitive.tags?.includes("focus-interior") === true)
         && (typeof this.activeFloorView !== "number" || primitiveTouchesFloorContext(primitive, this.activeFloorView))
-        && primitive.tags?.includes("focus-cutaway") !== true
+        && !(primitive.tags?.includes("focus-cutaway") === true && !isFocusBoundaryWall(primitive))
         && (this.activeFloorView === "roof" || (primitive.material !== "roof" && !primitive.tags?.includes("roof"))))
       : [];
     if (focusedVisible.length > 0) return this.boundsForPrimitives(focusedVisible, GRID_METERS * 1.25);

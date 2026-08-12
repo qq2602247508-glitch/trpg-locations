@@ -429,6 +429,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
       // Read-only browser audit hook for visual regression tooling. It exposes
       // the exact generated contract without coupling tests to renderer state.
       Object.assign(window, { __TRPG_SCENE__: scene });
+      Object.assign(window, { __TRPG_FOCUS_AUDIT__: () => renderer.getFocusAuditSnapshot() });
       renderer.setScene(scene);
       setToggle(elements.cameraToggle, false);
       setToggle(elements.topCameraToggle, false);
