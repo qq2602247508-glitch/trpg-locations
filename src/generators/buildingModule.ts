@@ -596,7 +596,7 @@ function addFunctionalModuleGeometry(
         : localZ;
       const archiveThreshold = point(archiveThresholdLocalX, archiveThresholdLocalZ);
       scene.primitives.push(
-        box(`${lot.id}-${module.kind}-surface-hatch`, 0, archiveAccess.x, baseY + FLOOR_SLAB_METERS, archiveAccess.z, 1.5, 0.16, 1.5, "metal", [...common, `function:${module.kind}`, "archive-hatch", "vertical-opening", "entrance"], lot.rotation),
+        box(`${lot.id}-${module.kind}-surface-hatch`, 0, archiveAccess.x, baseY + FLOOR_SLAB_METERS, archiveAccess.z, 1.5, 0.16, 1.5, "metal", [...common, `function:${module.kind}`, "archive-hatch", "vertical-opening", "entrance", "floor-context:3"], lot.rotation),
         box(`${lot.id}-${module.kind}-shaft-collar-north`, 3, shaftNorth.x, baseY - 0.34, shaftNorth.z, 1.6, 0.34, 0.18, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),
         box(`${lot.id}-${module.kind}-shaft-collar-south`, 3, shaftSouth.x, baseY - 0.34, shaftSouth.z, 1.6, 0.34, 0.18, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),
         box(`${lot.id}-${module.kind}-shaft-collar-west`, 3, shaftWest.x, baseY - 0.34, shaftWest.z, 0.18, 0.34, 1.6, "darkStone", [...common, `function:${module.kind}`, "archive-access", "shaft-collar", "top-portal", "vertical-opening", "underground"], lot.rotation),

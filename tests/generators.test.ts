@@ -1064,6 +1064,37 @@ describe("scene generators", () => {
     expect(program.parcels.filter((parcel) => (parcel.functionalModules?.length ?? 0) > 0).every((parcel) => parcel.lod === "full-interior" || parcel.lod === "facade")).toBe(true);
   });
 
+  it("links archive surface hatches into focused basement context", () => {
+    const scene = baseScene("settlement", "Archive module", "Archive module context", "archive-hatch-context", { x: 24, z: 24 }, 4, [10, 10, 10, 10]);
+    instantiateBuildingModule(scene, {
+      id: "archive-context-building",
+      kind: "guild",
+      x: 12,
+      z: 12,
+      width: 10,
+      depth: 8,
+      rotation: 0,
+      district: "service",
+      seed: "archive-hatch-context",
+      lod: "full-interior",
+      baseY: 0.3048,
+      functionalModules: [{
+        id: "archive",
+        kind: "archive",
+        label: "Archive",
+        levelRole: "basement",
+        minimumFootprintCells: 16,
+        tags: ["archive"],
+      }],
+    }, new SeededRandom("archive-hatch-context"));
+    const hatch = scene.primitives.find((primitive) => primitive.id === "archive-context-building-archive-surface-hatch");
+    expect(hatch?.level).toBe(0);
+    expect(hatch?.tags).toEqual(expect.arrayContaining(["floor-context:3", "vertical-opening"]));
+    expect(hatch?.tags?.some((tag) => tag.startsWith("building-instance:"))).toBe(true);
+    expect(floorContextLevels(hatch ?? { tags: [] })).toEqual([3]);
+    expect(primitiveTouchesFloorContext(hatch ?? { level: -1, tags: [] }, 3)).toBe(true);
+  });
+
   it("realizes specialist settlement functions as geometry, rooms, routes, and tactical space", () => {
     const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、盐雾蒸馏塔、半淹档案库和水下温室";
     const first = generateScene({ ...request("functional-module-scene-a", "medium", 0.72), prompt }, "adaptive");
@@ -1083,6 +1114,12 @@ describe("scene generators", () => {
     expect(first.routes.some((route) => route.id.includes("archive-route"))).toBe(true);
     expect(first.routes.some((route) => route.id.includes("greenhouse-route"))).toBe(true);
     expect(first.tactical.some((feature) => feature.id.includes("greenhouse-cover"))).toBe(true);
+    const archiveHatch = first.primitives.find((primitive) => primitive.tags?.includes("archive-hatch"));
+    expect(archiveHatch?.level).toBe(0);
+    expect(archiveHatch?.tags).toEqual(expect.arrayContaining(["floor-context:3", "vertical-opening"]));
+    expect(archiveHatch?.tags?.some((tag) => tag.startsWith("building-instance:"))).toBe(true);
+    expect(floorContextLevels(archiveHatch ?? { tags: [] })).toEqual([3]);
+    expect(primitiveTouchesFloorContext(archiveHatch ?? { level: -1, tags: [] }, 3)).toBe(true);
     const dedicatedBasementBuildings = new Set(first.primitives
       .filter((primitive) => primitive.level === 3 && primitive.tags?.includes("functional-module"))
       .flatMap((primitive) => primitive.tags?.filter((tag) => tag.startsWith("building-instance:")) ?? []));
