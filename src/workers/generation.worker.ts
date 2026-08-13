@@ -1,9 +1,6 @@
-import { generateScene } from "../generators";
-import { planSceneProgramLocally, planSceneProgramWithOllamaDetailed, type SceneProgram, type OllamaPlanningStatus } from "../scene-program";
-import type { GenerationRequest, SceneKind } from "../schema";
-import { compileSceneComposition, type SceneCompositionProgram } from "../composition";
-import { retrieveCapabilitiesWithBge } from "../semantic/bge";
-import { shouldComposeWildernessFacility } from "../semantic/siteIntent";
+import type { GenerationRequest, GeneratedScene, SceneKind } from "../schema";
+import type { SceneProgram, OllamaPlanningStatus } from "../scene-program";
+import type { SceneCompositionProgram } from "../composition";
 import { normalizeGenerationTiming } from "../timing";
 
 interface GenerationWorkerRequest {
@@ -14,7 +11,7 @@ interface GenerationWorkerRequest {
 
 interface GenerationWorkerResponse {
   id: number;
-  scene?: ReturnType<typeof generateScene>;
+  scene?: GeneratedScene;
   error?: string;
 }
 
@@ -30,6 +27,10 @@ const sceneProgramCache = new Map<string, PlannedProgram>();
 const compositionCache = new Map<string, SceneCompositionProgram>();
 
 async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean, forceLocalModel = false): Promise<{ program: SceneProgram; ollamaStatus?: OllamaPlanningStatus; model?: string }> {
+  const [{ planSceneProgramLocally, planSceneProgramWithOllamaDetailed }, { shouldComposeWildernessFacility }] = await Promise.all([
+    import("../scene-program"),
+    import("../semantic/siteIntent"),
+  ]);
   const key = `${kind}|${forceLocalModel ? "forced-model" : "auto"}|${prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}`;
   const cached = sceneProgramCache.get(key);
   if (cached) return cached;
@@ -56,6 +57,11 @@ async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean
 }
 
 async function planComposition(request: GenerationRequest, kind: SceneKind): Promise<SceneCompositionProgram> {
+  const [{ compileSceneComposition }, { retrieveCapabilitiesWithBge }, { shouldComposeWildernessFacility }] = await Promise.all([
+    import("../composition"),
+    import("../semantic/bge"),
+    import("../semantic/siteIntent"),
+  ]);
   const key = `${kind}|${request.prompt.normalize("NFKC").trim().toLocaleLowerCase("en-US")}|${request.seed}|${request.density}`;
   const cached = compositionCache.get(key); if (cached) return cached;
   const local = compileSceneComposition(request);
@@ -87,6 +93,7 @@ scope.addEventListener("message", async (event: MessageEvent<GenerationWorkerReq
     const planning = await planProgram(request.prompt, kind, composition.capabilityIds.length === 0, request.forceLocalModel === true);
     const planningMs = Math.max(0, performance.now() - planningStartedAt);
     const geometryStartedAt = performance.now();
+    const { generateScene } = await import("../generators");
     const scene = generateScene(request, kind, undefined, planning.program, composition);
     const geometryMs = Math.max(0, performance.now() - geometryStartedAt);
     if (planning.ollamaStatus) {

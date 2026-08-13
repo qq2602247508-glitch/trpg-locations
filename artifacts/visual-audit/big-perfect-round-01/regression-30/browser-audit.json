@@ -43,7 +43,7 @@
       ],
       "networkFailures": [],
       "consoleErrors": [],
-      "generationMs": 2730.5999999046326
+      "generationMs": 2128.5999999046326
     },
     {
       "id": "forest-village-medium",
@@ -86,7 +86,7 @@
       ],
       "networkFailures": [],
       "consoleErrors": [],
-      "generationMs": 1110.1000003814697
+      "generationMs": 1059.9000000953674
     },
     {
       "id": "forest-village-large-dense",
@@ -129,7 +129,7 @@
       ],
       "networkFailures": [],
       "consoleErrors": [],
-      "generationMs": 1238.8000001907349
+      "generationMs": 1134.3000001907349
     },
     {
       "id": "forest-village-large-seed-variant",
@@ -172,7 +172,7 @@
       ],
       "networkFailures": [],
       "consoleErrors": [],
-      "generationMs": 1167.5
+      "generationMs": 1044.5
     }
   ]
 }

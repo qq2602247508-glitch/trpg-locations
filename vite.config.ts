@@ -3,4 +3,14 @@ import { defineConfig } from "vite";
 export default defineConfig({
   server: { host: "127.0.0.1", port: 5241, strictPort: true },
   preview: { host: "127.0.0.1", port: 5241, strictPort: true },
+  worker: { format: "es" },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ["three", "three/addons/controls/OrbitControls.js"],
+        },
+      },
+    },
+  },
 });

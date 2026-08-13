@@ -7,18 +7,18 @@
       "seed": "regression-26-ordinary",
       "sceneValid": true,
       "primitives": 18,
-      "generationMs": 37.39999961853027,
+      "generationMs": 64.7000002861023,
       "timing": {
-        "planningMs": 1.3000001907348633,
-        "geometryMs": 2.5999999046325684,
-        "totalMs": 37.39999961853027,
-        "transportMs": 33.49999952316284
+        "planningMs": 18.5,
+        "geometryMs": 37.59999990463257,
+        "totalMs": 64.7000002861023,
+        "transportMs": 8.600000381469727
       },
       "semantic": {
         "source": "local"
       },
       "planningSource": "local",
-      "statusDetail": "18 个可批处理图元 · 总计 37 ms · 规划 1 ms · 几何 3 ms · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
+      "statusDetail": "18 个可批处理图元 · 总计 65 ms · 规划 19 ms · 几何 38 ms · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · LOCAL",
       "screenshot": "artifacts/visual-audit/big-perfect-round-01/regression-26/ordinary-rules.png",
       "networkFailures": [],
       "consoleErrors": []
@@ -31,23 +31,25 @@
       "forceLocalModel": true,
       "sceneValid": true,
       "primitives": 88,
-      "generationMs": 12869.5,
+      "generationMs": 17030,
       "timing": {
-        "planningMs": 12833.5,
-        "geometryMs": 9.099999904632568,
-        "totalMs": 12869.5,
-        "transportMs": 26.90000009536743
+        "planningMs": 16968.099999904633,
+        "geometryMs": 55.30000019073486,
+        "totalMs": 17030,
+        "transportMs": 6.599999904632568
       },
       "semantic": {
         "source": "local",
         "model": "qwen3.6:35b-mlx",
-        "status": "ollama-schema-rejected",
+        "status": "ollama-timeout",
         "fallback": "rule"
       },
       "planningSource": "local",
-      "statusDetail": "88 个可批处理图元 · 总计 12870 ms · 规划 12834 ms · 几何 9 ms · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
+      "statusDetail": "88 个可批处理图元 · 总计 17030 ms · 规划 16968 ms · 几何 55 ms · SceneProgram v1 · 4 区域 · Composition v1 · 0 母题 · BGE",
       "screenshot": "artifacts/visual-audit/big-perfect-round-01/regression-26/forced-ollama.png",
-      "networkFailures": [],
+      "networkFailures": [
+        "POST http://127.0.0.1:11434/api/chat"
+      ],
       "consoleErrors": []
     }
   ]
