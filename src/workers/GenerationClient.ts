@@ -1,4 +1,5 @@
 import type { GeneratedScene, GenerationRequest, SceneKind } from "../schema";
+import { normalizeGenerationTiming } from "../timing";
 
 interface WorkerResponse {
   id: number;
@@ -12,6 +13,7 @@ interface PendingGeneration {
   request: GenerationRequest;
   kind: SceneKind;
   timeoutId: ReturnType<typeof setTimeout>;
+  startedAt: number;
 }
 
 const WORKER_TIMEOUT_MS = 10_000;
@@ -41,7 +43,8 @@ export class GenerationClient {
 
   async generate(request: GenerationRequest, kind: SceneKind): Promise<GeneratedScene> {
     if (!this.worker) {
-      return this.generateInThread(request, kind);
+      const startedAt = performance.now();
+      return this.generateInThread(request, kind, true).then((scene) => this.withClientTiming(scene, startedAt));
     }
     const id = this.nextId;
     this.nextId += 1;
@@ -49,7 +52,7 @@ export class GenerationClient {
       const timeoutId = setTimeout(() => {
         void this.fallbackPending(id);
       }, request.forceLocalModel ? FORCED_LOCAL_MODEL_TIMEOUT_MS : WORKER_TIMEOUT_MS);
-      this.pending.set(id, { resolve, reject, request, kind, timeoutId });
+      this.pending.set(id, { resolve, reject, request, kind, timeoutId, startedAt: performance.now() });
       this.worker?.postMessage({ id, request, kind });
     });
   }
@@ -71,7 +74,7 @@ export class GenerationClient {
     if (!pending) return;
     this.pending.delete(event.data.id);
     clearTimeout(pending.timeoutId);
-    if (event.data.scene) pending.resolve(event.data.scene);
+    if (event.data.scene) pending.resolve(this.withClientTiming(event.data.scene, pending.startedAt));
     else pending.reject(new Error(event.data.error ?? "Scene planner returned no scene."));
   };
 
@@ -87,23 +90,82 @@ export class GenerationClient {
     this.pending.delete(id);
     clearTimeout(pending.timeoutId);
     try {
-      pending.resolve(await this.generateInThread(pending.request, pending.kind));
+      // A timed-out ordinary worker may already have an automatic Ollama
+      // request in flight. Fall back deterministically instead of replaying
+      // the same model side effect. Explicit forced mode retains its model
+      // contract and may retry on the in-thread path.
+      const scene = await this.generateInThread(
+        pending.request,
+        pending.kind,
+        pending.request.forceLocalModel === true,
+      );
+      pending.resolve(this.withClientTiming(scene, pending.startedAt));
     } catch (error) {
       pending.reject(error instanceof Error ? error : new Error("Local scene planning fallback failed."));
     }
   }
 
-  private async generateInThread(request: GenerationRequest, kind: SceneKind): Promise<GeneratedScene> {
+  private async generateInThread(
+    request: GenerationRequest,
+    kind: SceneKind,
+    allowAutomaticOllama: boolean,
+  ): Promise<GeneratedScene> {
     const { generateScene } = await import("../generators");
-    if (!request.forceLocalModel) return generateScene(request, kind);
+    const { compileSceneComposition } = await import("../composition");
+    const { retrieveCapabilitiesWithBge } = await import("../semantic/bge");
+    const { shouldComposeWildernessFacility } = await import("../semantic/siteIntent");
+    const planningStartedAt = performance.now();
+    const compositionLocal = compileSceneComposition(request);
+    const wildernessFacility = shouldComposeWildernessFacility(request.prompt);
+    const fixedBuildingKind = ["building", "tower", "tavern", "dungeon", "sewer", "cave"].includes(kind);
+    const retrieval = !fixedBuildingKind && (compositionLocal.primaryDomain === "generic"
+      || compositionLocal.primaryDomain === "settlement" || wildernessFacility)
+      ? await retrieveCapabilitiesWithBge(request.prompt, { limit: wildernessFacility ? 10 : 6 })
+      : undefined;
+    const composition = retrieval && retrieval.capabilityIds.length > 0
+      ? compileSceneComposition(request, retrieval.source === "bge" ? "bge" : "local", retrieval.capabilityIds)
+      : compositionLocal;
     const { planSceneProgramLocally, planSceneProgramWithOllamaDetailed } = await import("../scene-program");
     const localProgram = planSceneProgramLocally(request.prompt, kind);
-    const result = await planSceneProgramWithOllamaDetailed(request.prompt, { requestedKind: kind });
-    const program = result.program ?? localProgram;
-    const scene = generateScene(request, kind, undefined, program);
-    scene.semantic = result.status === "success"
-      ? { source: "ollama", model: result.model, status: "ollama-success" }
-      : { source: "local", model: result.model, status: `ollama-${result.status}`, fallback: "rule" };
+    const unresolved = localProgram.morphology.length === 1
+      && localProgram.morphology[0] === "plain"
+      && localProgram.coverage.length === 1
+      && localProgram.coverage[0] === "sparse";
+    const shouldUseOllama = (request.forceLocalModel === true
+      || (allowAutomaticOllama && kind === "adaptive" && composition.capabilityIds.length === 0 && unresolved))
+      && (request.forceLocalModel === true || !shouldComposeWildernessFacility(request.prompt))
+      && (localProgram.primaryKind === "wilderness" || localProgram.primaryKind === "building")
+      && (request.forceLocalModel === true || kind === "adaptive");
+    const result = shouldUseOllama
+      ? await planSceneProgramWithOllamaDetailed(request.prompt, { requestedKind: kind })
+      : undefined;
+    const program = result?.program ?? localProgram;
+    const planningMs = Math.max(0, performance.now() - planningStartedAt);
+    const geometryStartedAt = performance.now();
+    const scene = generateScene(request, kind, undefined, program, composition);
+    const geometryMs = Math.max(0, performance.now() - geometryStartedAt);
+    if (result) {
+      scene.semantic = result.status === "success"
+        ? { source: "ollama", model: result.model, status: "ollama-success" }
+        : { source: "local", model: result.model, status: `ollama-${result.status}`, fallback: "rule" };
+    }
+    scene.timing = normalizeGenerationTiming({ planningMs, geometryMs, totalMs: planningMs + geometryMs });
+    scene.generationMs = scene.timing.totalMs;
+    return scene;
+  }
+
+  private withClientTiming(scene: GeneratedScene, startedAt: number): GeneratedScene {
+    const totalMs = Math.max(0, performance.now() - startedAt);
+    const timing = normalizeGenerationTiming(scene.timing, totalMs);
+    // The client owns request-to-resolve total time, so recompute transport
+    // overhead from the calibrated total instead of trusting worker-local
+    // transport metadata.
+    scene.timing = normalizeGenerationTiming({
+      planningMs: timing.planningMs,
+      geometryMs: timing.geometryMs,
+      totalMs,
+    }, totalMs);
+    scene.generationMs = scene.timing.totalMs;
     return scene;
   }
 }

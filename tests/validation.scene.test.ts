@@ -116,4 +116,27 @@ describe("validateScene", () => {
     expect(result.errors).toContain("Route front-door point 0 lies outside the reasonable metre-space bounds.");
     expect(result.scene.primitives[0]?.position).toEqual({ x: 100, y: 0, z: -100 });
   });
+
+  it("repairs invalid timing while preserving legacy generationMs as total", () => {
+    const scene = validScene();
+    scene.generationMs = 12;
+    scene.timing = { planningMs: -1, geometryMs: Number.NaN, totalMs: 2, transportMs: -4 };
+
+    const result = validateScene(scene);
+
+    expect(result.scene.timing).toEqual({
+      planningMs: 0,
+      geometryMs: 0,
+      totalMs: 12,
+      transportMs: 0,
+    });
+    expect(result.scene.generationMs).toBe(12);
+    expect(result.repairs.some((repair) => repair.includes("timing"))).toBe(true);
+  });
+
+  it("accepts legacy scenes without timing", () => {
+    const result = validateScene(validScene());
+    expect(result.valid).toBe(true);
+    expect(result.scene.timing).toBeUndefined();
+  });
 });

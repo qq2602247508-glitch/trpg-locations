@@ -17,6 +17,7 @@ import {
   type Vec2,
   type Vec3,
 } from "../schema";
+import { normalizeGenerationTiming } from "../timing";
 
 export interface ValidationOptions {
   /** Apply safe metadata/topology repairs to the returned copy. Defaults to true. */
@@ -958,6 +959,20 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
   }
   const generationMs = Math.max(0, finiteValue(output.generationMs, 0, "generationMs"));
   if (isFiniteNumber(output.generationMs) && output.generationMs < 0) repairable("generationMs must not be negative; using 0.");
+  const rawTiming = (output as unknown as UnknownRecord).timing;
+  const timing = rawTiming === undefined ? undefined : normalizeGenerationTiming(rawTiming, generationMs);
+  if (rawTiming !== undefined) {
+    if (!isRecord(rawTiming)) repairable("timing was not an object; using zeroed timing.");
+    const raw = isRecord(rawTiming) ? rawTiming : {};
+    for (const field of ["planningMs", "geometryMs", "totalMs", "transportMs"] as const) {
+      if (raw[field] !== undefined && (!isFiniteNumber(raw[field]) || raw[field] < 0)) {
+        repairable(`timing.${field} must be finite and non-negative; using 0.`);
+      }
+    }
+    if (timing && timing.totalMs < timing.planningMs + timing.geometryMs) {
+      repairable("timing.totalMs must include planningMs and geometryMs; clamping it.");
+    }
+  }
 
   const uniqueId = (raw: unknown, prefix: string, index: number, used: Set<string>): string => {
     const base = typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : `${prefix}-${index + 1}`;
@@ -1317,6 +1332,7 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
     output.tactical = tactical;
     if ((output as unknown as UnknownRecord).buildingInstances !== undefined) output.buildingInstances = buildingInstances;
     output.generationMs = generationMs;
+    if (timing) output.timing = timing;
   }
   output.diagnostics = diagnostics;
 

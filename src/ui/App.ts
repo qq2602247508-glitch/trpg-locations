@@ -1,5 +1,6 @@
 import { GRID_FEET, GRID_METERS } from "../schema";
 import type { GeneratedScene, GenerationRequest, SceneKind } from "../schema";
+import { formatGenerationTiming } from "../timing";
 import type { RenderStats } from "../render/SceneRenderer";
 import { GenerationClient } from "../workers/GenerationClient";
 import { generateAtomTestScene } from "../composition";
@@ -278,10 +279,10 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   let tacticalDebug = false;
   let lastStats: RenderStats = renderer.getStats();
   let planningView: "all" | "roads" | "parcels" | "buildings" = "all";
-  let forceLocalModel = false;
+  const auditParams = new URLSearchParams(window.location.search);
+  let forceLocalModel = auditParams.get("forceLocalModel") === "true";
   let buildingEntrySession: BuildingEntrySession | undefined;
 
-  const auditParams = new URLSearchParams(window.location.search);
   const requestedDensity = Number(auditParams.get("density"));
   const requestedSize = auditParams.get("size");
   const requestedKind = auditParams.get("kind");
@@ -292,6 +293,11 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   if (Number.isFinite(requestedDensity)) {
     const normalizedDensity = requestedDensity > 0 && requestedDensity <= 1 ? requestedDensity * 100 : requestedDensity;
     elements.density.value = String(Math.round(Math.max(20, Math.min(100, normalizedDensity))));
+  }
+  if (forceLocalModel) {
+    elements.forceLocalModel.setAttribute("aria-pressed", "true");
+    const detail = elements.forceLocalModel.querySelector("small");
+    if (detail) detail.textContent = "开启 · 强制调用受 Schema 约束的本地 Qwen 规划";
   }
   updateDensityLabel(elements);
 
@@ -467,14 +473,11 @@ export async function mountApp(root: HTMLElement): Promise<void> {
     elements.statusDetail.textContent = forceLocalModel ? "正在请求本地语义规划，再由确定性生成器构筑几何…" : "正在布置房间、路线与战术节点…";
 
     try {
-      const generationStartedAt = performance.now();
       const atomAuditId = new URLSearchParams(window.location.search).get("atom");
       const generated = atomAuditId ? generateAtomTestScene(atomAuditId, request.seed) : await generationClient.generate(request, kind);
-      // Generation stays deterministic in the rule layer; elapsed time is a UI-only readout.
-      const scene: GeneratedScene = {
-        ...generated,
-        generationMs: Math.max(0, performance.now() - generationStartedAt),
-      };
+      // Timing is transport metadata; never overwrite the generator's
+      // deterministic scene contract with a second wall-clock measurement.
+      const scene: GeneratedScene = generated;
       activeScene = scene;
       buildingEntrySession = undefined;
       // Read-only browser audit hook for visual regression tooling. It exposes
@@ -503,7 +506,7 @@ export async function mountApp(root: HTMLElement): Promise<void> {
         ? ` · SceneProgram v${scene.sceneProgram.version} · ${scene.sceneProgram.regionCount} 区域${scene.sceneProgram.source === "ollama" ? " · Ollama" : ""}`
         : scene.semantic?.source === "ollama" ? " · Ollama 语义" : "";
       const compositionLabel = scene.compositionProgram ? ` · Composition v${scene.compositionProgram.version} · ${scene.compositionProgram.motifIds.length} 母题 · ${scene.compositionProgram.source.toUpperCase()}` : "";
-      elements.statusDetail.textContent = `${scene.primitives.length} 个可批处理图元 · ${scene.generationMs.toFixed(0)} ms 生成${semanticLabel}${compositionLabel}`;
+      elements.statusDetail.textContent = `${scene.primitives.length} 个可批处理图元 · ${formatGenerationTiming(scene.timing, scene.generationMs)}${semanticLabel}${compositionLabel}`;
     } catch (error) {
       const description = error instanceof Error ? error.message : "未知生成错误";
       setStatus(elements, "生成失败", "error");

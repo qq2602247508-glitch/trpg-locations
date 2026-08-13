@@ -4,6 +4,7 @@ import type { GenerationRequest, SceneKind } from "../schema";
 import { compileSceneComposition, type SceneCompositionProgram } from "../composition";
 import { retrieveCapabilitiesWithBge } from "../semantic/bge";
 import { shouldComposeWildernessFacility } from "../semantic/siteIntent";
+import { normalizeGenerationTiming } from "../timing";
 
 interface GenerationWorkerRequest {
   id: number;
@@ -40,10 +41,10 @@ async function planProgram(prompt: string, kind: SceneKind, allowOllama: boolean
     && localProgram.morphology[0] === "plain"
     && localProgram.coverage.length === 1
     && localProgram.coverage[0] === "sparse";
-  const shouldUseOllama = (forceLocalModel || (allowOllama && unresolved))
+  const shouldUseOllama = (forceLocalModel || (kind === "adaptive" && allowOllama && unresolved))
     && (forceLocalModel || !shouldComposeWildernessFacility(prompt))
     && (localProgram.primaryKind === "wilderness" || localProgram.primaryKind === "building")
-    && (kind === "adaptive" || kind === "wilderness" || kind === "building" || kind === "settlement");
+    && (forceLocalModel || kind === "adaptive");
   const ollamaResult = shouldUseOllama
     ? await planSceneProgramWithOllamaDetailed(prompt, { requestedKind: kind })
     : undefined;
@@ -77,17 +78,28 @@ async function planComposition(request: GenerationRequest, kind: SceneKind): Pro
 scope.addEventListener("message", async (event: MessageEvent<GenerationWorkerRequest>) => {
   const { id, request, kind } = event.data;
   try {
+    const startedAt = performance.now();
+    const planningStartedAt = startedAt;
     const composition = await planComposition(request, kind);
     // A successful BGE/lexical capability retrieval is sufficient for the
     // deterministic compiler. Qwen is the final ambiguity fallback, not a
     // mandatory step in every unknown prompt.
     const planning = await planProgram(request.prompt, kind, composition.capabilityIds.length === 0, request.forceLocalModel === true);
+    const planningMs = Math.max(0, performance.now() - planningStartedAt);
+    const geometryStartedAt = performance.now();
     const scene = generateScene(request, kind, undefined, planning.program, composition);
+    const geometryMs = Math.max(0, performance.now() - geometryStartedAt);
     if (planning.ollamaStatus) {
       scene.semantic = planning.ollamaStatus === "success"
         ? { source: "ollama", model: planning.model, status: "ollama-success" }
         : { source: "local", model: planning.model, status: `ollama-${planning.ollamaStatus}`, fallback: "rule" };
     }
+    scene.timing = normalizeGenerationTiming({
+      planningMs,
+      geometryMs,
+      totalMs: Math.max(0, performance.now() - startedAt),
+    });
+    scene.generationMs = scene.timing.totalMs;
     scope.postMessage({ id, scene } satisfies GenerationWorkerResponse);
   } catch (error) {
     scope.postMessage({

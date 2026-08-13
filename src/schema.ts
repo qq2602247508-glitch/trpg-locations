@@ -5,6 +5,7 @@ import type { SceneProgram, SceneProgramSummary } from "./scene-program/schema";
 import type { SettlementAdaptationProgramSummary, SiteProgramSummary, TerrainProgramSummary } from "./site-program/schema";
 import type { BuildingFunctionalModuleProgram } from "./site-program/schema";
 import type { SceneCompositionProgram, SceneCompositionProgramSummary } from "./composition/schema";
+import type { GenerationTiming } from "./timing";
 
 export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "dungeon" | "building" | "settlement" | "wilderness" | "adaptive";
 export type PrimitiveShape = "box" | "cylinder" | "cone" | "sphere" | "gable" | "ramp" | "stairs" | "water";
@@ -193,6 +194,8 @@ export interface GeneratedScene {
   buildingInstances?: BuildingInstance[];
   diagnostics: SceneDiagnostics;
   generationMs: number;
+  /** Optional performance breakdown; generationMs remains the total for compatibility. */
+  timing?: GenerationTiming;
   semantic?: {
     source: "local" | "ollama";
     model?: string;
