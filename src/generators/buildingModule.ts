@@ -1024,7 +1024,7 @@ function addFunctionalModuleGeometry(
       const platformWidth = Math.max(3.8, lot.width * 0.44);
       const platformDepth = Math.max(3.4, lot.depth * 0.38);
       const platformMaterial: MaterialKey = lot.climateProfile === "forest" || lot.kind === "shrine" ? "wood" : "metal";
-      const center = addBox(module, "platform", 2, platformX, platformY, platformZ, platformWidth, 0.24, platformDepth, platformMaterial, ["floor", "platform", "roof-platform", "observation-platform", "signal-platform", "standable", "high-ground", "supported"]);
+      const center = addBox(module, "platform", 2, platformX, platformY, platformZ, platformWidth, 0.24, platformDepth, platformMaterial, ["floor", "platform", "roof-platform", "observation-platform", "signal-platform", "standable", "high-ground", "supported", "support-validation-required"]);
       for (const [supportIndex, xOffset, zOffset] of [
         [1, -0.38, -0.36],
         [2, 0.38, -0.36],
@@ -1056,7 +1056,7 @@ function addFunctionalModuleGeometry(
       const access = point(platformX, platformZ + platformDepth * 0.34);
       const accessRise = platformY - roofBaseY;
       scene.primitives.push(
-        stairs(`${lot.id}-${module.kind}-roof-ladder`, 2, access.x, roofBaseY, access.z, 0.95, accessRise, 1.8, platformMaterial, [...common, `function:${module.kind}`, ...module.tags, "roof-ladder", "vertical-route", "vertical-opening", "standable"], lot.rotation + Math.PI),
+        stairs(`${lot.id}-${module.kind}-roof-ladder`, 2, access.x, roofBaseY, access.z, 0.95, accessRise, 1.8, platformMaterial, [...common, `function:${module.kind}`, ...module.tags, "roof-ladder", "vertical-route", "route-destination-required", "vertical-opening", "standable"], lot.rotation + Math.PI),
         box(`${lot.id}-${module.kind}-roof-hatch`, 2, access.x, roofBaseY + 0.06, access.z, 1.2, 0.14, 1.2, platformMaterial, [...common, `function:${module.kind}`, ...module.tags, "roof-hatch", "vertical-opening", "entrance"], lot.rotation),
       );
       scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "vertical", [

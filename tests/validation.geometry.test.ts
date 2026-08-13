@@ -350,6 +350,181 @@ describe("geometry-level P1 validation", () => {
     expect(hasError(result, "Stair blocked-connector-stair crosses solid wall connector-blocking-wall")).toBe(true);
   });
 
+  it("rejects an artificial bridge whose far endpoint has no landing or anchor", () => {
+    const scene = generateScene({ ...request, seed: "geometry-bridge-endpoint" }, "cave");
+    scene.primitives.push(
+      {
+        id: "test-bridge",
+        shape: "box",
+        position: { x: 100, y: 8, z: 100 },
+        size: { x: 12, y: 0.2, z: 2 },
+        material: "wood",
+        level: 1,
+        tags: ["floor", "bridge", "standable", "supported-crossing", "support-validation-required"],
+      },
+      {
+        id: "test-bridge-first-anchor",
+        shape: "box",
+        position: { x: 94, y: 4, z: 100 },
+        size: { x: 2, y: 8, z: 3 },
+        material: "stone",
+        level: 0,
+        tags: ["bridge-anchor", "structural-support"],
+      },
+    );
+
+    const result = validateScene(scene);
+
+    expect(result.valid).toBe(false);
+    expect(hasError(result, "Bridge test-bridge has a floating second endpoint")).toBe(true);
+  });
+
+  it("accepts an artificial bridge with structural anchors at both endpoints", () => {
+    const scene = generateScene({ ...request, seed: "geometry-supported-bridge" }, "cave");
+    scene.primitives.push(
+      {
+        id: "supported-test-bridge",
+        shape: "box",
+        position: { x: 100, y: 8, z: 100 },
+        size: { x: 12, y: 0.2, z: 2 },
+        material: "wood",
+        level: 1,
+        tags: ["floor", "bridge", "standable", "supported-crossing", "support-validation-required"],
+      },
+      ...[94, 106].map((x, index): ScenePrimitive => ({
+        id: `supported-test-bridge-anchor-${index + 1}`,
+        shape: "box",
+        position: { x, y: 4, z: 100 },
+        size: { x: 2, y: 8, z: 3 },
+        material: "stone",
+        level: 0,
+        tags: ["bridge-anchor", "structural-support"],
+      })),
+    );
+
+    const result = validateScene(scene);
+
+    expect(hasError(result, "Bridge supported-test-bridge")).toBe(false);
+  });
+
+  it("rejects a contracted production ice bridge moved away from its banks and anchors", () => {
+    const scene = generateScene({
+      ...request,
+      prompt: "破碎冰原上的地下研究设施，有冰裂缝和冰桥",
+      seed: "geometry-production-ice-bridge",
+      size: "large",
+    }, "wilderness");
+    const bridge = scene.primitives.find((primitive) => (
+      hasTag(primitive, "support-validation-required")
+      && hasTag(primitive, "natural-ice-bridge")
+    ));
+    expect(bridge).toBeDefined();
+    if (bridge !== undefined) {
+      bridge.position.x += GRID_METERS * 40;
+      bridge.position.z += GRID_METERS * 40;
+    }
+
+    const result = validateScene(scene);
+
+    expect(result.valid).toBe(false);
+    expect(hasError(result, `Bridge ${bridge?.id} has a floating first endpoint`)).toBe(true);
+    expect(hasError(result, `Bridge ${bridge?.id} has a floating second endpoint`)).toBe(true);
+  });
+
+  it("rejects an explicit elevated platform without structural continuity", () => {
+    const scene = generateScene({ ...request, seed: "geometry-platform-support" }, "cave");
+    scene.primitives.push({
+      id: "unsupported-observation-platform",
+      shape: "box",
+      position: { x: 120, y: 12, z: 120 },
+      size: { x: 8, y: 0.2, z: 6 },
+      material: "wood",
+      level: 2,
+      tags: ["floor", "platform", "observation-platform", "standable", "support-validation-required"],
+    });
+
+    const result = validateScene(scene);
+
+    expect(result.valid).toBe(false);
+    expect(hasError(result, "Elevated platform unsupported-observation-platform has no sufficient structural support continuity")).toBe(true);
+  });
+
+  it("requires explicit vertical-route connectors to connect to a nearby route", () => {
+    const scene = generateScene({ ...request, seed: "geometry-route-purpose" }, "cave");
+    scene.primitives.push(
+      {
+        id: "route-purpose-lower",
+        shape: "box",
+        position: { x: 140, y: 4, z: 140 },
+        size: { x: 5, y: 0.2, z: 5 },
+        material: "stone",
+        level: 1,
+        tags: ["floor", "platform", "standable"],
+      },
+      {
+        id: "route-purpose-upper",
+        shape: "box",
+        position: { x: 140, y: 8, z: 148 },
+        size: { x: 5, y: 0.2, z: 5 },
+        material: "stone",
+        level: 2,
+        tags: ["floor", "platform", "standable"],
+      },
+      {
+        id: "route-purpose-stair",
+        shape: "stairs",
+        position: { x: 140, y: 4, z: 144 },
+        size: { x: 2, y: 4, z: 8 },
+        material: "stone",
+        level: 1,
+        tags: ["stairs", "vertical-route", "route-destination-required", "vertical-opening"],
+      },
+    );
+
+    const withoutRoute = validateScene(scene);
+    expect(hasError(withoutRoute, "Stair route-purpose-stair has no nearby route destination evidence")).toBe(true);
+
+    scene.routes.push({
+      id: "route-purpose-evidence",
+      kind: "vertical",
+      points: [
+        { x: 140, y: 4, z: 140 },
+        { x: 140, y: 8, z: 148 },
+      ],
+    });
+    const withRoute = validateScene(scene);
+    expect(hasError(withRoute, "Stair route-purpose-stair has no nearby route destination evidence")).toBe(false);
+  });
+
+  it("does not impose artificial support rules on natural bridges or ordinary platforms", () => {
+    const scene = generateScene({ ...request, seed: "geometry-natural-bridge" }, "cave");
+    scene.primitives.push(
+      {
+        id: "natural-rock-bridge",
+        shape: "box",
+        position: { x: 170, y: 12, z: 170 },
+        size: { x: 14, y: 1, z: 3 },
+        material: "rock",
+        level: 2,
+        tags: ["floor", "bridge", "natural-bridge", "standable"],
+      },
+      {
+        id: "ordinary-terrain-platform",
+        shape: "box",
+        position: { x: 190, y: 12, z: 190 },
+        size: { x: 8, y: 1, z: 8 },
+        material: "rock",
+        level: 2,
+        tags: ["floor", "platform", "terrain", "standable"],
+      },
+    );
+
+    const result = validateScene(scene);
+
+    expect(hasError(result, "Bridge natural-rock-bridge")).toBe(false);
+    expect(hasError(result, "Elevated platform ordinary-terrain-platform")).toBe(false);
+  });
+
   it("rejects a detached tree canopy while accepting its grounded trunked neighbors", () => {
     const scene = generateScene({
       ...request,

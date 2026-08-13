@@ -2056,7 +2056,7 @@ function buildIce(scene: GeneratedScene, width: number, depth: number, density: 
       const halfGap = crevasseWidthAt(z) / 2;
       const bridgeY = FLOOR_SLAB_METERS + feetToMeters(0.45 + index * 0.35);
       scene.primitives.push(
-        corridor(`ice-main-crevasse-bridge-${index}`, 0, x - halfGap - 1.2, z, x + halfGap + 1.2, z, bridgeY, 1.45, "ice", ["ice", "main-crevasse", "crevasse-bridge", "natural-ice-bridge", "bridge", "standable", "supported", "surface-grid"]),
+        corridor(`ice-main-crevasse-bridge-${index}`, 0, x - halfGap - 1.2, z, x + halfGap + 1.2, z, bridgeY, 1.45, "ice", ["ice", "main-crevasse", "crevasse-bridge", "natural-ice-bridge", "bridge", "standable", "supported", "surface-grid", "support-validation-required"]),
         box(`ice-main-crevasse-bridge-anchor-west-${index}`, 0, x - halfGap - 0.55, 0, z, 1.5, bridgeY + FLOOR_SLAB_METERS, 2.1, "ice", ["ice", "main-crevasse", "bridge-anchor", "supported"]),
         box(`ice-main-crevasse-bridge-anchor-east-${index}`, 0, x + halfGap + 0.55, 0, z, 1.5, bridgeY + FLOOR_SLAB_METERS, 2.1, "ice", ["ice", "main-crevasse", "bridge-anchor", "supported"]),
       );

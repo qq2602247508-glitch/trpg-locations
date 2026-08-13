@@ -179,6 +179,32 @@ function stairEndpoints(stair: ScenePrimitive): { lower: Vec3; upper: Vec3 } {
   };
 }
 
+function horizontalEndpoints(primitive: ScenePrimitive): { first: Vec3; second: Vec3 } {
+  const rotation = primitive.rotationY ?? 0;
+  const longAxisIsX = primitive.size.x >= primitive.size.z;
+  const halfLength = Math.max(primitive.size.x, primitive.size.z) / 2;
+  const localX = longAxisIsX ? halfLength : 0;
+  const localZ = longAxisIsX ? 0 : halfLength;
+  const cosine = Math.cos(rotation);
+  const sine = Math.sin(rotation);
+  const offset = {
+    x: localX * cosine + localZ * sine,
+    z: -localX * sine + localZ * cosine,
+  };
+  return {
+    first: {
+      x: primitive.position.x - offset.x,
+      y: primitive.position.y,
+      z: primitive.position.z - offset.z,
+    },
+    second: {
+      x: primitive.position.x + offset.x,
+      y: primitive.position.y,
+      z: primitive.position.z + offset.z,
+    },
+  };
+}
+
 type VerticalConnector = {
   primitive: ScenePrimitive;
   kind: "stair" | "ladder";
@@ -282,6 +308,48 @@ function isWalkablePrimitive(primitive: ScenePrimitive): boolean {
     "standable",
     "support-surface",
     "stair-landing",
+  ]);
+}
+
+function isArtificialBridge(primitive: ScenePrimitive): boolean {
+  return hasTag(primitive, "support-validation-required")
+    && hasTag(primitive, "bridge")
+    && !hasAnyTag(primitive, [
+      "magical-floating",
+      "levitating",
+      "floating-island",
+      "decorative-bridge",
+    ]);
+}
+
+function isExplicitElevatedPlatform(primitive: ScenePrimitive): boolean {
+  return hasTag(primitive, "support-validation-required")
+    && (hasTag(primitive, "platform") || hasTag(primitive, "floor") || hasTag(primitive, "standable"))
+    && !isStructuralSupportPrimitive(primitive)
+    && hasAnyTag(primitive, [
+    "canopy-platform",
+    "tree-platform",
+    "escape-platform",
+    "observation-platform",
+    "suspended-platform",
+    "hanging-platform",
+    "market-platform",
+  ])
+    && !hasAnyTag(primitive, ["magical-floating", "levitating", "floating-island"]);
+}
+
+function isStructuralSupportPrimitive(primitive: ScenePrimitive): boolean {
+  return hasAnyTag(primitive, [
+    "structural-support",
+    "platform-support",
+    "grounded-support",
+    "bridge-anchor",
+    "bridge-abutment",
+    "buttress",
+    "tree-trunk",
+    "tree-support",
+    "giant-tree",
+    "suspension-rod",
   ]);
 }
 
@@ -617,6 +685,59 @@ function validateGeometryInvariants(
     || stairLandingSurfaces.some((surface) => surface !== connectorPrimitive && pointOnWalkableTop(point, surface))
     || pointAtOpenedLanding(point)
   );
+  const structureSupportsPoint = (point: Vec3, subject: ScenePrimitive): boolean => primitives.some((support) => (
+    support !== subject
+    && isStructuralSupportPrimitive(support)
+    && pointNearPrimitiveFootprint(point, support, GRID_METERS * 0.75)
+    && rangesOverlap(
+      primitiveVerticalSpan(support),
+      { min: point.y - ROUTE_SURFACE_MARGIN_METERS, max: point.y + ROUTE_SURFACE_MARGIN_METERS },
+    )
+  ));
+  const routeSupportsConnector = (connector: VerticalConnector, endpoints: { lower: Vec3; upper: Vec3 }): boolean => (
+    !hasAnyTag(connector.primitive, ["route-destination-required", "shaft-access", "ladder"])
+    || routes.some((route) => {
+      const samples = routeSamples(route);
+      const nearConnector = samples.some((sample) => (
+        pointNearPrimitiveFootprint(sample, connector.primitive, GRID_METERS * 1.5)
+        && sample.y >= Math.min(endpoints.lower.y, endpoints.upper.y) - ROUTE_SURFACE_MARGIN_METERS
+        && sample.y <= Math.max(endpoints.lower.y, endpoints.upper.y) + ROUTE_SURFACE_MARGIN_METERS
+      ));
+      return nearConnector && rangesOverlap(routeVerticalRange(route), {
+        min: Math.min(endpoints.lower.y, endpoints.upper.y),
+        max: Math.max(endpoints.lower.y, endpoints.upper.y),
+      }, ROUTE_SURFACE_MARGIN_METERS);
+    })
+  );
+
+  for (const bridge of primitives.filter(isArtificialBridge)) {
+    const endpoints = horizontalEndpoints(bridge);
+    const endpointHasLanding = (point: Vec3): boolean => (
+      stairLandingSurfaces.some((surface) => surface !== bridge && pointOnWalkableTop(point, surface))
+      || structureSupportsPoint(point, bridge)
+    );
+    if (!endpointHasLanding(endpoints.first)) {
+      geometryError(`Bridge ${bridge.id} has a floating first endpoint with no walkable landing or structural anchor.`);
+    }
+    if (!endpointHasLanding(endpoints.second)) {
+      geometryError(`Bridge ${bridge.id} has a floating second endpoint with no walkable landing or structural anchor.`);
+    }
+  }
+
+  for (const platform of primitives.filter(isExplicitElevatedPlatform)) {
+    const platformBottom = primitiveVerticalSpan(platform).min;
+    const supports = primitives.filter((support) => (
+      support !== platform
+      && isStructuralSupportPrimitive(support)
+      && pointNearPrimitiveFootprint(support.position, platform, GRID_METERS * 0.35)
+      && primitiveVerticalSpan(support).max >= platformBottom - ROUTE_SURFACE_MARGIN_METERS
+    ));
+    const requiredSupportCount = hasAnyTag(platform, ["canopy-platform", "tree-platform"]) ? 1 : 2;
+    if (supports.length < requiredSupportCount) {
+      geometryError(`Elevated platform ${platform.id} has no sufficient structural support continuity.`);
+    }
+  }
+
   for (const connector of verticalConnectors) {
     const candidate = connector.endpointCandidates.find((endpoints) => (
       endpointSupported(endpoints.lower, connector.primitive) && endpointSupported(endpoints.upper, connector.primitive)
@@ -627,6 +748,9 @@ function validateGeometryInvariants(
     if (!lowerSupported) geometryError(`${label} ${connector.primitive.id} has a floating lower endpoint with no walkable landing.`);
     if (!upperSupported) geometryError(`${label} ${connector.primitive.id} has a floating upper endpoint with no walkable landing.`);
     if (candidate === undefined) continue;
+    if (!routeSupportsConnector(connector, candidate)) {
+      geometryError(`${label} ${connector.primitive.id} has no nearby route destination evidence.`);
+    }
 
     const connectorRoute: Route = {
       id: `${connector.primitive.id}-clearance`,
