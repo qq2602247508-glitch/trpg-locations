@@ -750,4 +750,56 @@ describe("geometry-level P1 validation", () => {
     expect(result.valid).toBe(false);
     expect(hasError(result, "Tree canopy detached-tree-canopy has no attached trunk support")).toBe(true);
   });
+
+  it("rejects a tree trunk whose authored base misses the composed terrain surface", () => {
+    const scene = generateScene({
+      ...request,
+      prompt: "森林中的猎人木屋，有起居室、地窖、门廊、柴堆和林间道路",
+      seed: "geometry-floating-trunk",
+    }, "adaptive");
+    const trunk = scene.primitives.find((primitive) => primitive.tags?.includes("tree-trunk"));
+    expect(trunk).toBeDefined();
+    if (trunk) trunk.position.y += GRID_METERS * 8;
+
+    const result = validateScene(scene);
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics.metrics.vegetationTrunksChecked).toBeGreaterThan(0);
+    expect(result.diagnostics.metrics.vegetationGroundContactErrorCount).toBeGreaterThan(0);
+    expect(hasError(result, "has no post-composition terrain contact")).toBe(true);
+  });
+
+  it("accepts canopy and trunk contact without requiring tree-anchor metadata", () => {
+    const scene = generateScene({
+      ...request,
+      prompt: "森林中的溪边设施，有古树、林间道路和木制观景平台",
+      seed: "geometry-unlabelled-woodland-tree",
+    }, "adaptive");
+    const canopy = scene.primitives.find((primitive) => (
+      primitive.tags?.includes("tree-canopy")
+      && primitive.tags?.includes("forest")
+      && primitive.tags?.some((tag) => tag.startsWith("tree-anchor:"))
+    ));
+    const anchor = canopy?.tags?.find((tag) => tag.startsWith("tree-anchor:"));
+    const trunk = scene.primitives.find((primitive) => (
+      primitive.tags?.includes("tree-trunk")
+      && primitive.tags?.includes("forest")
+      && anchor !== undefined
+      && primitive.tags?.includes(anchor)
+    ));
+    expect(trunk).toBeDefined();
+    expect(canopy).toBeDefined();
+    if (trunk && anchor) {
+      trunk.tags = trunk.tags?.filter((tag) => !tag.startsWith("tree-anchor:"));
+      for (const anchoredCanopy of scene.primitives.filter((primitive) => primitive.tags?.includes(anchor))) {
+        anchoredCanopy.tags = anchoredCanopy.tags?.filter((tag) => tag !== anchor);
+      }
+    }
+    const result = validateScene(scene);
+    expect(result.diagnostics.metrics.vegetationTrunksChecked).toBeGreaterThan(0);
+    expect(result.diagnostics.metrics.vegetationCanopyGroupsChecked).toBeGreaterThan(0);
+    expect(result.diagnostics.metrics.vegetationGroundContactErrorCount).toBe(0);
+    expect(result.diagnostics.metrics.vegetationDetachedCanopyErrorCount).toBe(0);
+    expect(result.valid).toBe(true);
+  });
 });

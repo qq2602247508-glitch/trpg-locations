@@ -441,9 +441,12 @@ function addMangroveSmugglerPort(scene: GeneratedScene, width: number, depth: nu
   for (let index = 0; index < rootCount; index += 1) {
     const x = width * macro.float(0.06, 0.94);
     const z = depth * macro.float(0.08, 0.92);
+    const treeAnchor = `tree-anchor:mangrove-site-${index + 1}`;
+    const rootHeight = feetToMeters(7 + index % 4 * 2);
+    const canopyHeight = 1.35;
     scene.primitives.push(
-      cylinder(`mangrove-root-pillar-${index + 1}`, 0, x, 0, z, 0.55 + (index % 3) * 0.18, feetToMeters(7 + index % 4 * 2), "wood", ["mangrove", "prop-root", "cover", "standable", "site-program"]),
-      primitive(`mangrove-canopy-${index + 1}`, "sphere", 2, x + Math.sin(index) * 1.2, feetToMeters(12 + index % 3 * 2), z + Math.cos(index) * 1.2, 2.2 + (index % 3) * 0.42, 1.35, 2.1 + (index % 2) * 0.4, "moss", ["mangrove", "canopy", "blocks-sight", "site-program"]),
+      cylinder(`mangrove-root-pillar-${index + 1}`, 0, x, 0, z, 0.55 + (index % 3) * 0.18, rootHeight, "wood", ["mangrove", "prop-root", "tree-trunk", "cover", "standable", "site-program", treeAnchor]),
+      primitive(`mangrove-canopy-${index + 1}`, "sphere", 2, x, rootHeight + canopyHeight * 0.4, z, 2.2 + (index % 3) * 0.42, canopyHeight, 2.1 + (index % 2) * 0.4, "moss", ["mangrove", "canopy", "tree-canopy", "canopy-layer", "blocks-sight", "site-program", treeAnchor]),
     );
   }
   scene.primitives.push(

@@ -47,6 +47,10 @@ interface GeometryMetrics {
   openingEvidenceCount: number;
   connectorCount: number;
   connectorClearanceErrorCount: number;
+  vegetationTrunksChecked: number;
+  vegetationCanopyGroupsChecked: number;
+  vegetationGroundContactErrorCount: number;
+  vegetationDetachedCanopyErrorCount: number;
   geometryErrorCount: number;
 }
 
@@ -68,6 +72,7 @@ const ROUTE_SURFACE_MARGIN_METERS = GRID_METERS * 1.2;
 const CONNECTOR_LANDING_MARGIN_METERS = GRID_METERS * 0.35;
 const VERTICAL_ROUTE_MIN_RISE_METERS = GRID_METERS * 0.35;
 const CAVE_ELEVATION_MIN_RISE_METERS = GRID_METERS * 0.9;
+const VEGETATION_CONTACT_MARGIN_METERS = GRID_METERS * 0.16;
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -381,6 +386,15 @@ function isSolidFloorSlab(primitive: ScenePrimitive): boolean {
     && hasTag(primitive, "floor");
 }
 
+function isVegetationSurface(primitive: ScenePrimitive): boolean {
+  return !isWaterPrimitive(primitive) && hasAnyTag(primitive, [
+    "terrain",
+    "floor",
+    "support-surface",
+    "standable",
+  ]);
+}
+
 function isOpeningEvidence(primitive: ScenePrimitive): boolean {
   const id = primitive.id.toLowerCase();
   return hasAnyTag(primitive, ["door-frame", "opening", "floor-opening", "opening-frame", "doorway", "portal", "arch"])
@@ -495,6 +509,9 @@ function validateGeometryInvariants(
   let verticalRouteCount = 0;
   let waterflowRouteCount = 0;
   let connectorClearanceErrorCount = 0;
+  let vegetationGroundContactErrorCount = 0;
+  let vegetationCanopyGroupsChecked = 0;
+  let vegetationDetachedCanopyErrorCount = 0;
 
   for (const route of routes) {
     const routeRange = routeVerticalRange(route);
@@ -873,15 +890,36 @@ function validateGeometryInvariants(
     }
   }
 
-  // A tree canopy may overhang its trunk, but it cannot exist as an unrelated
-  // floating blob. Keep this check tag-driven so fantasy floating vegetation
-  // can opt out explicitly.
-  const treeTrunks = primitives.filter((primitive) => hasTag(primitive, "tree-trunk"));
+  // Vegetation is checked after composition, against the final terrain/floor
+  // primitives. The authored Y datum is the trunk base in the generator
+  // convention; accepting the three usual surface datums keeps this compatible
+  // with imported centre-Y slabs without treating arbitrary volume overlap as
+  // contact. Decorative canopy-only blobs and explicitly floating vegetation
+  // are intentionally outside this contract.
+  const vegetationSurfaces = primitives.filter(isVegetationSurface);
+  const treeTrunks = primitives.filter((primitive) => (
+    hasTag(primitive, "tree-trunk")
+    && hasAnyTag(primitive, ["forest", "woodland-cover", "mangrove", "ancient-tree"])
+    && !hasAnyTag(primitive, ["magical-floating", "levitating", "floating-island", "decorative"])
+  ));
+  for (const trunk of treeTrunks) {
+    const baseY = trunk.position.y;
+    const grounded = vegetationSurfaces.some((surface) => (
+      pointNearPrimitiveFootprint(trunk.position, surface, Math.max(GEOMETRY_EPSILON, trunk.size.x * 0.15))
+      && [surface.position.y, surface.position.y + surface.size.y / 2, surface.position.y + surface.size.y]
+        .some((surfaceY) => Math.abs(baseY - surfaceY) <= VEGETATION_CONTACT_MARGIN_METERS)
+    ));
+    if (!grounded) {
+      vegetationGroundContactErrorCount += 1;
+      geometryError(`Vegetation trunk ${trunk.id} has no post-composition terrain contact.`);
+    }
+  }
   for (const canopy of primitives.filter((primitive) => (
     hasTag(primitive, "tree-canopy")
     && hasTag(primitive, "canopy-layer")
     && !hasAnyTag(primitive, ["magical-floating", "levitating", "floating-island"])
   ))) {
+    vegetationCanopyGroupsChecked += 1;
     const attachmentRadius = Math.max(GRID_METERS, Math.min(canopy.size.x, canopy.size.z) * 0.45);
     const anchor = canopy.tags?.find((tag) => tag.startsWith("tree-anchor:"));
     const attached = treeTrunks.some((trunk) => (
@@ -890,7 +928,10 @@ function validateGeometryInvariants(
       Math.hypot(canopy.position.x - trunk.position.x, canopy.position.z - trunk.position.z) <= attachmentRadius
       && primitiveVerticalSpan(trunk).max >= primitiveVerticalSpan(canopy).min - GRID_METERS
     ));
-    if (!attached) geometryError(`Tree canopy ${canopy.id} has no attached trunk support.`);
+    if (!attached) {
+      vegetationDetachedCanopyErrorCount += 1;
+      geometryError(`Tree canopy ${canopy.id} has no attached trunk support.`);
+    }
   }
 
   return {
@@ -902,6 +943,14 @@ function validateGeometryInvariants(
     openingEvidenceCount: openings.length,
     connectorCount: verticalConnectors.length,
     connectorClearanceErrorCount,
+    vegetationTrunksChecked: treeTrunks.length,
+    vegetationCanopyGroupsChecked: primitives.filter((primitive) => (
+      hasTag(primitive, "tree-canopy")
+      && hasTag(primitive, "canopy-layer")
+      && !hasAnyTag(primitive, ["magical-floating", "levitating", "floating-island"])
+    )).length,
+    vegetationGroundContactErrorCount,
+    vegetationDetachedCanopyErrorCount,
     geometryErrorCount: geometryErrors,
   };
 }
@@ -1410,6 +1459,10 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
     openingEvidenceCount: geometry.openingEvidenceCount,
     connectorCount: geometry.connectorCount,
     connectorClearanceErrorCount: geometry.connectorClearanceErrorCount,
+    vegetationTrunksChecked: geometry.vegetationTrunksChecked,
+    vegetationCanopyGroupsChecked: geometry.vegetationCanopyGroupsChecked,
+    vegetationGroundContactErrorCount: geometry.vegetationGroundContactErrorCount,
+    vegetationDetachedCanopyErrorCount: geometry.vegetationDetachedCanopyErrorCount,
     geometryErrorCount: geometry.geometryErrorCount,
     boundsAreaCells,
     repairCount: repairs.length,

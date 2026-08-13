@@ -1211,6 +1211,29 @@ describe("scene generators", () => {
     expect(salt.diagnostics.valid).toBe(true);
   });
 
+  it("keeps mangrove root pillars and canopies as grounded shared-anchor assemblies", () => {
+    const scene = generateScene({
+      ...request("regression-29-mangrove-village", "medium", 0.62),
+      prompt: "隐藏在红树林沼泽中的走私港村，有蜿蜒水道、树根栈道、吊脚仓库、伪装酒馆、沉船码头、巡逻塔和水下秘密入口",
+    }, "adaptive");
+    const roots = scene.primitives.filter((primitive) => (
+      primitive.tags?.includes("mangrove")
+      && primitive.tags?.includes("tree-trunk")
+      && primitive.tags?.some((tag) => tag.startsWith("tree-anchor:"))
+    ));
+    const canopies = scene.primitives.filter((primitive) => (
+      primitive.tags?.includes("mangrove")
+      && primitive.tags?.includes("tree-canopy")
+      && primitive.tags?.includes("canopy-layer")
+      && primitive.tags?.some((tag) => tag.startsWith("tree-anchor:"))
+    ));
+    expect(roots.length).toBeGreaterThan(0);
+    expect(canopies.length).toBe(roots.length);
+    expect(scene.diagnostics.metrics.vegetationGroundContactErrorCount).toBe(0);
+    expect(scene.diagnostics.metrics.vegetationDetachedCanopyErrorCount).toBe(0);
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
   it("assigns unfamiliar specialist functions to explicit reusable building modules", () => {
     const prompt = "潮汐红树林里的炼金学者港村，有根桥、树上实验屋、盐雾蒸馏塔、半淹档案库和水下温室";
     const program = planSettlementSite({ request: { ...request("functional-module-program", "medium", 0.7), prompt }, archetype: "village" }, new SeededRandom("functional-module-program"));

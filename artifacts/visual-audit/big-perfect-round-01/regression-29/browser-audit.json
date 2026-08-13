@@ -1,0 +1,111 @@
+{
+  "regression": 29,
+  "cases": [
+    {
+      "id": "forest-low-angle",
+      "kind": "adaptive",
+      "size": "large",
+      "density": 0.78,
+      "seed": "regression-29-browser-pure-forest",
+      "prompt": "茂密古老森林，有溪流、倒木、树冠平台和高低林地",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "trunksChecked": 210,
+      "anchoredCanopyGroups": 314,
+      "groundedContactErrors": 0,
+      "detachedCanopyErrors": 0,
+      "visibleVegetation": {
+        "trunkCount": 210,
+        "canopyCount": 314,
+        "trunkIds": [
+          "forest-tree-0",
+          "forest-tree-1",
+          "forest-tree-2",
+          "forest-tree-3",
+          "forest-tree-4",
+          "forest-tree-5",
+          "forest-tree-6",
+          "forest-tree-7",
+          "forest-tree-8",
+          "forest-tree-9",
+          "forest-tree-10",
+          "forest-tree-11"
+        ],
+        "canopyIds": [
+          "forest-canopy-0-a",
+          "forest-canopy-0-b",
+          "forest-canopy-1",
+          "forest-canopy-2",
+          "forest-canopy-3-a",
+          "forest-canopy-3-b",
+          "forest-canopy-4-a",
+          "forest-canopy-4-b",
+          "forest-canopy-5-a",
+          "forest-canopy-5-b",
+          "forest-canopy-6-a",
+          "forest-canopy-6-b"
+        ]
+      },
+      "snapshots": [
+        "forest-low-angle-overview.png",
+        "forest-low-angle-low-angle-trunk-base.png",
+        "forest-low-angle-low-angle-contact-emphasis.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "mangrove-village-low-angle",
+      "kind": "adaptive",
+      "size": "medium",
+      "density": 0.62,
+      "seed": "regression-29-browser-mangrove-village",
+      "prompt": "隐藏在红树林沼泽中的走私港村，有蜿蜒水道、树根栈道、吊脚仓库、伪装酒馆、沉船码头、巡逻塔和水下秘密入口",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "trunksChecked": 37,
+      "anchoredCanopyGroups": 37,
+      "groundedContactErrors": 0,
+      "detachedCanopyErrors": 0,
+      "visibleVegetation": {
+        "trunkCount": 37,
+        "canopyCount": 37,
+        "trunkIds": [
+          "mangrove-root-pillar-1",
+          "mangrove-root-pillar-2",
+          "mangrove-root-pillar-3",
+          "mangrove-root-pillar-4",
+          "mangrove-root-pillar-5",
+          "mangrove-root-pillar-6",
+          "mangrove-root-pillar-7",
+          "mangrove-root-pillar-8",
+          "mangrove-root-pillar-9",
+          "mangrove-root-pillar-10",
+          "mangrove-root-pillar-11",
+          "mangrove-root-pillar-12"
+        ],
+        "canopyIds": [
+          "mangrove-canopy-1",
+          "mangrove-canopy-2",
+          "mangrove-canopy-3",
+          "mangrove-canopy-4",
+          "mangrove-canopy-5",
+          "mangrove-canopy-6",
+          "mangrove-canopy-7",
+          "mangrove-canopy-8",
+          "mangrove-canopy-9",
+          "mangrove-canopy-10",
+          "mangrove-canopy-11",
+          "mangrove-canopy-12"
+        ]
+      },
+      "snapshots": [
+        "mangrove-village-low-angle-overview.png",
+        "mangrove-village-low-angle-low-angle-trunk-base.png",
+        "mangrove-village-low-angle-low-angle-contact-emphasis.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    }
+  ]
+}

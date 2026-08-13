@@ -3603,9 +3603,12 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
       const rootZ = Math.max(2, Math.min(depth - 2, z + Math.sin(angle) * radius));
       if (Math.hypot(rootX - x, rootZ - z) < 11.5) continue;
       const rootBase = terrainSurfaceY(scene, rootX, rootZ, terrainBaseY);
+      const treeAnchor = `tree-anchor:wilderness-mangrove-${index}`;
+      const rootHeight = feetToMeters(rootRng.int(8, 14));
+      const canopyHeight = rootRng.float(1.4, 2.2);
       scene.primitives.push(
-        cylinder(`wilderness-mangrove-root-${index}`, 0, rootX, rootBase, rootZ, rootRng.float(0.55, 0.95), feetToMeters(rootRng.int(8, 14)), "wood", ["site-program", "mangrove", "prop-root", "root-buttress", "cover"]),
-        primitive(`wilderness-mangrove-canopy-${index}`, "sphere", 1, rootX, rootBase + feetToMeters(rootRng.int(9, 14)), rootZ, rootRng.float(2.8, 4.2), rootRng.float(1.4, 2.2), rootRng.float(2.6, 4), "moss", ["site-program", "mangrove", "canopy", "blocks-sight"]),
+        cylinder(`wilderness-mangrove-root-${index}`, 0, rootX, rootBase, rootZ, rootRng.float(0.55, 0.95), rootHeight, "wood", ["site-program", "mangrove", "prop-root", "tree-trunk", "root-buttress", "cover", treeAnchor]),
+        primitive(`wilderness-mangrove-canopy-${index}`, "sphere", 1, rootX, rootBase + rootHeight + canopyHeight * 0.4, rootZ, rootRng.float(2.8, 4.2), canopyHeight, rootRng.float(2.6, 4), "moss", ["site-program", "mangrove", "canopy", "tree-canopy", "canopy-layer", "blocks-sight", treeAnchor]),
       );
     }
   }
@@ -4748,12 +4751,26 @@ function addWoodlandCoverage(scene: GeneratedScene, width: number, depth: number
   const groveCount = Math.round(5 + density * 6);
   const treesPerGrove = Math.round(7 + density * 12);
   const channelZ = depth * 0.52;
-  const riverSurfaceY = (x: number, z: number) => {
+  const estimatedSurfaceY = (x: number, z: number) => {
     if (!riverBanks) return FLOOR_SLAB_METERS;
     const riverLine = channelZ + Math.sin(x * 0.16) * 2.8 + Math.sin(x * 0.045) * 3;
     const distance = Math.abs(z - riverLine);
     const level = distance < 5 ? 0 : distance < 9 ? 1 : distance < 15 ? 2 : 3;
     return feetToMeters(level * 10) + FLOOR_SLAB_METERS;
+  };
+  const composedSurfaceY = (x: number, z: number): number | undefined => {
+    const worldX = x * CELL;
+    const worldZ = z * CELL;
+    const surfaces = scene.primitives.filter((surface) => (
+      surface.tags?.includes("floor")
+      && surface.tags?.includes("terrain")
+      && surface.shape !== "water"
+      && surface.material !== "water"
+      && Math.abs(worldX - surface.position.x) <= surface.size.x / 2
+      && Math.abs(worldZ - surface.position.z) <= surface.size.z / 2
+    ));
+    if (surfaces.length === 0) return undefined;
+    return Math.max(...surfaces.map((surface) => surface.position.y + surface.size.y + 0.04));
   };
   for (let grove = 0; grove < groveCount; grove += 1) {
     const north = grove % 2 === 0;
@@ -4767,7 +4784,11 @@ function addWoodlandCoverage(scene: GeneratedScene, width: number, depth: number
       if (riverBanks && Math.abs(z - (channelZ + Math.sin(x * 0.16) * 2.8 + Math.sin(x * 0.045) * 3)) < 5.2) continue;
       const trunkRadius = rng.float(0.34, 0.74);
       const height = feetToMeters(rng.int(16, 34));
-      const baseY = riverSurfaceY(x, z);
+      // Woodland is composed after the parent terrain. Read the realized
+      // surface instead of replaying an approximate river-bank formula: the
+      // continuous valley may have already warped or terraced this exact cell.
+      const baseY = composedSurfaceY(x, z);
+      if (baseY === undefined) continue;
       scene.primitives.push(
         cylinder(`woodland-grove-${grove}-tree-${index}`, 0, x, baseY, z, trunkRadius, height, "wood", ["woodland-cover", "tree", "tree-trunk", "cover", "blocks-sight", `grove:${grove}`]),
         primitive(`woodland-grove-${grove}-canopy-${index}`, "cone", 0, x, baseY + height * 0.76, z, feetToMeters(rng.float(7, 13)), height * 0.42, feetToMeters(rng.float(7, 13)), "moss", ["woodland-cover", "canopy", "tree-canopy", "canopy-layer", `grove:${grove}`]),
@@ -4790,7 +4811,8 @@ function addWoodlandCoverage(scene: GeneratedScene, width: number, depth: number
     const z = riverBanks ? north ? depth * rng.float(0.14, 0.3) : depth * rng.float(0.74, 0.88) : depth * rng.float(0.18, 0.82);
     const height = feetToMeters(rng.int(28, 48));
     const crown = rng.float(4.5, 7.5);
-    const baseY = riverSurfaceY(x, z);
+    const baseY = composedSurfaceY(x, z);
+    if (baseY === undefined) continue;
     scene.primitives.push(
       cylinder(`woodland-ancient-tree-${index}`, 0, x, baseY, z, rng.float(1.2, 1.8), height, "wood", ["ancient-tree", "tree-trunk", "woodland-cover", "cover", "blocks-sight", "landmark"]),
       primitive(`woodland-ancient-crown-${index}`, "sphere", 0, x, baseY + height * 0.72, z, crown * CELL, height * 0.42, crown * CELL, "moss", ["ancient-tree", "canopy", "tree-canopy", "canopy-layer", "landmark"]),
