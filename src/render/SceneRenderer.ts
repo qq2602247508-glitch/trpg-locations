@@ -300,6 +300,25 @@ export function shouldRenderTacticalSurfaceGrid(
   return primitive.id !== "site-terrain-base" && isTacticalGridSurface(primitive);
 }
 
+/** Keep grid segments inside a circular platform instead of its empty
+ * rectangular bounding box. */
+export function clippedCylinderGridSegments(
+  radius: number,
+  gridStep: number = GRID_METERS,
+): Array<[[number, number], [number, number]]> {
+  if (!Number.isFinite(radius) || radius <= 0 || !Number.isFinite(gridStep) || gridStep <= 0) return [];
+  const segments: Array<[[number, number], [number, number]]> = [];
+  for (let x = -radius; x <= radius + 0.000_1; x += gridStep) {
+    const halfChord = Math.sqrt(Math.max(0, radius * radius - x * x));
+    segments.push([[x, -halfChord], [x, halfChord]]);
+  }
+  for (let z = -radius; z <= radius + 0.000_1; z += gridStep) {
+    const halfChord = Math.sqrt(Math.max(0, radius * radius - z * z));
+    segments.push([[-halfChord, z], [halfChord, z]]);
+  }
+  return segments;
+}
+
 const MATERIAL_STYLE: Record<
   MaterialKey,
   {
@@ -1301,6 +1320,13 @@ export class SceneRenderer {
       const maxLocalX = surface.size.x / 2;
       const minLocalZ = -surface.size.z / 2;
       const maxLocalZ = surface.size.z / 2;
+      if (surface.shape === "cylinder") {
+        const radius = Math.min(surface.size.x, surface.size.z) / 2;
+        for (const [[x0, z0], [x1, z1]] of clippedCylinderGridSegments(radius)) {
+          push(toWorld(x0, z0), toWorld(x1, z1));
+        }
+        return;
+      }
       for (let x = minLocalX; x <= maxLocalX + 0.001; x += GRID_METERS) push(toWorld(x, minLocalZ), toWorld(x, maxLocalZ));
       for (let z = minLocalZ; z <= maxLocalZ + 0.001; z += GRID_METERS) push(toWorld(minLocalX, z), toWorld(maxLocalX, z));
     };

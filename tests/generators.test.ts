@@ -4,7 +4,7 @@ import { SeededRandom } from "../src/core/random";
 import { generateBuildingInteriorScene, instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, box, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
-import { dynamicFocusCutawayIds, floorBaseY, floorContextLevels, focusedCameraFactors, focusClusterForFloor, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, shouldRenderTacticalSurfaceGrid, spatialBatchKey } from "../src/render/SceneRenderer";
+import { clippedCylinderGridSegments, dynamicFocusCutawayIds, floorBaseY, floorContextLevels, focusedCameraFactors, focusClusterForFloor, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, shouldRenderTacticalSurfaceGrid, spatialBatchKey } from "../src/render/SceneRenderer";
 import { planSettlementSite } from "../src/site-program";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
@@ -85,6 +85,18 @@ describe("scene generators", () => {
       material: "water",
       tags: ["standable"],
     })).toBe(false);
+  });
+
+  it("clips circular tactical grid lines to the standable cylinder footprint", () => {
+    const radius = GRID_METERS * 1.5;
+    const segments = clippedCylinderGridSegments(radius);
+    expect(segments.length).toBeGreaterThan(0);
+    for (const [[x0, z0], [x1, z1]] of segments) {
+      expect(Math.hypot(x0, z0)).toBeLessThanOrEqual(radius + 0.000_1);
+      expect(Math.hypot(x1, z1)).toBeLessThanOrEqual(radius + 0.000_1);
+    }
+    const edgeSegment = segments.find(([[x0]]) => Math.abs(Math.abs(x0) - radius) < 0.000_1);
+    expect(edgeSegment?.[0][1]).toBeCloseTo(edgeSegment?.[1][1] ?? 0);
   });
 
   it("reduces fog density as generated maps grow", () => {

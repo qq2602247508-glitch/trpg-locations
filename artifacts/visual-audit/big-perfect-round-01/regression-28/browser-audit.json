@@ -1,0 +1,36 @@
+{
+  "case": {
+    "kind": "tower",
+    "size": "medium",
+    "density": 0.72,
+    "seed": "regression-28-circular-wizard-roof",
+    "prompt": "三层法师塔，有圆形屋顶决斗平台、炼金室和地下储藏室"
+  },
+  "sceneValid": true,
+  "geometryErrors": 0,
+  "warnings": [],
+  "circularSurfaceCount": 1,
+  "circularSurfaceIds": [
+    "wizard-roof-duel-platform"
+  ],
+  "targetSurface": {
+    "id": "wizard-roof-duel-platform",
+    "level": 2,
+    "position": {
+      "x": 10.668,
+      "y": 11.8872,
+      "z": 10.668
+    },
+    "size": {
+      "x": 14.99616,
+      "y": 0.18,
+      "z": 14.99616
+    }
+  },
+  "snapshots": [
+    "artifacts/visual-audit/big-perfect-round-01/regression-28/circular-platform-overview.png",
+    "artifacts/visual-audit/big-perfect-round-01/regression-28/circular-platform-grid-close.png"
+  ],
+  "networkFailures": [],
+  "consoleErrors": []
+}
