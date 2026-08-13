@@ -1,0 +1,56 @@
+{
+  "generatedAt": "2026-08-13",
+  "target": "建筑透明/进入/返回真实验收资产与针对性回归测试",
+  "requestedScene": {
+    "prompt": "潮汐红树林里的炼金学者港村，有根桥、树上实验室、盐雾蒸馏塔、半淹档案库和水下温室",
+    "seed": "browser-r18-entry",
+    "size": "large",
+    "density": 0.72,
+    "kind": "adaptive",
+    "reason": "项目既有回归资产将其记录为包含 full-interior 与 facade 建筑的混合场景"
+  },
+  "automatedRegression": {
+    "command": "npm test -- --run tests/ui.building-entry-session.test.ts tests/generators.test.ts",
+    "result": "passed",
+    "testFiles": 2,
+    "tests": 153
+  },
+  "build": {
+    "command": "npm run build",
+    "result": "passed",
+    "warning": "Some chunks are larger than 500 kB after minification."
+  },
+  "browserExecution": {
+    "requested": true,
+    "result": "blocked-before-evidence",
+    "attempts": [
+      {
+        "surface": "in-app browser connector",
+        "result": "connected but returned no readable tab/document/screenshot payload in this session"
+      },
+      {
+        "surface": "cached Chromium + CDP",
+        "result": "Chromium process launch was rejected by the system security review"
+      },
+      {
+        "surface": "in-app browser with explicit local URL",
+        "command": "agent.browsers.getForUrl(\"http://127.0.0.1:5241/\")",
+        "result": "returned an empty tool payload; no browser binding, tab, DOM, page-evaluate result, or screenshot was exposed"
+      },
+      {
+        "surface": "local dev server reachability",
+        "command": "npm run dev",
+        "result": "Vite reported ready on http://127.0.0.1:5241/ in the PTY, but curl -I --max-time 5 http://127.0.0.1:5241/ returned curl: (7) Failed to connect to 127.0.0.1 port 5241 after 0 ms"
+      }
+    ],
+    "screenshots": [],
+    "reason": "No screenshot or browser hook JSON was fabricated when the real browser evidence could not be persisted."
+  },
+  "scope": {
+    "coreRenderingChanged": false,
+    "generatorChanged": false,
+    "promptfooChanged": false,
+    "dependenciesChanged": false
+  },
+  "remainingRisk": "Targets 4, 5 and 10 still require a successful real Chromium run that persists overview, transparency/cutaway, interior-floor and returned-settlement screenshots plus live __TRPG_SCENE__, __TRPG_FOCUS_AUDIT__ and __TRPG_VIEW_AUDIT__ snapshots."
+}

@@ -3,6 +3,31 @@ import type { SceneViewSnapshot } from "../src/render/SceneRenderer";
 import { createBuildingEntrySession } from "../src/ui/buildingEntrySession";
 
 describe("building entry session", () => {
+  it("captures the non-no-op transparency and focus return contract", () => {
+    const overview = {
+      floorView: "roof" as const,
+      cameraMode: "perspective" as const,
+      buildingTransparency: false,
+      camera: { x: 40, y: 20, z: 15 },
+      target: { x: 10, y: 0, z: 10 },
+      near: 0.1,
+      far: 300,
+    };
+    const session = createBuildingEntrySession("guild-hall", overview, true, false);
+    const entered = {
+      ...session.view,
+      floorView: 0 as const,
+      buildingTransparency: true,
+    };
+
+    expect(entered).not.toEqual(session.view);
+    expect(entered.floorView).toBe(0);
+    expect(entered.buildingTransparency).toBe(true);
+    expect(session.view).toEqual(overview);
+    expect(session.lowCameraActive).toBe(true);
+    expect(session.topCameraActive).toBe(false);
+  });
+
   it("preserves the complete pre-entry view without retaining mutable vector references", () => {
     const view: SceneViewSnapshot = {
       floorView: 3,
