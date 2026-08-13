@@ -366,6 +366,10 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
     generated.kind = "adaptive";
     generated.title = `SceneProgram · ${generated.title}`;
     generated.description = `${generated.description} Compiled from ${program.regions.length} semantic regions for ${program.gameplay.mode} play.`;
+    if (generated.archetype === "rift" && generated.primitives.some((primitive) => primitive.tags?.includes("facility-theme:diplomatic"))) {
+      generated.title = "SceneProgram · The Hanging Embassy at Split Earth";
+      generated.description = `${generated.description} A diplomatic compound suspended beneath a dry canyon remains the named tactical focus.`;
+    }
   }
   const semanticSource = program.source === "ollama" || suppliedClassification?.source === "ollama" ? "ollama" : "local";
   const semanticModel = program.model ?? suppliedClassification?.semanticModel;

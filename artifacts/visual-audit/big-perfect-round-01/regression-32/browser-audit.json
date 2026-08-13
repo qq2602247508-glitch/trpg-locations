@@ -1,0 +1,610 @@
+{
+  "regression": 32,
+  "generatedAt": "2026-08-13T14:05:05.565Z",
+  "cases": [
+    {
+      "id": "forest-village-medium",
+      "size": "medium",
+      "density": 0.62,
+      "seed": "regression-32-forest-village-medium",
+      "prompt": "森林村庄",
+      "expected": {
+        "domain": "settlement",
+        "terrainKind": "forest-clearing",
+        "siteType": "village",
+        "roomIds": [],
+        "tags": [
+          "forest",
+          "stream",
+          "stream-crossing",
+          "wood-bridge",
+          "canopy-platform"
+        ],
+        "minimums": {
+          "forest": 1,
+          "terrain": 1,
+          "tree-trunk": 1,
+          "tree-canopy": 1,
+          "canopy-platform": 1,
+          "bridge": 1,
+          "building": 1,
+          "room": 1,
+          "primaryRoute": 1,
+          "alternateRoute": 1
+        }
+      },
+      "url": "http://127.0.0.1:5241/?kind=adaptive&size=medium&density=0.62&seed=regression-32-forest-village-medium&prompt=%E6%A3%AE%E6%9E%97%E6%9D%91%E5%BA%84",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "warnings": [],
+      "semantic": {
+        "domain": "settlement",
+        "terrainKind": "forest-clearing",
+        "siteType": "village",
+        "title": "SceneProgram · The Living Crossroads",
+        "floors": 4,
+        "buildings": 10,
+        "rooms": 23,
+        "routes": 14,
+        "primitives": 2733,
+        "requiredRoomIds": [],
+        "presentRoomIds": [],
+        "presentTags": [
+          "forest",
+          "stream",
+          "stream-crossing",
+          "wood-bridge",
+          "canopy-platform"
+        ],
+        "tagCounts": {
+          "forest": 1019,
+          "terrain": 2205,
+          "tree-trunk": 82,
+          "tree-canopy": 80,
+          "canopy-platform": 4,
+          "bridge": 1,
+          "settlement-building": 220,
+          "opera-house": 0,
+          "auditorium-seat": 0,
+          "orchestra-pit": 0,
+          "stage": 0,
+          "prop-store": 0,
+          "flooded": 0,
+          "embassy": 0,
+          "visa-archive": 0,
+          "suspended-office": 0,
+          "escape-platform": 0,
+          "cliff-lift": 0,
+          "shaft-access": 0,
+          "structural-support": 4,
+          "rope-bridge": 0,
+          "cliff-descent": 0,
+          "cliff-platform": 0
+        },
+        "primaryRoutes": 4,
+        "alternateRoutes": 4
+      },
+      "floorOptions": [
+        {
+          "value": "cut",
+          "label": "剖切 · 隐藏屋顶"
+        },
+        {
+          "value": "roof",
+          "label": "完整 · 显示屋顶"
+        },
+        {
+          "value": "0",
+          "label": "仅查看 地面/1F"
+        },
+        {
+          "value": "1",
+          "label": "仅查看 主要上层"
+        },
+        {
+          "value": "2",
+          "label": "仅查看 屋顶"
+        },
+        {
+          "value": "3",
+          "label": "仅查看 B1"
+        }
+      ],
+      "selectedFloor": {
+        "value": "cut",
+        "label": "剖切 · 隐藏屋顶"
+      },
+      "buildingOptions": [
+        {
+          "value": "settlement-building-1",
+          "label": "1. guild · commercial · 远景/按需"
+        },
+        {
+          "value": "settlement-building-2",
+          "label": "2. home · residential · 远景/按需"
+        },
+        {
+          "value": "settlement-building-3",
+          "label": "3. barn · agricultural · 远景/按需"
+        },
+        {
+          "value": "settlement-building-4",
+          "label": "4. shrine · sacred · 按需内部"
+        },
+        {
+          "value": "settlement-building-5",
+          "label": "5. home · service · 按需内部"
+        },
+        {
+          "value": "settlement-building-6",
+          "label": "6. tavern · commercial · 完整"
+        },
+        {
+          "value": "settlement-building-7",
+          "label": "7. home · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-8",
+          "label": "8. home · agricultural · 完整"
+        },
+        {
+          "value": "settlement-building-9",
+          "label": "9. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-10",
+          "label": "10. home · service · 按需内部"
+        }
+      ],
+      "snapshots": [
+        "forest-village-medium-overview.png",
+        "forest-village-medium-low-angle.png",
+        "forest-village-medium-grid-close.png",
+        "forest-village-medium-floor-cut.png",
+        "forest-village-medium-focused-building.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "forest-village-large-seed-variant",
+      "size": "large",
+      "density": 0.62,
+      "seed": "regression-32-forest-village-large-variant",
+      "prompt": "森林村庄",
+      "expected": {
+        "domain": "settlement",
+        "terrainKind": "forest-clearing",
+        "siteType": "village",
+        "roomIds": [],
+        "tags": [
+          "forest",
+          "stream",
+          "stream-crossing",
+          "wood-bridge",
+          "canopy-platform"
+        ],
+        "minimums": {
+          "forest": 1,
+          "terrain": 1,
+          "tree-trunk": 1,
+          "tree-canopy": 1,
+          "canopy-platform": 1,
+          "bridge": 1,
+          "building": 1,
+          "room": 1,
+          "primaryRoute": 1,
+          "alternateRoute": 1
+        }
+      },
+      "url": "http://127.0.0.1:5241/?kind=adaptive&size=large&density=0.62&seed=regression-32-forest-village-large-variant&prompt=%E6%A3%AE%E6%9E%97%E6%9D%91%E5%BA%84",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "warnings": [],
+      "semantic": {
+        "domain": "settlement",
+        "terrainKind": "forest-clearing",
+        "siteType": "village",
+        "title": "SceneProgram · The Living Crossroads",
+        "floors": 4,
+        "buildings": 13,
+        "rooms": 30,
+        "routes": 18,
+        "primitives": 4556,
+        "requiredRoomIds": [],
+        "presentRoomIds": [],
+        "presentTags": [
+          "forest",
+          "stream",
+          "stream-crossing",
+          "wood-bridge",
+          "canopy-platform"
+        ],
+        "tagCounts": {
+          "forest": 1994,
+          "terrain": 3752,
+          "tree-trunk": 157,
+          "tree-canopy": 155,
+          "canopy-platform": 4,
+          "bridge": 1,
+          "settlement-building": 314,
+          "opera-house": 0,
+          "auditorium-seat": 0,
+          "orchestra-pit": 0,
+          "stage": 0,
+          "prop-store": 0,
+          "flooded": 0,
+          "embassy": 0,
+          "visa-archive": 0,
+          "suspended-office": 0,
+          "escape-platform": 0,
+          "cliff-lift": 0,
+          "shaft-access": 0,
+          "structural-support": 6,
+          "rope-bridge": 0,
+          "cliff-descent": 0,
+          "cliff-platform": 0
+        },
+        "primaryRoutes": 5,
+        "alternateRoutes": 4
+      },
+      "floorOptions": [
+        {
+          "value": "cut",
+          "label": "剖切 · 隐藏屋顶"
+        },
+        {
+          "value": "roof",
+          "label": "完整 · 显示屋顶"
+        },
+        {
+          "value": "0",
+          "label": "仅查看 地面/1F"
+        },
+        {
+          "value": "1",
+          "label": "仅查看 主要上层"
+        },
+        {
+          "value": "2",
+          "label": "仅查看 屋顶"
+        },
+        {
+          "value": "3",
+          "label": "仅查看 B1"
+        }
+      ],
+      "selectedFloor": {
+        "value": "cut",
+        "label": "剖切 · 隐藏屋顶"
+      },
+      "buildingOptions": [
+        {
+          "value": "settlement-building-1",
+          "label": "1. guild · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-2",
+          "label": "2. home · residential · 远景/按需"
+        },
+        {
+          "value": "settlement-building-3",
+          "label": "3. barn · agricultural · 远景/按需"
+        },
+        {
+          "value": "settlement-building-4",
+          "label": "4. shrine · sacred · 远景/按需"
+        },
+        {
+          "value": "settlement-building-5",
+          "label": "5. home · service · 远景/按需"
+        },
+        {
+          "value": "settlement-building-6",
+          "label": "6. tavern · commercial · 按需内部"
+        },
+        {
+          "value": "settlement-building-7",
+          "label": "7. home · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-8",
+          "label": "8. home · agricultural · 完整"
+        },
+        {
+          "value": "settlement-building-9",
+          "label": "9. shrine · sacred · 完整"
+        },
+        {
+          "value": "settlement-building-10",
+          "label": "10. home · service · 完整"
+        },
+        {
+          "value": "settlement-building-11",
+          "label": "11. tavern · commercial · 完整"
+        },
+        {
+          "value": "settlement-building-12",
+          "label": "12. home · residential · 按需内部"
+        },
+        {
+          "value": "settlement-building-13",
+          "label": "13. barn · agricultural · 按需内部"
+        }
+      ],
+      "snapshots": [
+        "forest-village-large-seed-variant-overview.png",
+        "forest-village-large-seed-variant-low-angle.png",
+        "forest-village-large-seed-variant-grid-close.png",
+        "forest-village-large-seed-variant-floor-cut.png",
+        "forest-village-large-seed-variant-focused-building.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "flooded-opera",
+      "size": "large",
+      "density": 0.76,
+      "seed": "regression-32-drowned-opera",
+      "prompt": "被洪水淹没的歌剧院，有门厅、马蹄形观众席、下沉乐池、主舞台、后台、化妆间、半淹道具库和屋顶逃生路线",
+      "expected": {
+        "roomIds": [
+          "opera-foyer",
+          "opera-auditorium",
+          "opera-orchestra",
+          "opera-stage",
+          "opera-backstage",
+          "opera-dressing",
+          "opera-props",
+          "opera-roof"
+        ],
+        "tags": [
+          "opera-house",
+          "auditorium-seat",
+          "orchestra-pit",
+          "stage",
+          "prop-store",
+          "flooded"
+        ],
+        "minimums": {
+          "room": 9,
+          "route": 8
+        }
+      },
+      "url": "http://127.0.0.1:5241/?kind=adaptive&size=large&density=0.76&seed=regression-32-drowned-opera&prompt=%E8%A2%AB%E6%B4%AA%E6%B0%B4%E6%B7%B9%E6%B2%A1%E7%9A%84%E6%AD%8C%E5%89%A7%E9%99%A2%EF%BC%8C%E6%9C%89%E9%97%A8%E5%8E%85%E3%80%81%E9%A9%AC%E8%B9%84%E5%BD%A2%E8%A7%82%E4%BC%97%E5%B8%AD%E3%80%81%E4%B8%8B%E6%B2%89%E4%B9%90%E6%B1%A0%E3%80%81%E4%B8%BB%E8%88%9E%E5%8F%B0%E3%80%81%E5%90%8E%E5%8F%B0%E3%80%81%E5%8C%96%E5%A6%86%E9%97%B4%E3%80%81%E5%8D%8A%E6%B7%B9%E9%81%93%E5%85%B7%E5%BA%93%E5%92%8C%E5%B1%8B%E9%A1%B6%E9%80%83%E7%94%9F%E8%B7%AF%E7%BA%BF",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "warnings": [],
+      "semantic": {
+        "domain": "building",
+        "title": "SceneProgram · The Drowned Orpheum",
+        "floors": 4,
+        "buildings": 0,
+        "rooms": 9,
+        "routes": 8,
+        "primitives": 138,
+        "requiredRoomIds": [
+          "opera-foyer",
+          "opera-auditorium",
+          "opera-orchestra",
+          "opera-stage",
+          "opera-backstage",
+          "opera-dressing",
+          "opera-props",
+          "opera-roof"
+        ],
+        "presentRoomIds": [
+          "opera-foyer",
+          "opera-auditorium",
+          "opera-orchestra",
+          "opera-stage",
+          "opera-backstage",
+          "opera-dressing",
+          "opera-props",
+          "opera-roof"
+        ],
+        "presentTags": [
+          "opera-house",
+          "auditorium-seat",
+          "orchestra-pit",
+          "stage",
+          "prop-store",
+          "flooded"
+        ],
+        "tagCounts": {
+          "forest": 0,
+          "terrain": 0,
+          "tree-trunk": 0,
+          "tree-canopy": 0,
+          "canopy-platform": 0,
+          "bridge": 0,
+          "settlement-building": 0,
+          "opera-house": 80,
+          "auditorium-seat": 12,
+          "orchestra-pit": 8,
+          "stage": 9,
+          "prop-store": 6,
+          "flooded": 11,
+          "embassy": 0,
+          "visa-archive": 0,
+          "suspended-office": 0,
+          "escape-platform": 0,
+          "cliff-lift": 0,
+          "shaft-access": 0,
+          "structural-support": 2,
+          "rope-bridge": 0,
+          "cliff-descent": 0,
+          "cliff-platform": 0
+        },
+        "primaryRoutes": 3,
+        "alternateRoutes": 2
+      },
+      "floorOptions": [
+        {
+          "value": "cut",
+          "label": "剖切 · 隐藏屋顶"
+        },
+        {
+          "value": "roof",
+          "label": "完整 · 显示屋顶"
+        },
+        {
+          "value": "0",
+          "label": "仅查看 1F观众厅"
+        },
+        {
+          "value": "1",
+          "label": "仅查看 包厢与楼座"
+        },
+        {
+          "value": "2",
+          "label": "仅查看 屋顶逃生层"
+        },
+        {
+          "value": "3",
+          "label": "仅查看 B1道具库"
+        }
+      ],
+      "selectedFloor": {
+        "value": "cut",
+        "label": "剖切 · 隐藏屋顶"
+      },
+      "buildingOptions": [],
+      "snapshots": [
+        "flooded-opera-overview.png",
+        "flooded-opera-low-angle.png",
+        "flooded-opera-grid-close.png",
+        "flooded-opera-floor-cut.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "canyon-embassy",
+      "size": "large",
+      "density": 0.78,
+      "seed": "browser-08-canyon-embassy",
+      "prompt": "倒挂在峡谷下方的使馆和索桥，岩壁平台、外交大厅、垂直升降梯、悬索桥、峡谷底部密道",
+      "expected": {
+        "terrainKind": "rift",
+        "roomIds": [],
+        "tags": [
+          "embassy",
+          "visa-archive",
+          "suspended-office",
+          "escape-platform",
+          "cliff-lift",
+          "shaft-access",
+          "structural-support"
+        ],
+        "minimums": {
+          "room": 1,
+          "route": 1,
+          "building": 1,
+          "bridge": 2,
+          "cliffDescent": 2,
+          "cliffPlatform": 1
+        }
+      },
+      "url": "http://127.0.0.1:5241/?kind=adaptive&size=large&density=0.78&seed=browser-08-canyon-embassy&prompt=%E5%80%92%E6%8C%82%E5%9C%A8%E5%B3%A1%E8%B0%B7%E4%B8%8B%E6%96%B9%E7%9A%84%E4%BD%BF%E9%A6%86%E5%92%8C%E7%B4%A2%E6%A1%A5%EF%BC%8C%E5%B2%A9%E5%A3%81%E5%B9%B3%E5%8F%B0%E3%80%81%E5%A4%96%E4%BA%A4%E5%A4%A7%E5%8E%85%E3%80%81%E5%9E%82%E7%9B%B4%E5%8D%87%E9%99%8D%E6%A2%AF%E3%80%81%E6%82%AC%E7%B4%A2%E6%A1%A5%E3%80%81%E5%B3%A1%E8%B0%B7%E5%BA%95%E9%83%A8%E5%AF%86%E9%81%93",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "warnings": [],
+      "semantic": {
+        "domain": "natural",
+        "terrainKind": "rift",
+        "siteType": "wilderness-site",
+        "title": "SceneProgram · The Hanging Embassy at Split Earth",
+        "floors": 4,
+        "buildings": 1,
+        "rooms": 13,
+        "routes": 11,
+        "primitives": 8583,
+        "requiredRoomIds": [],
+        "presentRoomIds": [],
+        "presentTags": [
+          "embassy",
+          "visa-archive",
+          "suspended-office",
+          "escape-platform",
+          "cliff-lift",
+          "shaft-access",
+          "structural-support"
+        ],
+        "tagCounts": {
+          "forest": 0,
+          "terrain": 8427,
+          "tree-trunk": 0,
+          "tree-canopy": 0,
+          "canopy-platform": 0,
+          "bridge": 2,
+          "settlement-building": 57,
+          "opera-house": 0,
+          "auditorium-seat": 0,
+          "orchestra-pit": 0,
+          "stage": 0,
+          "prop-store": 0,
+          "flooded": 0,
+          "embassy": 16,
+          "visa-archive": 2,
+          "suspended-office": 1,
+          "escape-platform": 1,
+          "cliff-lift": 6,
+          "shaft-access": 1,
+          "structural-support": 22,
+          "rope-bridge": 1,
+          "cliff-descent": 3,
+          "cliff-platform": 0
+        },
+        "primaryRoutes": 3,
+        "alternateRoutes": 3
+      },
+      "floorOptions": [
+        {
+          "value": "cut",
+          "label": "剖切 · 隐藏屋顶"
+        },
+        {
+          "value": "roof",
+          "label": "完整 · 显示屋顶"
+        },
+        {
+          "value": "0",
+          "label": "仅查看 地形/1F"
+        },
+        {
+          "value": "1",
+          "label": "仅查看 阁楼"
+        },
+        {
+          "value": "2",
+          "label": "仅查看 屋顶"
+        },
+        {
+          "value": "3",
+          "label": "仅查看 B1"
+        }
+      ],
+      "selectedFloor": {
+        "value": "cut",
+        "label": "剖切 · 隐藏屋顶"
+      },
+      "buildingOptions": [
+        {
+          "value": "wilderness-core-building",
+          "label": "1. factory · rift-clearing · 完整"
+        }
+      ],
+      "snapshots": [
+        "canyon-embassy-overview.png",
+        "canyon-embassy-low-angle.png",
+        "canyon-embassy-grid-close.png",
+        "canyon-embassy-floor-cut.png",
+        "canyon-embassy-focused-building.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    }
+  ]
+}

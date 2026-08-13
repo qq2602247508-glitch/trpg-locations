@@ -1861,6 +1861,9 @@ describe("scene generators", () => {
       prompt: "建在无水峡谷下的使馆，有接待厅、签证档案、悬挂办公室、跨峡谷索桥、贴崖升降机和桥下逃生平台",
     }, "adaptive");
     expect(scene.archetype).toBe("rift");
+    expect(scene.siteProgram?.terrainKind).toBe("rift");
+    expect(scene.title).toContain("The Hanging Embassy at Split Earth");
+    expect(scene.description).toContain("diplomatic compound suspended beneath a dry canyon");
     expect(scene.buildingInstances?.some((building) => building.id === "wilderness-core-building")).toBe(true);
     for (const tag of [
       "embassy",
@@ -1872,6 +1875,8 @@ describe("scene generators", () => {
       "structural-support",
       "rope-bridge",
     ]) expect(hasTag(scene, tag)).toBe(true);
+    expect(hasTag(scene, "embassy-landmark")).toBe(true);
+    expect(hasTag(scene, "facade-detail")).toBe(true);
     expect(scene.routes.some((route) => route.id === "wilderness-custom-embassy-cliff-lift-route" && route.kind === "vertical")).toBe(true);
     const escapeRoom = scene.rooms.find((room) => room.id === "wilderness-custom-embassy-escape-room");
     expect(escapeRoom?.connections).toContain("wilderness-core-building-room");
@@ -1891,6 +1896,19 @@ describe("scene generators", () => {
     expect(dry.archetype).toBe("rift");
     expect(wet.archetype).toBe("river-valley");
     expect(dry.diagnostics.valid && wet.diagnostics.valid).toBe(true);
+  });
+
+  it("routes the exact hanging canyon embassy short prompt to the rift parent", () => {
+    const scene = generateScene({
+      ...request("exact-hanging-embassy-short-prompt", "large", 0.78),
+      prompt: "倒挂在峡谷下方的使馆和索桥，岩壁平台、外交大厅、垂直升降梯、悬索桥、峡谷底部密道",
+    }, "adaptive");
+    expect(scene.archetype).toBe("rift");
+    expect(scene.sceneProgram?.domain).toBe("natural");
+    expect(scene.title).toContain("The Hanging Embassy at Split Earth");
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("embassy-landmark"))).toBe(true);
+    expect(scene.diagnostics.valid).toBe(true);
+    expect(scene.diagnostics.warnings).toEqual([]);
   });
 
   it("reroutes an ice research escape route around the complete building envelope", () => {

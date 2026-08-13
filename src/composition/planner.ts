@@ -93,7 +93,8 @@ function domainFor(prompt: string): SceneCompositionProgram["primaryDomain"] {
   const riftTerms = ["裂谷", "裂缝", "裂隙", "深渊", "rift", "crevasse", "chasm", "ravine"] as const;
   const caveIndex = firstIndexOf(caveTerms);
   const riftIndex = firstIndexOf(riftTerms);
-  if (riftIndex < caveIndex) return "rift";
+  const explicitDryCanyon = has(text, ["倒挂在峡谷下方", "无水峡谷", "干峡谷", "dry canyon", "canyon beneath", "hanging beneath the canyon"]);
+  if (explicitDryCanyon || (riftIndex < caveIndex && riftIndex < Number.POSITIVE_INFINITY)) return "rift";
   if (caveIndex < Number.POSITIVE_INFINITY) return "cave";
   if (has(text, ["火山", "熔岩", "岩浆", "volcano", "volcanic", "caldera", "lava"])) return "volcanic";
   if (has(text, ["盐碱荒原", "盐碱地", "盐沼荒原", "盐壳荒地", "salt wasteland", "salt flat", "salt flats", "salt desert"])) return "salt-waste";

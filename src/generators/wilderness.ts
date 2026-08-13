@@ -4216,7 +4216,32 @@ function addWildernessBuildingSite(scene: GeneratedScene, context: GeneratorCont
     ...primitiveEntry,
     tags: primitiveEntry.tags ? [...new Set(primitiveEntry.tags)] : primitiveEntry.tags,
   }));
-  scene.siteProgram = { version: 1, siteType: "wilderness-site", districtCount: 1, roadCount: siteRoadCount, junctionCount: 1, blockCount: 1, parcelCount: 1, fullInteriorCount: 1, facadeCount: 0, massCount: 0, roadLengthCells: siteRoadLength, parcelCoverage: (13 * 12) / (width * depth), buildingCoverage: (9 * 8) / (width * depth), averageParcelArea: 13 * 12, openSpaceRatio: 1 - (13 * 12) / (width * depth), roadPattern: "anchor-web", curvedRoadRatio: siteRoadCount > 0 ? 1 : 0, nonRectangularBlockRatio: 1, terrainKind: archetype === "forest" ? "forest-clearing" : archetype === "mountain" ? "valley" : "rolling" };
+  const siteTerrainKind = archetype === "forest"
+    ? "forest-clearing"
+    : archetype === "mountain"
+      ? "valley"
+      : archetype === "river-valley" || archetype === "dry-riverbed"
+        ? "river"
+        : archetype === "rift"
+          ? "rift"
+          : archetype === "volcanic"
+            ? "caldera"
+            : archetype === "ice"
+              ? "ice-crevasse"
+              : archetype === "swamp"
+                ? "swamp-bone"
+                : archetype === "underground-lake" || archetype === "underdark"
+                  ? "underdark"
+                  : archetype === "floating-islands"
+                    ? "megastructure"
+                    : archetype === "industrial-ruin"
+                      ? "urban"
+                      : archetype === "coral-tide"
+                        ? "coast"
+                        : archetype === "impact-crater"
+                          ? "impact-crater"
+                          : "rolling";
+  scene.siteProgram = { version: 1, siteType: "wilderness-site", districtCount: 1, roadCount: siteRoadCount, junctionCount: 1, blockCount: 1, parcelCount: 1, fullInteriorCount: 1, facadeCount: 0, massCount: 0, roadLengthCells: siteRoadLength, parcelCoverage: (13 * 12) / (width * depth), buildingCoverage: (9 * 8) / (width * depth), averageParcelArea: 13 * 12, openSpaceRatio: 1 - (13 * 12) / (width * depth), roadPattern: "anchor-web", curvedRoadRatio: siteRoadCount > 0 ? 1 : 0, nonRectangularBlockRatio: 1, terrainKind: siteTerrainKind };
   scene.floors = Math.max(scene.floors, 4);
   scene.floorHeightFeet = [12, 10, 8, 10];
   const upperFloorLabel = requestedFloors && requestedFloors >= 2
@@ -5078,6 +5103,8 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const archetype: WildernessArchetype = compositionArchetype
     ?? classifyWildernessArchetype(context.request.prompt, context.semanticHints, context.compositionProgram?.capabilityIds);
   const profile = bounds(context, archetype);
+  const facilityIntent = embeddedFacilityIntent(context.request.prompt);
+  const hangingEmbassy = archetype === "rift" && facilityIntent?.theme === "diplomatic";
   const titlePool: Record<WildernessArchetype, readonly string[]> = {
     "river-valley": ["Silverfall Valley", "The Two-Bank Reach"],
     "dry-riverbed": ["The Thirsting Wash", "Deadwater Channel"],
@@ -5101,10 +5128,14 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
   const saltWasteland = isSaltWastelandPrompt(context.request.prompt);
   const scene = baseScene(
     "wilderness",
-    saltWasteland
+    hangingEmbassy
+      ? "The Hanging Embassy at Split Earth"
+      : saltWasteland
       ? (embeddedFacilityProfile(context.request.prompt) === "quarantine" ? "The Saltbound Quarantine Oratory" : "The White Salt Expanse")
       : choose(context.rng, titlePool[archetype]),
-    `${archetype} terrain with elevation bands, route choices, tactical cover, and explicit hazards.`,
+    hangingEmbassy
+      ? "A diplomatic compound suspended beneath a dry canyon: reception, visa archives, rope crossings, a cliff lift, and a bridge-under escape platform remain owned by the rift terrain."
+      : `${archetype} terrain with elevation bands, route choices, tactical cover, and explicit hazards.`,
     context.request.seed,
     { x: profile.width, z: profile.depth },
     1,
@@ -5157,5 +5188,28 @@ export function generateWilderness(context: GeneratorContext): GeneratedScene {
     addTerrainComplexity(scene, archetype, profile.width, profile.depth, profile.density, context.rng.fork("terrain-complexity"));
   }
   addWildernessBuildingSite(scene, context, profile.width, profile.depth, archetype);
+  if (hangingEmbassy) {
+    const embassy = scene.primitives.find((primitiveEntry) => primitiveEntry.tags?.includes("facility-theme:diplomatic"));
+    if (embassy) {
+      const x = embassy.position.x;
+      const z = embassy.position.z + 3.2;
+      const y = embassy.position.y;
+      const embassyTags = ["embassy", "diplomatic", "embassy-landmark", "facade-detail", "supported", "building-instance:wilderness-core-building"];
+      scene.primitives.push(
+        cylinder("wilderness-custom-embassy-flag-pylon-west", 0, x - 2.4, y, z, 0.22, feetToMeters(12), "darkStone", embassyTags),
+        cylinder("wilderness-custom-embassy-flag-pylon-east", 0, x + 2.4, y, z, 0.22, feetToMeters(12), "darkStone", embassyTags),
+        box("wilderness-custom-embassy-diplomatic-portico", 0, x, y + FLOOR_SLAB_METERS, z, 5.2, feetToMeters(1.2), 1.4, "stone", [...embassyTags, "entrance", "standable"]),
+      );
+      scene.tactical.push(tacticalFeature(
+        "wilderness-custom-embassy-entrance-choke",
+        "chokepoint",
+        x,
+        z,
+        y,
+        1.6,
+        "A supported diplomatic portico marks the hanging embassy entrance above the canyon route.",
+      ));
+    }
+  }
   return scene;
 }
