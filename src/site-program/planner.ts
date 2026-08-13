@@ -181,6 +181,7 @@ function requestedSiteFeatures(text: string): string[] {
   add("mountain-monastery", ["山地修道院", "山顶修道院", "mountain monastery"]);
   add("radio-observatory", ["无线电观测", "气象站", "无线电塔", "radio observatory", "weather station"]);
   add("river-crossing", ["河上", "石桥", "河谷", "浅滩", "河桥", "river bridge", "river crossing", "ford"]);
+  add("root-bridge", ["根桥", "树根桥", "root bridge", "root-bridge"]);
   add("mine-remnant", ["旧矿井口", "废弃矿井", "矿车轨道", "矿井入口", "abandoned mine", "old mine", "mine entrance", "mine-cart track", "mine cart track"]);
   add("underground-well", ["地下水井", "矿井水井", "地下取水井", "underground well", "subterranean well"]);
   add("gate-district", ["城门街区", "城门到市场", "gate district", "city gate"]);

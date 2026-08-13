@@ -646,6 +646,46 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           scene.tactical.push(tacticalFeature(`forest-settlement-canopy-highground-${index + 1}`, "highGround", anchor.x, anchor.z, platformY, 2, "A supported canopy platform overlooks the forest settlement."));
         }
       }
+      if (kind === "forest-clearing" && program.requiredFeatures.includes("root-bridge")) {
+        const outer = {
+          x: Math.max(4, Math.min(width - 4, width * 0.18)),
+          z: Math.max(4, Math.min(depth - 4, depth * 0.43)),
+        };
+        const inner = {
+          x: Math.max(4, Math.min(width - 4, width * 0.42)),
+          z: Math.max(4, Math.min(depth - 4, depth * 0.43 + 2.2)),
+        };
+        const outerY = feetToMeters(cellAt(outer.x, outer.z).elevationFeet) + FLOOR_SLAB_METERS;
+        const innerY = feetToMeters(cellAt(inner.x, inner.z).elevationFeet) + FLOOR_SLAB_METERS;
+        const bridgeY = (outerY + innerY) / 2 + 0.04;
+        const bridgeTags = ["forest", "root-bridge", "bridge", "standable", "supported", "alternate-route", "surface-grid", "terrain-program"];
+        scene.primitives.push(corridor("settlement-forest-root-bridge", 0, outer.x, outer.z, inner.x, inner.z, bridgeY, 1.55, "wood", bridgeTags));
+        const dx = inner.x - outer.x;
+        const dz = inner.z - outer.z;
+        const span = Math.hypot(dx, dz);
+        const normalX = span > 0 ? -dz / span : 0;
+        const normalZ = span > 0 ? dx / span : 0;
+        for (const [index, offset] of [-0.48, 0.48].entries()) {
+          scene.primitives.push(box(
+            `settlement-forest-root-bridge-buttress-${index + 1}`,
+            0,
+            (outer.x + inner.x) / 2 + normalX * offset,
+            Math.min(outerY, innerY) + feetToMeters(0.4),
+            (outer.z + inner.z) / 2 + normalZ * offset,
+            0.34,
+            feetToMeters(0.8),
+            Math.max(0.6, span),
+            "wood",
+            ["forest", "root-bridge", "root-buttress", "structural-support", "cover", "terrain-program"],
+            Math.atan2(dx, dz),
+          ));
+        }
+        scene.routes.push(createRoute("settlement-forest-root-bridge-route", "alternate", [
+          { x: outer.x, z: outer.z, y: outerY },
+          { x: inner.x, z: inner.z, y: innerY },
+        ], { purpose: "movement", traffic: 0.24, schedule: "all" }));
+        scene.tactical.push(tacticalFeature("settlement-forest-root-bridge-choke", "chokepoint", (outer.x + inner.x) / 2, (outer.z + inner.z) / 2, bridgeY, 1, "A fused root bridge creates a narrow alternate approach between the forest clearings."));
+      }
       if (kind === "river") {
         const bridgeRows = [depth * 0.28, depth * 0.56, depth * 0.81];
         for (const [index, row] of bridgeRows.entries()) {

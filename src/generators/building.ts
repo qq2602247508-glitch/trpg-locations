@@ -399,13 +399,38 @@ function buildMine(scene: GeneratedScene, profile: BuildingProfile, width: numbe
   const upperEntryX = 2;
   const upperEntryZ = depth * 0.3;
   scene.primitives.push(
-    corridor("mine-upper-adit", 1, upperEntryX, upperEntryZ, hubX, hubZ, upperY, 2.5, "rock", ["mine-tunnel", "adit", "cart-track"]),
-    corridor("mine-lower-main", 0, 3, depth * 0.72, width - 4, depth * 0.72, lowerY, 2.7, "rock", ["mine-tunnel", "main-level", "cart-track"]),
+    corridor("mine-upper-adit", 1, upperEntryX, upperEntryZ, hubX, hubZ, upperY, 2.5, "rock", ["mine-tunnel", "adit", "cart-track", "mine-entrance", "old-mine-mouth"]),
+    corridor("mine-lower-main", 0, 3, depth * 0.72, width - 4, depth * 0.72, lowerY, 2.7, "rock", ["mine-tunnel", "main-level", "cart-track", "mine-cart-track"]),
     corridor("mine-lower-branch-a", 0, hubX, depth * 0.72, width * 0.2, depth * 0.9, lowerY, 2, "rock", ["mine-tunnel", "branch"]),
     corridor("mine-lower-branch-b", 0, hubX, depth * 0.72, width * 0.78, depth * 0.9, lowerY, 2, "rock", ["mine-tunnel", "branch"]),
     box("mine-upper-platform", 1, hubX, upperY, hubZ, 7, FLOOR_SLAB_METERS, 6, "wood", ["floor", "shaft-platform", "platform"]),
     box("mine-lower-hub", 0, hubX, lowerY, depth * 0.72, 9, FLOOR_SLAB_METERS, 7, "rock", ["floor", "mine-hub", "platform"]),
+    box("mine-entrance-post-left", 1, upperEntryX - 1.25, upperY + feetToMeters(4.5), upperEntryZ, 0.45, feetToMeters(9), 0.45, "darkStone", ["mine-entrance", "old-mine-mouth", "portal", "structural-support"]),
+    box("mine-entrance-post-right", 1, upperEntryX + 1.25, upperY + feetToMeters(4.5), upperEntryZ, 0.45, feetToMeters(9), 0.45, "darkStone", ["mine-entrance", "old-mine-mouth", "portal", "structural-support"]),
+    box("mine-entrance-lintel", 1, upperEntryX, upperY + feetToMeters(9), upperEntryZ, 2.95, feetToMeters(1.2), 0.45, "darkStone", ["mine-entrance", "old-mine-mouth", "portal", "structural-support"]),
   );
+  const cartTrackStart = { x: 3, z: depth * 0.72 };
+  const cartTrackEnd = { x: width - 4, z: depth * 0.72 };
+  scene.primitives.push(
+    corridor("mine-cart-rail-left", 0, cartTrackStart.x, cartTrackStart.z - 0.55, cartTrackEnd.x, cartTrackEnd.z - 0.55, lowerY + FLOOR_SLAB_METERS + 0.08, 0.16, "metal", ["mine-cart-track", "rail", "industrial-route"]),
+    corridor("mine-cart-rail-right", 0, cartTrackStart.x, cartTrackStart.z + 0.55, cartTrackEnd.x, cartTrackEnd.z + 0.55, lowerY + FLOOR_SLAB_METERS + 0.08, 0.16, "metal", ["mine-cart-track", "rail", "industrial-route"]),
+  );
+  const sleeperCount = Math.max(5, Math.floor((cartTrackEnd.x - cartTrackStart.x) / 1.5));
+  for (let index = 0; index <= sleeperCount; index += 1) {
+    const t = index / sleeperCount;
+    scene.primitives.push(box(
+      `mine-cart-sleeper-${index + 1}`,
+      0,
+      cartTrackStart.x + (cartTrackEnd.x - cartTrackStart.x) * t,
+      lowerY + FLOOR_SLAB_METERS + 0.04,
+      cartTrackStart.z,
+      1.7,
+      0.12,
+      0.28,
+      "wood",
+      ["mine-cart-track", "rail-sleeper", "industrial-route"],
+    ));
+  }
   const bottom = { xCells: hubX + 2.4, zCells: depth * 0.72, yMeters: lowerY + FLOOR_SLAB_METERS };
   const top = { xCells: hubX + 2.4, zCells: hubZ, yMeters: upperY + FLOOR_SLAB_METERS };
   const shaftStair = stairConnection("mine-incline", 0, bottom, top, 2, "wood", ["mine-incline", "shaft-access"]);

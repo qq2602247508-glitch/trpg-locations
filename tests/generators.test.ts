@@ -556,6 +556,32 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("realizes a requested root bridge in a forest settlement terrain owner", () => {
+    const scene = generateScene({
+      ...request("regression-20-root-bridge", "large", 0.72),
+      prompt: "森林村庄，有树冠平台、根桥、吊桥、梯子和树上实验屋",
+    }, "adaptive");
+    expect(scene.archetype).toBe("village");
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("root-bridge"))).toBe(true);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("root-buttress"))).toBe(true);
+    expect(scene.routes.some((route) => route.id === "settlement-forest-root-bridge-route")).toBe(true);
+    expect(scene.diagnostics.warnings).not.toContain("Semantic geometry missing: 根桥.");
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("realizes a requested old mine mouth and paired cart rails in the mine grammar", () => {
+    const scene = generateScene({
+      ...request("regression-20-mine-remnant", "large", 0.72),
+      prompt: "废弃矿井，有矿车桥、木平台、竖井梯和多层开采面",
+    }, "adaptive");
+    expect(scene.archetype).toBe("mine");
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes("old-mine-mouth"))).toBe(true);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("mine-cart-track")).length).toBeGreaterThanOrEqual(4);
+    expect(scene.primitives.filter((primitive) => primitive.tags?.includes("rail")).length).toBeGreaterThanOrEqual(2);
+    expect(scene.diagnostics.warnings).not.toContain("Semantic geometry missing: 旧矿井口与矿车轨道.");
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
   it("realizes underdark settlement chambers, passages, and ledges", () => {
     const scene = generateScene({
       ...request("browser-08-underdark-lake-contract", "medium", 0.64),
