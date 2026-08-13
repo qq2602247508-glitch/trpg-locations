@@ -139,4 +139,53 @@ describe("validateScene", () => {
     expect(result.valid).toBe(true);
     expect(result.scene.timing).toBeUndefined();
   });
+
+  it("preserves replay metadata on validated building manifests", () => {
+    const scene = validScene();
+    scene.primitives.push({
+      id: "metadata-building-shell",
+      shape: "box",
+      position: { x: 4, y: 0, z: 4 },
+      size: { x: 4, y: 4, z: 4 },
+      material: "stone",
+      level: 0,
+      tags: ["independent-building-module"],
+    });
+    scene.buildingInstances = [{
+      id: "metadata-building",
+      archetype: "guild",
+      seed: "metadata-building-seed",
+      district: "research",
+      positionCells: { x: 4, z: 4 },
+      footprintCells: { x: 6, z: 5 },
+      rotationY: 0,
+      floors: 2,
+      floorHeightFeet: [10, 10],
+      detailLevel: "facade",
+      siteProfile: "peat-clinic",
+      state: "flooded",
+      functionalModules: [{
+        id: "submerged",
+        kind: "submerged-room",
+        label: "Half-flooded archive",
+        levelRole: "basement",
+        requiresWater: true,
+        minimumFootprintCells: 16,
+        tags: ["submerged", "flooded"],
+      }],
+    }];
+
+    const result = validateScene(scene);
+
+    expect(result.scene.buildingInstances?.[0]).toMatchObject({
+      siteProfile: "peat-clinic",
+      state: "flooded",
+      functionalModules: [{
+        id: "submerged",
+        kind: "submerged-room",
+        requiresWater: true,
+        tags: ["submerged", "flooded"],
+      }],
+    });
+  });
 });

@@ -45,6 +45,8 @@ interface GeometryMetrics {
   waterflowRouteCount: number;
   roomConnectionCount: number;
   openingEvidenceCount: number;
+  connectorCount: number;
+  connectorClearanceErrorCount: number;
   geometryErrorCount: number;
 }
 
@@ -58,6 +60,7 @@ const ROUTE_SCHEDULES = ["day", "night", "all"] as const satisfies readonly NonN
 const TACTICAL_KINDS = ["cover", "highGround", "hazard", "chokepoint", "entrance", "secret"] as const satisfies readonly TacticalFeature["kind"][];
 const SETTLEMENT_BUILDING_KINDS = ["home", "tavern", "shrine", "warehouse", "tower", "manor", "guild", "clinic", "blacksmith", "mill", "barn", "factory"] as const satisfies readonly SettlementBuildingKind[];
 const BUILDING_DETAIL_LEVELS = ["mass", "facade", "full-interior"] as const satisfies readonly BuildingInstance["detailLevel"][];
+const BUILDING_STATES = ["active", "abandoned", "flooded", "temporary"] as const satisfies readonly NonNullable<BuildingInstance["state"]>[];
 
 const GEOMETRY_EPSILON = 0.000_1;
 const ROUTE_BOUNDS_MARGIN_METERS = GRID_METERS * 2.5;
@@ -387,6 +390,39 @@ function isOpeningEvidence(primitive: ScenePrimitive): boolean {
     || id.includes("doorway");
 }
 
+function isConnectorClearanceBlocker(primitive: ScenePrimitive): boolean {
+  if (primitive.shape === "water" || isOpeningEvidence(primitive)) return false;
+  if (hasAnyTag(primitive, [
+    "decorative",
+    "nonblocking",
+    "railing",
+    "bridge-rail",
+    "roof-edge",
+    "edge-protection",
+    "structural-support",
+    "platform-support",
+    "grounded-support",
+    "bridge-anchor",
+    "bridge-abutment",
+    "buttress",
+    "tree-trunk",
+    "tree-support",
+    "giant-tree",
+    "suspension-rod",
+  ])) return false;
+  return hasAnyTag(primitive, [
+    "wall",
+    "blocks-movement",
+    "solid-obstacle",
+    "obstacle",
+    "beam",
+    "main-beam",
+    "crossbeam",
+    "floor-slab",
+    "solid",
+  ]);
+}
+
 function pointAtSegmentHeight(start: Vec3, end: Vec3, height: number): Vec3 | undefined {
   const delta = end.y - start.y;
   if (Math.abs(delta) <= GEOMETRY_EPSILON) return undefined;
@@ -458,6 +494,7 @@ function validateGeometryInvariants(
   let routePointsNearWalkable = 0;
   let verticalRouteCount = 0;
   let waterflowRouteCount = 0;
+  let connectorClearanceErrorCount = 0;
 
   for (const route of routes) {
     const routeRange = routeVerticalRange(route);
@@ -789,6 +826,51 @@ function validateGeometryInvariants(
     if (blockingWall !== undefined) {
       geometryError(`${label} ${connector.primitive.id} crosses solid wall ${blockingWall.id} without nearby opening evidence.`);
     }
+
+    const connectorClearanceBlockers = primitives.filter((primitive) => (
+      primitive !== connector.primitive
+      && isConnectorClearanceBlocker(primitive)
+      && !(hasTag(primitive, "underground")
+        && connectorBuildingId !== undefined
+        && (primitive.tags?.find((tag) => tag.startsWith("building-instance:"))?.slice("building-instance:".length) ?? undefined) !== undefined
+        && (primitive.tags?.find((tag) => tag.startsWith("building-instance:"))?.slice("building-instance:".length) ?? undefined) !== connectorBuildingId)
+    ));
+    const connectorSamples = routeSamples(connectorRoute);
+    const lowerY = Math.min(candidate.lower.y, candidate.upper.y);
+    const upperY = Math.max(candidate.lower.y, candidate.upper.y);
+    const endpointInset = Math.max(GRID_METERS * 0.45, connector.primitive.size.z * 0.16);
+    const clearanceSamples = connectorSamples.filter((sample) => (
+      sample.y > lowerY + endpointInset
+      && sample.y < upperY - endpointInset
+    ));
+    const clearanceHalfWidth = Math.max(
+      GRID_METERS * 0.28,
+      connector.primitive.size.x * 0.5 + GRID_METERS * 0.08,
+    );
+    const clearanceVerticalMargin = Math.max(
+      GRID_METERS * 0.12,
+      Math.min(GRID_METERS * 0.42, connector.primitive.size.y * 0.08),
+    );
+    const blockingVolume = connectorClearanceBlockers.find((blocker) => {
+      const blockerSpan = primitiveVerticalSpan(blocker);
+      const overlapsConnectorHeight = rangesOverlap(
+        blockerSpan,
+        { min: lowerY + endpointInset, max: upperY - endpointInset },
+        clearanceVerticalMargin,
+      );
+      if (!overlapsConnectorHeight) return false;
+      const openingNearby = openings.some((opening) => (
+        opening.level === blocker.level
+        && routeNearPrimitive(connectorRoute, opening, GRID_METERS * 0.8, ROUTE_SURFACE_MARGIN_METERS)
+        && pointNearPrimitiveFootprint(blocker.position, opening, GRID_METERS * 0.8)
+      ));
+      if (openingNearby) return false;
+      return clearanceSamples.some((sample) => pointNearPrimitiveFootprint(sample, blocker, clearanceHalfWidth));
+    });
+    if (blockingVolume !== undefined) {
+      connectorClearanceErrorCount += 1;
+      geometryError(`${label} ${connector.primitive.id} clearance volume intersects blocking ${blockingVolume.id}.`);
+    }
   }
 
   // A tree canopy may overhang its trunk, but it cannot exist as an unrelated
@@ -818,6 +900,8 @@ function validateGeometryInvariants(
     waterflowRouteCount,
     roomConnectionCount: connectionCount,
     openingEvidenceCount: openings.length,
+    connectorCount: verticalConnectors.length,
+    connectorClearanceErrorCount,
     geometryErrorCount: geometryErrors,
   };
 }
@@ -1211,6 +1295,22 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
     const positionRecord = isRecord(raw.positionCells) ? raw.positionCells : {};
     if (!isRecord(raw.positionCells)) repairable(`buildingInstances[${index}].positionCells was invalid; using the origin.`);
     const detailLevel = enumValue(raw.detailLevel, BUILDING_DETAIL_LEVELS, "facade", `buildingInstances[${index}].detailLevel`);
+    const functionalModules = Array.isArray(raw.functionalModules)
+      ? raw.functionalModules.filter((module): module is NonNullable<BuildingInstance["functionalModules"]>[number] => (
+        isRecord(module)
+        && typeof module.id === "string"
+        && typeof module.kind === "string"
+        && typeof module.label === "string"
+        && typeof module.levelRole === "string"
+        && typeof module.minimumFootprintCells === "number"
+        && Number.isFinite(module.minimumFootprintCells)
+        && Array.isArray(module.tags)
+        && module.tags.every((tag) => typeof tag === "string")
+      )) as NonNullable<BuildingInstance["functionalModules"]>
+      : undefined;
+    if (Array.isArray(raw.functionalModules) && functionalModules?.length !== raw.functionalModules.length) {
+      repairable(`buildingInstances[${index}].functionalModules contained invalid entries and was normalized.`);
+    }
     const instance: BuildingInstance = {
       id,
       archetype,
@@ -1233,6 +1333,12 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
       ...(isRecord(raw.buildingProgram) && Array.isArray(raw.buildingProgram.requiredFeatures) ? { buildingProgram: raw.buildingProgram as unknown as BuildingProgramSummary } : {}),
       ...(isRecord(raw.envelopeProgram) && typeof raw.envelopeProgram.silhouetteSignature === "string" ? { envelopeProgram: raw.envelopeProgram as unknown as NonNullable<BuildingInstance["envelopeProgram"]> } : {}),
       ...(isRecord(raw.interiorProgram) && Array.isArray(raw.interiorProgram.rooms) && Array.isArray(raw.interiorProgram.connections) && Array.isArray(raw.interiorProgram.verticalCores) ? { interiorProgram: raw.interiorProgram as unknown as SettlementBuildingProgram } : {}),
+      ...(typeof raw.siteProfile === "string" ? { siteProfile: raw.siteProfile } : {}),
+      ...(functionalModules && functionalModules.length > 0 ? { functionalModules: functionalModules.map((module) => ({
+        ...module,
+        tags: [...module.tags],
+      })) } : {}),
+      ...(raw.state === undefined ? {} : { state: enumValue(raw.state, BUILDING_STATES, "active", `buildingInstances[${index}].state`) }),
     };
     if (!primitives.some((primitive) => primitive.id.startsWith(`${id}-`) && hasTag(primitive, "independent-building-module"))) {
       fatal(`Building instance ${id} has no independently generated exterior primitive evidence.`);
@@ -1302,6 +1408,8 @@ export function validateScene(scene: GeneratedScene, options: ValidationOptions 
     waterflowRouteCount: geometry.waterflowRouteCount,
     roomConnectionCount: geometry.roomConnectionCount,
     openingEvidenceCount: geometry.openingEvidenceCount,
+    connectorCount: geometry.connectorCount,
+    connectorClearanceErrorCount: geometry.connectorClearanceErrorCount,
     geometryErrorCount: geometry.geometryErrorCount,
     boundsAreaCells,
     repairCount: repairs.length,

@@ -59,6 +59,25 @@ describe("cross-domain building and natural-terrain interfaces", () => {
     expect(signature(generated[1]!)).not.toBe(signature(generated[2]!));
   });
 
+  it("keeps the peat clinic submerged-room connector clear of the shared basement wall", () => {
+    const scene = generateScene({
+      prompt: "酸雾泥炭湿地里的旧电报诊疗站，有治疗室、发报室、半淹药品库、架高木栈道和观察塔。",
+      seed: "round-88-peat-telegraph-clinic-a",
+      size: "medium",
+      density: 0.84,
+    }, "adaptive");
+
+    expect(scene.diagnostics.valid).toBe(true);
+    expect(scene.diagnostics.metrics.connectorClearanceErrorCount).toBe(0);
+    expect(scene.diagnostics.warnings).toEqual([]);
+    const submergedBuilding = scene.buildingInstances?.find((building) => (
+      building.functionalModules?.some((module) => module.kind === "submerged-room")
+    ));
+    expect(submergedBuilding).toBeDefined();
+    expect(submergedBuilding?.functionalModules?.find((module) => module.kind === "submerged-room")?.tags)
+      .toEqual(expect.arrayContaining(["prompt-derived-space", "submerged-room"]));
+  });
+
   it("keeps the glacier rescue building when local retrieval adds its medical space", () => {
     const prompt = "黑冰川裂缝旁的巡礼无线电救护站，有伤员舱、祷告室、地下燃料库、测风塔和跨冰隙担架桥。";
     const request = { prompt, seed: "round-88-glacier-pilgrim-radio-b", size: "medium" as const, density: 0.84 };

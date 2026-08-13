@@ -350,6 +350,210 @@ describe("geometry-level P1 validation", () => {
     expect(hasError(result, "Stair blocked-connector-stair crosses solid wall connector-blocking-wall")).toBe(true);
   });
 
+  it("rejects a stair run that intersects a tagged beam or solid obstacle", () => {
+    const scene = generateScene({ ...request, seed: "geometry-stair-clearance-volume" }, "tower");
+    scene.primitives.push(
+      {
+        id: "clearance-lower-landing",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 5 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 0,
+        tags: ["floor", "platform"],
+      },
+      {
+        id: "clearance-upper-landing",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 3, z: GRID_METERS * 11 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 1,
+        tags: ["floor", "platform"],
+      },
+      {
+        id: "clearance-test-stair",
+        shape: "stairs",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS, y: GRID_METERS * 3, z: GRID_METERS * 6 },
+        material: "stone",
+        level: 0,
+        tags: ["stairs", "vertical-opening"],
+      },
+      {
+        id: "clearance-cross-beam",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 1.5, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS * 4, y: 0.45, z: 0.45 },
+        material: "wood",
+        level: 0,
+        tags: ["beam", "solid-obstacle"],
+      },
+    );
+
+    const result = validateScene(scene);
+
+    expect(result.valid).toBe(false);
+    expect(hasError(result, "clearance volume intersects blocking clearance-cross-beam")).toBe(true);
+    expect(result.diagnostics.metrics.connectorClearanceErrorCount).toBeGreaterThan(0);
+  });
+
+  it("does not treat a landing, edge railing, or structural support as a connector blocker", () => {
+    const scene = generateScene({ ...request, seed: "geometry-stair-clearance-exemptions" }, "tower");
+    scene.primitives.push(
+      {
+        id: "exempt-lower-landing",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 5 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 0,
+        tags: ["floor", "platform", "stair-landing"],
+      },
+      {
+        id: "exempt-upper-landing",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 3, z: GRID_METERS * 11 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 1,
+        tags: ["floor", "platform", "stair-landing"],
+      },
+      {
+        id: "exempt-stair",
+        shape: "stairs",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS, y: GRID_METERS * 3, z: GRID_METERS * 6 },
+        material: "stone",
+        level: 0,
+        tags: ["stairs", "vertical-opening"],
+      },
+      {
+        id: "exempt-edge-railing",
+        shape: "box",
+        position: { x: GRID_METERS * 5 + GRID_METERS * 0.8, y: GRID_METERS * 1.5, z: GRID_METERS * 8 },
+        size: { x: 0.12, y: GRID_METERS * 2, z: GRID_METERS * 2 },
+        material: "wood",
+        level: 0,
+        tags: ["railing", "edge-protection"],
+      },
+      {
+        id: "exempt-stair-support",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 1.5, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS * 0.3, y: GRID_METERS * 3, z: GRID_METERS * 0.3 },
+        material: "stone",
+        level: 0,
+        tags: ["structural-support", "platform-support"],
+      },
+    );
+
+    const result = validateScene(scene);
+
+    expect(hasError(result, "clearance volume intersects blocking")).toBe(false);
+  });
+
+  it("allows a vertical connector through an explicitly opened floor slab", () => {
+    const scene = generateScene({ ...request, seed: "geometry-stair-clearance-opening" }, "tower");
+    scene.primitives.push(
+      {
+        id: "opening-lower-landing",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 5 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 0,
+        tags: ["floor", "platform"],
+      },
+      {
+        id: "opening-upper-landing",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 3, z: GRID_METERS * 11 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 1,
+        tags: ["floor", "platform"],
+      },
+      {
+        id: "opening-test-stair",
+        shape: "stairs",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS, y: GRID_METERS * 3, z: GRID_METERS * 6 },
+        material: "stone",
+        level: 0,
+        tags: ["stairs", "vertical-opening"],
+      },
+      {
+        id: "opened-floor-slab",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 1.5, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS * 4, y: 0.45, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 0,
+        tags: ["floor", "floor-slab", "solid"],
+      },
+      {
+        id: "opened-floor-frame",
+        shape: "box",
+        position: { x: GRID_METERS * 6.7, y: GRID_METERS * 1.6, z: GRID_METERS * 8 },
+        size: { x: 0.2, y: 0.4, z: GRID_METERS * 3 },
+        material: "stone",
+        level: 0,
+        tags: ["floor-opening", "opening-frame", "vertical-opening"],
+      },
+    );
+
+    const result = validateScene(scene);
+
+    expect(hasError(result, "clearance volume intersects blocking opened-floor-slab")).toBe(false);
+  });
+
+  it("does not let a dormant underground interior from another building block a connector", () => {
+    const scene = generateScene({ ...request, seed: "geometry-stair-clearance-building-isolation" }, "settlement");
+    scene.primitives.push(
+      {
+        id: "building-a-stair",
+        shape: "stairs",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS, y: GRID_METERS * 3, z: GRID_METERS * 6 },
+        material: "stone",
+        level: 0,
+        tags: ["stairs", "vertical-opening", "building-instance:building-a"],
+      },
+      {
+        id: "building-a-lower",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: 0, z: GRID_METERS * 5 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 0,
+        tags: ["floor", "platform", "building-instance:building-a"],
+      },
+      {
+        id: "building-a-upper",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 3, z: GRID_METERS * 11 },
+        size: { x: GRID_METERS * 4, y: 0.3, z: GRID_METERS * 4 },
+        material: "stone",
+        level: 1,
+        tags: ["floor", "platform", "building-instance:building-a"],
+      },
+      {
+        id: "building-b-dormant-wall",
+        shape: "box",
+        position: { x: GRID_METERS * 5, y: GRID_METERS * 1.5, z: GRID_METERS * 8 },
+        size: { x: GRID_METERS * 4, y: GRID_METERS * 3, z: 0.4 },
+        material: "stone",
+        level: 0,
+        tags: ["wall", "underground", "building-instance:building-b"],
+      },
+    );
+
+    const result = validateScene(scene);
+
+    expect(hasError(result, "clearance volume intersects blocking building-b-dormant-wall")).toBe(false);
+  });
+
   it("rejects an artificial bridge whose far endpoint has no landing or anchor", () => {
     const scene = generateScene({ ...request, seed: "geometry-bridge-endpoint" }, "cave");
     scene.primitives.push(

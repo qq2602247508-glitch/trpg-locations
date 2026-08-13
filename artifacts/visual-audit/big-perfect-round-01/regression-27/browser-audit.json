@@ -1,0 +1,90 @@
+{
+  "cases": [
+    {
+      "id": "submerged-clinic",
+      "kind": "adaptive",
+      "size": "medium",
+      "density": 0.84,
+      "seed": "round-88-peat-telegraph-clinic-a",
+      "prompt": "酸雾泥炭湿地里的旧电报诊疗站，有治疗室、发报室、半淹药品库、架高木栈道和观察塔。",
+      "focusModule": "submerged-room",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "connectorCount": 16,
+      "connectorClearanceErrorCount": 0,
+      "primitives": 1878,
+      "snapshots": [
+        "submerged-clinic-overview.png",
+        "submerged-clinic-low.png",
+        "submerged-clinic-low-support.png",
+        "submerged-clinic-focused-basement.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "underground-greenhouse",
+      "kind": "adaptive",
+      "size": "large",
+      "density": 0.78,
+      "seed": "regression-27-browser-greenhouse",
+      "prompt": "建在火山灰峡谷边缘的炼金采矿营地，有试金实验室、矿物档案库、冷凝塔、地下菌类温室和熔岩上方维护桥",
+      "focusModule": "greenhouse",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "connectorCount": 14,
+      "connectorClearanceErrorCount": 0,
+      "primitives": 6152,
+      "snapshots": [
+        "underground-greenhouse-overview.png",
+        "underground-greenhouse-low.png",
+        "underground-greenhouse-low-support.png",
+        "underground-greenhouse-focused-basement.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "archive-station",
+      "kind": "adaptive",
+      "size": "medium",
+      "density": 0.7,
+      "seed": "unknown-field-station",
+      "prompt": "高山冻土湿地上的无线电研究站，有样本实验室、通信塔、发电机棚、架高栈道和地下样本库",
+      "focusModule": "archive",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "connectorCount": 11,
+      "connectorClearanceErrorCount": 0,
+      "primitives": 335,
+      "snapshots": [
+        "archive-station-overview.png",
+        "archive-station-low.png",
+        "archive-station-low-support.png",
+        "archive-station-focused-basement.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "id": "forest",
+      "kind": "wilderness",
+      "size": "large",
+      "density": 0.35,
+      "seed": "regression-27-browser-forest",
+      "prompt": "茂密古老森林，有溪流、倒木、树冠平台和高低林地",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "connectorCount": 10,
+      "connectorClearanceErrorCount": 0,
+      "primitives": 6364,
+      "snapshots": [
+        "forest-overview.png",
+        "forest-low.png",
+        "forest-low-support.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": []
+    }
+  ]
+}

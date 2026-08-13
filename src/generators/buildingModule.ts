@@ -557,7 +557,7 @@ function addFunctionalModuleGeometry(
       scene.tactical.push(tacticalFeature(`${lot.id}-${module.kind}-high`, "highGround", tower.x, tower.z, baseY + feetToMeters(8), 1.6, "The distillation maintenance deck is reachable high ground."));
     } else if (module.kind === "archive") {
       const archiveY = undergroundY;
-      const archiveLocalX = localX * 0.45;
+      const archiveLocalX = localX * 0.28;
       const archiveWidth = Math.max(3.5, lot.width * 0.42);
       const archiveDepth = Math.max(3.2, lot.depth * 0.36);
       const center = addBox(module, "floor", 3, archiveLocalX, archiveY, localZ, archiveWidth, FLOOR_SLAB_METERS, archiveDepth, "stone", ["floor", "standable", "archive-floor", "underground"]);
@@ -986,9 +986,9 @@ function addFunctionalModuleGeometry(
       }
       if (submerged) addBox(module, "water", 3, greenhouseX, greenhouseY + feetToMeters(1.25), localZ, width * 0.9, 0.14, depth * 0.86, "water", ["water", "submerged", "hazard"]);
       if (submerged) {
-        const access = point(greenhouseX + width * 0.34, localZ + depth * 0.34);
+        const access = point(greenhouseX - width * 0.18, localZ + depth * 0.05);
         scene.primitives.push(
-          stairs(`${lot.id}-${module.kind}-access`, 3, access.x, greenhouseY, access.z, 1.05, baseY - greenhouseY, 4.5, "stone", [...common, `function:${module.kind}`, "greenhouse-access", "vertical-opening", "standable", "underground"], lot.rotation),
+          stairs(`${lot.id}-${module.kind}-access`, 3, access.x, greenhouseY, access.z, 1.05, baseY - greenhouseY, 2.8, "stone", [...common, `function:${module.kind}`, "greenhouse-access", "vertical-opening", "standable", "underground"], lot.rotation),
         );
         scene.routes.push(createRoute(`${lot.id}-${module.kind}-route`, "vertical", [
           { x: access.x, z: access.z, y: baseY },
@@ -1011,7 +1011,11 @@ function addFunctionalModuleGeometry(
       const center = addBox(module, "floor", 3, localX * 0.42, submergedY, localZ, width, FLOOR_SLAB_METERS, depth, "stone", ["floor", "standable", "submerged-floor", "underground"]);
       addBox(module, "water", 3, localX * 0.42, submergedY + feetToMeters(1.4), localZ, width * 0.82, 0.15, depth * 0.72, "water", ["water", "flooded", "hazard"]);
       addBox(module, "retaining-wall", 3, localX * 0.42 - width / 2, submergedY, localZ, 0.2, feetToMeters(8), depth, "darkStone", ["wall", "submerged", "water-tight"]);
-      const access = point(localX * 0.42 + width * 0.34, localZ + depth * 0.34);
+      // Keep the submerged-room access inside the shared basement shell.
+      // The old 0.34-width offset placed the stair on top of the east
+      // retaining wall for compact full-interior envelopes, so the composed
+      // connector had no actual clearance even though both landings existed.
+      const access = point(localX * 0.42 - width * 0.02, localZ + depth * 0.34);
       scene.primitives.push(stairs(`${lot.id}-${module.kind}-access`, 3, access.x, submergedY, access.z, 1.05, baseY - submergedY, 4.5, "stone", [...common, `function:${module.kind}`, "submerged-access", "standable"], lot.rotation));
       scene.primitives.push(box(`${lot.id}-${module.kind}-door-opening`, 3, access.x, submergedY, access.z, 1.4, feetToMeters(7), 0.3, "stone", [...common, `function:${module.kind}`, "opening", "door-frame", "vertical-opening"], lot.rotation));
       scene.primitives.push(box(`${lot.id}-${module.kind}-top-opening`, 0, access.x, baseY - 0.04, access.z, 1.4, 0.12, 1.4, "darkStone", [...common, `function:${module.kind}`, "floor-opening", "opening-frame", "vertical-opening"], lot.rotation));
