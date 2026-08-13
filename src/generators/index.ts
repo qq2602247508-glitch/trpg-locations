@@ -3,6 +3,7 @@ import { auditSemanticCoverage, compileSceneComposition, summarizeComposition, t
 import { classifyInput, type AdaptiveFeatures, type InputClassification } from "../semantic/classify";
 import type { GeneratedScene, GenerationRequest, GeneratorContext, Room, SceneKind } from "../schema";
 import { validateScene } from "../validation/scene";
+import { auditPerformance } from "../validation/performance";
 import { generateCave } from "./cave";
 import { generateDungeon } from "./dungeon";
 import { generateSewer } from "./sewer";
@@ -379,8 +380,21 @@ export function generateScene(request: GenerationRequest, requestedKind: SceneKi
   const tacticalQuality = Math.min(100, 38 + validated.routes.length * 7 + validated.tactical.length * 5);
   const visualIdentity = semanticCoverage.score;
   const variationQuality = Math.round(Math.min(100, 45 + composition.density.structuralComplexity * 35 + composition.density.routeComplexity * 20));
-  const performanceQuality = validated.primitives.length < 4500 ? 100 : validated.primitives.length < 7500 ? 85 : 65;
-  Object.assign(validated.diagnostics.metrics, { geometryIntegrity, semanticCoverage: semanticCoverage.score, spatialCoherence, tacticalQuality, visualIdentity, variationQuality, performanceQuality });
+  const performance = auditPerformance(validated, normalized);
+  const performanceQuality = performance.qualityScore;
+  Object.assign(validated.diagnostics.metrics, {
+    geometryIntegrity,
+    semanticCoverage: semanticCoverage.score,
+    spatialCoherence,
+    tacticalQuality,
+    visualIdentity,
+    variationQuality,
+    performanceQuality,
+    primitiveDensity: performance.primitiveDensity,
+    semanticYield: performance.semanticYield,
+    primitiveBudget: performance.primitiveBudget,
+    performanceBudgetScore: performance.budgetScore,
+  });
   const compositeScore = Math.round(geometryIntegrity * 0.22 + semanticCoverage.score * 0.22 + spatialCoherence * 0.18 + tacticalQuality * 0.12 + visualIdentity * 0.1 + variationQuality * 0.08 + performanceQuality * 0.08);
   validated.diagnostics.score = Math.min(validated.diagnostics.score, compositeScore);
   if (semanticCoverage.missing.length > 0) {

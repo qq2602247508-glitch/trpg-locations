@@ -47,3 +47,11 @@
   vars:
     scene_request: >-
       被雷火烧过的黑森林玻璃工坊，焦木密林、引雷塔、魔法熔炉、吹制大厅、石英仓、地下冷却池和树冠观测台。
+
+- description: very short forest village still produces connected terrain and settlement regions
+  vars:
+    scene_request: 森林村庄
+
+- description: very short flooded opera still preserves structure and state
+  vars:
+    scene_request: 洪水歌剧院
