@@ -4,6 +4,7 @@ import { instantiateBuildingModule } from "./buildingModule";
 import { classifySettlementArchetype } from "./settlement";
 import { compileSettlementTerrain, type SettlementTerrain, type TerrainCrossingCandidate } from "./settlementTerrain";
 import { FLOOR_SLAB_METERS, baseScene, box, connectRooms, corridor, createRoom, createRoute, cylinder, feetToMeters, primitive, stairConnection, stairs, tacticalFeature, water } from "./shared";
+import { SeededRandom } from "../core/random";
 
 function roadPieces(road: RoadProgram, terrain: SettlementTerrain) {
   return road.points.slice(1).flatMap((point, index) => {
@@ -1074,6 +1075,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
   const isMountainMonastery = program.requiredFeatures.includes("mountain-monastery") || program.requiredFeatures.includes("hillside-district");
   const isTidalCavern = program.requiredFeatures.includes("tidal-cavern");
   const isFlooded = program.requiredFeatures.includes("flooded-site") && !isTidalCavern;
+  const canonicalBuildingSeeds = terrain.summary.kind === "forest-clearing";
   const legacySpecialElevation = isFloating || isMountainMonastery;
   const elevationAt = isFloating ? addFloatingIslandTerrain(scene, program.bounds.x, program.bounds.z, program.requiredFeatures.includes("salt-crystal-monastery")) : isMountainMonastery ? addMountainTerraces(scene, program.bounds.x, program.bounds.z) : terrain.elevationAt;
   if (!legacySpecialElevation) terrain.render(scene);
@@ -1199,7 +1201,7 @@ export function generateSiteSettlement(context: GeneratorContext): GeneratedScen
       state: parcel.state,
       functionalModules: parcel.functionalModules,
       siteProfile,
-    }, context.rng.fork(parcel.buildingSeed));
+    }, canonicalBuildingSeeds ? new SeededRandom(parcel.buildingSeed) : context.rng.fork(parcel.buildingSeed));
     if (raisedStiltHome) {
       const stairRotation = parcel.rotationY ?? 0;
       const stairRunCells = 4;

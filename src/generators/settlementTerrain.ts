@@ -625,6 +625,30 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           { x: width * 0.28, z: depth * 0.28, level: 0 },
           { x: width * 0.72, z: depth * 0.62, level: 1 },
         ];
+        const nearestForestLanding = (requestedX: number, requestedZ: number): { xCells: number; zCells: number; yMeters: number } => {
+          const baseX = Math.floor(requestedX);
+          const baseZ = Math.floor(requestedZ);
+          let best: { x: number; z: number; distance: number; elevationFeet: number } | undefined;
+          for (let radius = 0; radius <= 8; radius += 1) {
+            for (let dz = -radius; dz <= radius; dz += 1) for (let dx = -radius; dx <= radius; dx += 1) {
+              if (radius > 0 && Math.max(Math.abs(dx), Math.abs(dz)) !== radius) continue;
+              const x = baseX + dx;
+              const z = baseZ + dz;
+              if (x < 0 || z < 0 || x >= width || z >= depth) continue;
+              const cell = cellAt(x, z);
+              if (!cell.standable || ["water", "lava", "void"].includes(cell.surface)) continue;
+              const distance = Math.hypot((x + 0.5) - requestedX, (z + 0.5) - requestedZ);
+              if (best === undefined || distance < best.distance) best = { x, z, distance, elevationFeet: cell.elevationFeet };
+            }
+            if (best !== undefined) break;
+          }
+          const landing = best ?? { x: Math.max(0, Math.min(width - 1, baseX)), z: Math.max(0, Math.min(depth - 1, baseZ)), distance: 0, elevationFeet: cellAt(baseX, baseZ).elevationFeet };
+          return {
+            xCells: landing.x + 0.5,
+            zCells: landing.z + 0.5,
+            yMeters: feetToMeters(landing.elevationFeet) + FLOOR_SLAB_METERS,
+          };
+        };
         for (const [index, anchor] of canopyAnchors.entries()) {
           const groundY = feetToMeters(cellAt(anchor.x, anchor.z).elevationFeet) + FLOOR_SLAB_METERS;
           const platformY = groundY + feetToMeters(14 + index * 4);
@@ -635,7 +659,7 @@ export function compileSettlementTerrain(program: SiteProgram, prompt: string, r
           const stair = stairConnection(
             `forest-settlement-canopy-stair-${index + 1}`,
             0,
-            { xCells: anchor.x + 3.8, zCells: anchor.z, yMeters: groundY + FLOOR_SLAB_METERS },
+            nearestForestLanding(anchor.x + 3.8, anchor.z),
             { xCells: anchor.x + 1.1, zCells: anchor.z, yMeters: platformY + FLOOR_SLAB_METERS },
             1.1,
             "wood",

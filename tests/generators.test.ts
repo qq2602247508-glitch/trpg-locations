@@ -632,6 +632,22 @@ describe("scene generators", () => {
     expect(scene.diagnostics.valid).toBe(true);
   });
 
+  it("keeps short forest-village canopy stairs on real landings at dense large scale", () => {
+    const scene = generateScene({
+      ...request("regression-30-forest-village-c", "large", 0.94),
+      prompt: "森林村庄",
+    }, "adaptive");
+    expect(scene.terrainProgram?.kind).toBe("forest-clearing");
+    expect(scene.primitives.filter((primitive) => primitive.id.includes("forest-settlement-canopy-stair")).length).toBe(2);
+    expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
+    expect(scene.routes.filter((route) => route.id.includes("forest-settlement-canopy-route")).every((route) => (
+      route.points.every((point) => scene.primitives.some((primitive) => (
+        primitive.tags?.includes("standable")
+        && Math.hypot(point.x - primitive.position.x, point.z - primitive.position.z) <= GRID_METERS * 3
+      )))
+    ))).toBe(true);
+  });
+
   it("realizes a requested root bridge in a forest settlement terrain owner", () => {
     const scene = generateScene({
       ...request("regression-20-root-bridge", "large", 0.72),

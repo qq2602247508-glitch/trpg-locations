@@ -1,0 +1,178 @@
+{
+  "regression": 30,
+  "prompt": "森林村庄",
+  "cases": [
+    {
+      "id": "forest-village-small",
+      "size": "small",
+      "density": 0.28,
+      "seed": "regression-30-forest-village-a",
+      "prompt": "森林村庄",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "warnings": [],
+      "semantic": {
+        "domain": "settlement",
+        "terrainKind": "forest-clearing",
+        "siteType": "village",
+        "forestTagged": 322,
+        "terrainTagged": 891,
+        "buildings": 5,
+        "rooms": 11,
+        "routes": 9,
+        "primaryRoutes": 2,
+        "alternateRoutes": 3,
+        "treeTrunks": 20,
+        "treeCanopies": 18,
+        "canopyPlatforms": 4,
+        "bridges": 1,
+        "tags": [
+          "forest",
+          "canopy-platform",
+          "stream",
+          "wood-bridge",
+          "stream-crossing",
+          "settlement-building"
+        ]
+      },
+      "snapshots": [
+        "forest-village-small-overview.png",
+        "forest-village-small-low-angle.png",
+        "forest-village-small-grid-close.png",
+        "forest-village-small-focused-building.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": [],
+      "generationMs": 2730.5999999046326
+    },
+    {
+      "id": "forest-village-medium",
+      "size": "medium",
+      "density": 0.62,
+      "seed": "regression-30-forest-village-b",
+      "prompt": "森林村庄",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "warnings": [],
+      "semantic": {
+        "domain": "settlement",
+        "terrainKind": "forest-clearing",
+        "siteType": "village",
+        "forestTagged": 984,
+        "terrainTagged": 2115,
+        "buildings": 10,
+        "rooms": 23,
+        "routes": 15,
+        "primaryRoutes": 4,
+        "alternateRoutes": 4,
+        "treeTrunks": 78,
+        "treeCanopies": 76,
+        "canopyPlatforms": 4,
+        "bridges": 1,
+        "tags": [
+          "forest",
+          "canopy-platform",
+          "stream",
+          "wood-bridge",
+          "stream-crossing",
+          "settlement-building"
+        ]
+      },
+      "snapshots": [
+        "forest-village-medium-overview.png",
+        "forest-village-medium-low-angle.png",
+        "forest-village-medium-grid-close.png",
+        "forest-village-medium-focused-building.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": [],
+      "generationMs": 1110.1000003814697
+    },
+    {
+      "id": "forest-village-large-dense",
+      "size": "large",
+      "density": 0.94,
+      "seed": "regression-30-forest-village-c",
+      "prompt": "森林村庄",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "warnings": [],
+      "semantic": {
+        "domain": "settlement",
+        "terrainKind": "forest-clearing",
+        "siteType": "village",
+        "forestTagged": 2434,
+        "terrainTagged": 4012,
+        "buildings": 17,
+        "rooms": 36,
+        "routes": 19,
+        "primaryRoutes": 5,
+        "alternateRoutes": 5,
+        "treeTrunks": 357,
+        "treeCanopies": 355,
+        "canopyPlatforms": 4,
+        "bridges": 1,
+        "tags": [
+          "forest",
+          "canopy-platform",
+          "stream",
+          "wood-bridge",
+          "stream-crossing",
+          "settlement-building"
+        ]
+      },
+      "snapshots": [
+        "forest-village-large-dense-overview.png",
+        "forest-village-large-dense-low-angle.png",
+        "forest-village-large-dense-grid-close.png",
+        "forest-village-large-dense-focused-building.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": [],
+      "generationMs": 1238.8000001907349
+    },
+    {
+      "id": "forest-village-large-seed-variant",
+      "size": "large",
+      "density": 0.62,
+      "seed": "regression-30-forest-village-d",
+      "prompt": "森林村庄",
+      "sceneValid": true,
+      "geometryErrors": 0,
+      "warnings": [],
+      "semantic": {
+        "domain": "settlement",
+        "terrainKind": "forest-clearing",
+        "siteType": "village",
+        "forestTagged": 1766,
+        "terrainTagged": 3696,
+        "buildings": 13,
+        "rooms": 31,
+        "routes": 17,
+        "primaryRoutes": 5,
+        "alternateRoutes": 4,
+        "treeTrunks": 147,
+        "treeCanopies": 145,
+        "canopyPlatforms": 4,
+        "bridges": 1,
+        "tags": [
+          "forest",
+          "canopy-platform",
+          "stream",
+          "wood-bridge",
+          "stream-crossing",
+          "settlement-building"
+        ]
+      },
+      "snapshots": [
+        "forest-village-large-seed-variant-overview.png",
+        "forest-village-large-seed-variant-low-angle.png",
+        "forest-village-large-seed-variant-grid-close.png",
+        "forest-village-large-seed-variant-focused-building.png"
+      ],
+      "networkFailures": [],
+      "consoleErrors": [],
+      "generationMs": 1167.5
+    }
+  ]
+}
