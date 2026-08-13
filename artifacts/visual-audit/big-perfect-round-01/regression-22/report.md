@@ -47,9 +47,20 @@ that the fallback source is visible. Browser health was 0 network failures and
 - `forced-working.png`
 - `forced-fallback.png`
 
-## Remaining gap
+## Promptfoo comparison
 
-The runtime/UI path is verified. Promptfoo still needs a maintained comparison
-configuration that explicitly contrasts deterministic/local planning with the
-forced Ollama provider on the same unknown composite prompts. The Goal remains
-active.
+The maintained evaluation now contains two providers over the same 10
+unknown-composite prompts:
+
+- `deterministic-local-baseline`, which calls the existing local planner;
+- `forced-ollama-qwen3-30b-instruct`, which performs a real Ollama request.
+
+Both providers share strict assertions for SceneProgram v1, `gridFeet=5`,
+at least two regions, valid relation IDs and recursive rejection of geometry,
+mesh, coordinate, room and dimension keys.
+
+Full evaluation result: **20/20 passed** (10 deterministic + 10 Ollama), with
+**7,258 measured tokens** total. No token-saving claim is made.
+
+The Goal remains active for the larger browser matrix and remaining geometry,
+building-entry and performance work.

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
 
-description: TRPG SceneProgram local semantic regression suite
+description: TRPG SceneProgram deterministic/local baseline and forced Ollama semantic regression suite
 
 prompts:
   - |-
@@ -18,8 +18,10 @@ prompts:
       {{scene_request}}
 
 providers:
+  - id: file://deterministic-local-provider.mjs
+    label: deterministic-local-baseline
   - id: ollama:chat:qwen3:30b-instruct
-    label: local-qwen-scene-program
+    label: forced-ollama-qwen3-30b-instruct
     config:
       temperature: 0
       num_predict: 1200
@@ -46,6 +48,17 @@ defaultTest:
         const validRelations = (program.relations || []).every(
           (relation) => regionIds.has(relation.from) && regionIds.has(relation.to),
         );
+        const forbiddenKeys = new Set([
+          "mesh", "meshes", "geometry", "geometries", "coordinate", "coordinates",
+          "vertices", "faces", "polygons", "primitives", "rooms", "dimensions",
+          "width", "height", "depth", "x", "y", "z",
+        ]);
+        const containsForbiddenKey = (value) => {
+          if (!value || typeof value !== "object") return false;
+          if (Array.isArray(value)) return value.some(containsForbiddenKey);
+          return Object.entries(value).some(([key, child]) =>
+            forbiddenKeys.has(key.toLowerCase()) || containsForbiddenKey(child));
+        };
         return program.version === 1
           && program.constraints?.gridFeet === 5
           && typeof program.title === "string"
@@ -56,7 +69,8 @@ defaultTest:
             && ["approach", "circulation", "combat", "investigation", "public", "private", "service", "hazard", "landmark", "residential", "commercial", "civic", "industrial", "natural"].includes(functionAliases[region.function] || region.function)
             && ["sunken", "low", "level", "raised", "high", "vertical"].includes(elevationAliases[region.elevation] || region.elevation)
             && typeof region.scale === "number")
-          && validRelations;
+          && validRelations
+          && !containsForbiddenKey(program);
 
 tests: file://cases.yaml
 
