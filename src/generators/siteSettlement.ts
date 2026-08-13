@@ -272,10 +272,53 @@ function addHollowTreeCity(scene: GeneratedScene, width: number, depth: number):
     const y = feetToMeters(2 + t * 50) + FLOOR_SLAB_METERS;
     scene.primitives.push(box(`hollow-tree-spiral-step-${step + 1}`, Math.floor(t * 4), cx + Math.cos(angle) * radius, y, cz + Math.sin(angle) * radius, 1.7, 0.22, 1.05, "wood", ["hollow-tree", "spiral-tree-street", "vertical-route", "standable", "site-program"], angle));
   }
+  const spiralStartAngle = -Math.PI * 0.4;
+  const spiralStartRadius = inner * 0.72;
+  const spiralStart = {
+    x: cx + Math.cos(spiralStartAngle) * spiralStartRadius,
+    z: cz + Math.sin(spiralStartAngle) * spiralStartRadius,
+  };
+  const spiralEndAngle = Math.PI * 3.8;
+  const spiralEndRadius = inner * 0.5;
+  const spiralEnd = {
+    x: cx + Math.cos(spiralEndAngle) * spiralEndRadius,
+    z: cz + Math.sin(spiralEndAngle) * spiralEndRadius,
+  };
+  const spiralRouteRotation = Math.atan2(spiralEnd.x - spiralStart.x, spiralEnd.z - spiralStart.z);
+  const spiralRunCells = Math.max(1.5, Math.hypot(spiralEnd.x - spiralStart.x, spiralEnd.z - spiralStart.z));
+  scene.primitives.push(stairs(
+    "hollow-tree-spiral-route-stairs",
+    0,
+    (spiralStart.x + spiralEnd.x) / 2,
+    feetToMeters(2),
+    (spiralStart.z + spiralEnd.z) / 2,
+    1.7,
+    feetToMeters(50),
+    spiralRunCells,
+    "wood",
+    ["hollow-tree", "spiral-tree-street", "vertical-route", "shaft-access", "standable", "site-program"],
+    spiralRouteRotation,
+  ));
+  const spiralLowerLanding = {
+    x: (spiralStart.x + spiralEnd.x) / 2 - (spiralRunCells / 2) * Math.sin(spiralRouteRotation),
+    z: (spiralStart.z + spiralEnd.z) / 2 - (spiralRunCells / 2) * Math.cos(spiralRouteRotation),
+  };
+  scene.primitives.push(box(
+    "hollow-tree-spiral-route-lower-landing",
+    0,
+    spiralLowerLanding.x,
+    feetToMeters(2),
+    spiralLowerLanding.z,
+    2.2,
+    FLOOR_SLAB_METERS,
+    2.2,
+    "wood",
+    ["hollow-tree", "spiral-tree-street", "stair-landing", "support-surface", "standable", "site-program"],
+  ));
   scene.routes.push(createRoute("hollow-tree-spiral-route", "vertical", [
-    { x: cx + Math.cos(-Math.PI * 0.4) * inner * 0.72, z: cz + Math.sin(-Math.PI * 0.4) * inner * 0.72, y: feetToMeters(2) },
+    { x: spiralStart.x, z: spiralStart.z, y: feetToMeters(2) },
     { x: cx, z: cz - inner * 0.5, y: feetToMeters(27) },
-    { x: cx + Math.cos(Math.PI * 3.8) * inner * 0.5, z: cz + Math.sin(Math.PI * 3.8) * inner * 0.5, y: feetToMeters(52) },
+    { x: spiralEnd.x, z: spiralEnd.z, y: feetToMeters(52) },
   ], { purpose: "movement", traffic: 0.72, schedule: "all" }));
   scene.primitives.push(
     primitive("hollow-tree-canopy-platform", "cylinder", 3, cx, feetToMeters(56), cz, inner * 0.33, 0.35, inner * 0.33, "moss", ["hollow-tree", "canopy-observatory", "high-ground", "standable", "site-program"]),

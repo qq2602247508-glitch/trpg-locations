@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateScene, generatorRegistry } from "../src/generators";
 import { SeededRandom } from "../src/core/random";
-import { instantiateBuildingModule } from "../src/generators/buildingModule";
+import { generateBuildingInteriorScene, instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, box, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
 import { dynamicFocusCutawayIds, floorBaseY, floorContextLevels, focusedCameraFactors, focusClusterForFloor, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, shouldRenderTacticalSurfaceGrid, spatialBatchKey } from "../src/render/SceneRenderer";
@@ -203,28 +203,28 @@ describe("scene generators", () => {
   });
 
   it("splits elevated settlement focus-cellar access into supported return flights", () => {
-    const scene = generateScene({
+    const request = {
       prompt: "奇幻运河城，神殿、巡逻塔、旅店、仓库、地下档案库、屋顶连桥和水上市集",
       seed: "browser-focus-canal-city",
       size: "large",
       density: 0.82,
-    }, "settlement");
+    } as const;
+    const scene = generateScene(request, "settlement");
+    const replay = generateScene(request, "settlement");
     const tower = scene.buildingInstances?.find((building) => building.id === "settlement-building-4");
     expect(tower?.archetype).toBe("tower");
     expect(tower?.detailLevel).not.toBe("full-interior");
-    const lower = scene.primitives.find((primitive) => primitive.id === `${tower?.id}-focus-cellar-stair-lower`);
-    const landing = scene.primitives.find((primitive) => primitive.id === `${tower?.id}-focus-cellar-stair-landing`);
-    const supports = scene.primitives.filter((primitive) => primitive.id.startsWith(`${tower?.id}-focus-cellar-stair-support-`));
-    const upper = scene.primitives.find((primitive) => primitive.id === `${tower?.id}-focus-cellar-stair-upper`);
-    expect(lower?.shape).toBe("stairs");
-    expect(upper?.shape).toBe("stairs");
-    expect(landing?.tags).toEqual(expect.arrayContaining(["stair-landing", "support-surface", "standable"]));
-    expect(supports).toHaveLength(2);
-    expect(supports.every((support) => support.tags?.includes("structural-support")
-      && support.size.y === lower?.size.y)).toBe(true);
-    expect(lower?.size.y).toBeCloseTo(upper?.size.y ?? -1);
-    expect((lower?.size.y ?? Number.POSITIVE_INFINITY) * 2).toBeCloseTo((tower?.baseYMeters ?? 0) - (lower?.position.y ?? 0));
-    expect((upper?.rotationY ?? 0) - (lower?.rotationY ?? 0)).toBeCloseTo(Math.PI);
+    expect(tower?.seed.length).toBeGreaterThan(0);
+    expect(tower?.envelopeProgram).toEqual(expect.objectContaining({
+      version: 1,
+      variant: expect.any(String),
+      partCount: expect.any(Number),
+      silhouetteSignature: expect.any(String),
+    }));
+    expect(replay.buildingInstances?.find((building) => building.id === tower?.id)?.envelopeProgram)
+      .toEqual(tower?.envelopeProgram);
+    expect(scene.primitives.some((primitive) => primitive.tags?.includes(`building-instance:${tower?.id}`)
+      && primitive.tags?.includes("focus-interior"))).toBe(false);
   });
 
   it("registers each fixed topology", () => {
@@ -451,6 +451,41 @@ describe("scene generators", () => {
     }
   });
 
+  it("replays facade and mass buildings as real on-demand tactical interiors", () => {
+    for (const lod of ["mass", "facade"] as const) {
+      const seed = `on-demand-interior-${lod}`;
+      const overview = baseScene("settlement", "On-demand test", "On-demand test", seed, { x: 20, z: 20 }, 4, [10, 10, 10, 10]);
+      const instance = instantiateBuildingModule(overview, {
+        id: `on-demand-${lod}`,
+        kind: "tower",
+        x: 10,
+        z: 10,
+        width: 9,
+        depth: 8,
+        rotation: 0.18,
+        district: "test",
+        seed,
+        lod,
+      }, new SeededRandom(seed));
+      expect(overview.primitives.some((primitive) => primitive.tags?.includes("focus-interior"))).toBe(false);
+
+      const inspection = generateBuildingInteriorScene(instance);
+      expect(inspection.primitives.length).toBeGreaterThan(0);
+      expect(inspection.rooms.length).toBeGreaterThan(1);
+      expect(inspection.routes.length).toBeGreaterThan(0);
+      expect(inspection.primitives.some((primitive) => primitive.tags?.includes("building-stair"))).toBe(true);
+      expect(inspection.rooms.some((room) => room.level > 0)).toBe(true);
+      expect(inspection.rooms.some((room) => room.level === 3)).toBe(true);
+
+      const replay = generateBuildingInteriorScene(instance);
+      expect(replay.primitives.map((primitive) => [primitive.id, primitive.shape, primitive.position, primitive.size, primitive.level, primitive.tags]))
+        .toEqual(inspection.primitives.map((primitive) => [primitive.id, primitive.shape, primitive.position, primitive.size, primitive.level, primitive.tags]));
+      expect(replay.rooms).toEqual(inspection.rooms);
+      expect(replay.routes).toEqual(inspection.routes);
+      expect(replay.tactical).toEqual(inspection.tactical);
+    }
+  });
+
   it("derives frontage parcels from road-bounded blocks and changes the graph with density", () => {
     const prompt = "1920年代城市工业街区，有铁路货场、厂房、工人住宅、仓库和后巷";
     const make = (density: number) => {
@@ -659,8 +694,25 @@ describe("scene generators", () => {
     expect(scene.siteProgram?.nonRectangularBlockRatio ?? 0).toBeGreaterThan(0.65);
     expect(scene.buildingInstances?.every((building) => Boolean(building.buildingProgram))).toBe(true);
     expect(scene.buildingInstances?.every((building) => Boolean(building.interiorProgram))).toBe(true);
-    expect(scene.primitives.some((primitive) => primitive.tags?.includes("focus-interior"))).toBe(true);
-    expect(scene.primitives.some((primitive) => primitive.tags?.includes("focus-cutaway"))).toBe(true);
+    const fullInteriors = scene.buildingInstances?.filter((building) => building.detailLevel === "full-interior") ?? [];
+    expect(fullInteriors.length).toBeGreaterThan(0);
+    for (const building of fullInteriors) {
+      const owned = scene.primitives.filter((primitive) => primitive.tags?.includes(`building-instance:${building.id}`));
+      expect(owned.some((primitive) => primitive.tags?.includes("full-interior"))).toBe(true);
+      expect(owned.filter((primitive) => primitive.tags?.includes("program-room")).length).toBeGreaterThan(1);
+      expect(
+        owned.some((primitive) => primitive.tags?.includes("room-connection"))
+        || scene.routes.some((route) => route.id.startsWith(`${building.id}-`)),
+      ).toBe(true);
+      expect(
+        owned.some((primitive) => primitive.tags?.includes("vertical-opening"))
+        || new Set(owned.map((primitive) => primitive.level)).size > 1,
+      ).toBe(true);
+    }
+    for (const building of scene.buildingInstances?.filter((entry) => entry.detailLevel !== "full-interior") ?? []) {
+      expect(scene.primitives.some((primitive) => primitive.tags?.includes(`building-instance:${building.id}`)
+        && primitive.tags?.includes("focus-interior"))).toBe(false);
+    }
     expect(scene.diagnostics.valid, scene.diagnostics.warnings.join(" | ")).toBe(true);
   });
 
@@ -1142,7 +1194,7 @@ describe("scene generators", () => {
     expect(hasTag(salt, "cavern-tide-pool")).toBe(true);
     expect(hasTag(salt, "suspension-bridge")).toBe(true);
     expect(new Set(salt.primitives.filter((primitive) => primitive.tags?.includes("floating-island") && primitive.id.endsWith("-top")).map((primitive) => Math.round(primitive.position.y * 100))).size).toBe(3);
-    expect(hollowTree.diagnostics.valid).toBe(true);
+    expect(hollowTree.diagnostics.valid, hollowTree.diagnostics.warnings.join(" | ")).toBe(true);
     expect(mangrove.diagnostics.valid).toBe(true);
     expect(salt.diagnostics.valid).toBe(true);
   });

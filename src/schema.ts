@@ -3,6 +3,7 @@ export const GRID_METERS = 1.524;
 
 import type { SceneProgram, SceneProgramSummary } from "./scene-program/schema";
 import type { SettlementAdaptationProgramSummary, SiteProgramSummary, TerrainProgramSummary } from "./site-program/schema";
+import type { BuildingFunctionalModuleProgram } from "./site-program/schema";
 import type { SceneCompositionProgram, SceneCompositionProgramSummary } from "./composition/schema";
 
 export type SceneKind = "tavern" | "tower" | "sewer" | "cave" | "dungeon" | "building" | "settlement" | "wilderness" | "adaptive";
@@ -111,6 +112,10 @@ export interface BuildingInstance {
     partCount: number;
     silhouetteSignature: string;
   };
+  /** Optional replay manifest for on-demand inspection of facade/mass buildings. */
+  siteProfile?: string;
+  functionalModules?: BuildingFunctionalModuleProgram[];
+  state?: "active" | "abandoned" | "flooded" | "temporary";
 }
 
 export interface SettlementBuildingRoomProgram {

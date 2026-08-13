@@ -22,6 +22,7 @@ import {
 } from "./shared";
 import { planBuildingEnvelope, type BuildingEnvelopeProgram, type SiteBuildingProfile } from "./buildingEnvelope";
 import type { BuildingFunctionalModuleProgram } from "../site-program/schema";
+import { SeededRandom } from "../core/random";
 
 export interface BuildingLot {
   id: string;
@@ -1860,6 +1861,9 @@ function instantiateFullInterior(scene: GeneratedScene, lot: BuildingLot, genera
     buildingProgram: summarizeBuildingProgram(interiorProgram, [...labels.tags, ...functionalTags(lot)]),
     interiorProgram,
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },
+    ...(lot.siteProfile ? { siteProfile: lot.siteProfile } : {}),
+    ...(lot.functionalModules ? { functionalModules: [...lot.functionalModules] } : {}),
+    ...(lot.state ? { state: lot.state } : {}),
   };
   addFunctionalModuleGeometry(scene, lot, generated, { y: basementY, halfWidthCells: width * 0.32, depthCells: depth * 0.58 });
   const facadeHeight = generated.floorHeightFeet.reduce((sum, height) => sum + feetToMeters(height), 0);
@@ -2033,7 +2037,6 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
     scene.primitives.push(box(`${lot.id}-temporary-barricade`, 0, barricade.x, y, barricade.z, Math.min(3.6, lot.width * 0.62), feetToMeters(4), 0.55, "wood", [...tags, "temporary", "barricade", "cover"], lot.rotation));
   }
 
-  addFocusInteriorBlueprint(scene, lot, generated, envelope, interiorProgram);
   addFunctionalModuleGeometry(scene, lot, generated);
   addSiteClimateFacadeGeometry(scene, lot, y, totalHeight, envelope);
   addWaterfrontExterior(scene, lot, generated, y, totalHeight);
@@ -2069,7 +2072,105 @@ export function instantiateBuildingModule(scene: GeneratedScene, lot: BuildingLo
     buildingProgram: summarizeBuildingProgram(interiorProgram, [...fullInteriorLabels(lot.kind, lot.siteProfile).tags, ...functionalTags(lot)]),
     interiorProgram,
     envelopeProgram: { version: 1, variant: envelope.variant, partCount: envelope.parts.length, silhouetteSignature: envelope.silhouetteSignature },
+    ...(lot.siteProfile ? { siteProfile: lot.siteProfile } : {}),
+    ...(lot.functionalModules ? { functionalModules: [...lot.functionalModules] } : {}),
+    ...(lot.state ? { state: lot.state } : {}),
   };
   (scene.buildingInstances ??= []).push(instance);
   return instance;
+}
+
+function emptyBuildingInspectionScene(instance: BuildingInstance): GeneratedScene {
+  return {
+    version: 1,
+    kind: "building",
+    archetype: instance.archetype,
+    title: `${instance.archetype} interior`,
+    description: `On-demand tactical interior for ${instance.id}.`,
+    seed: instance.seed,
+    gridFeet: 5,
+    boundsCells: {
+      x: Math.max(instance.footprintCells.x, 8),
+      z: Math.max(instance.footprintCells.z, 8),
+    },
+    floors: Math.max(instance.floors, 1),
+    floorHeightFeet: [...instance.floorHeightFeet],
+    floorLabels: ["1F", "2F", "3F", "B1"],
+    primitives: [],
+    rooms: [],
+    routes: [],
+    tactical: [],
+    diagnostics: {
+      valid: true,
+      score: 100,
+      warnings: [],
+      repairs: [],
+      metrics: {},
+    },
+    generationMs: 0,
+  };
+}
+
+/**
+ * Replays a settlement building as a standalone inspection scene.
+ *
+ * The overview never calls this helper. It is intentionally fed only by the
+ * persisted BuildingInstance manifest when the user enters a facade/mass
+ * building, so the full interior has no settlement-time geometry cost.
+ */
+export function generateBuildingInteriorScene(instance: BuildingInstance): GeneratedScene {
+  if (!instance.interiorProgram || !instance.envelopeProgram) {
+    throw new Error(`Building ${instance.id} has no replayable interior manifest.`);
+  }
+  const scene = emptyBuildingInspectionScene(instance);
+  const lot: BuildingLot = {
+    id: instance.id,
+    kind: instance.archetype,
+    x: instance.positionCells.x,
+    z: instance.positionCells.z,
+    width: instance.footprintCells.x,
+    depth: instance.footprintCells.z,
+    rotation: instance.rotationY,
+    district: instance.district,
+    seed: instance.seed,
+    lod: "full-interior",
+    floorCount: instance.floors,
+    baseY: instance.baseYMeters,
+    siteProfile: instance.siteProfile as SiteBuildingProfile | undefined,
+    functionalModules: instance.functionalModules,
+    state: instance.state,
+  };
+  const replayRng = new SeededRandom(instance.seed);
+  const generated = profile(instance.archetype, replayRng, lot.siteProfile, instance.floors);
+  if (instance.functionalModules?.some((module) => module.kind === "laboratory" && module.levelRole === "upper")) {
+    generated.material = "wood";
+  }
+  generated.floorHeightFeet = [...instance.floorHeightFeet];
+  const envelope = planBuildingEnvelope(
+    instance.archetype,
+    instance.footprintCells.x,
+    instance.footprintCells.z,
+    replayRng.fork("building-envelope"),
+    lot.siteProfile,
+  );
+  if (envelope.variant !== instance.envelopeProgram.variant
+    || envelope.parts.length !== instance.envelopeProgram.partCount
+    || envelope.silhouetteSignature !== instance.envelopeProgram.silhouetteSignature) {
+    throw new Error(`Building ${instance.id} replay manifest does not match its stable seed.`);
+  }
+  instantiateFullInterior(scene, lot, generated, envelope, instance.interiorProgram);
+  scene.title = `${instance.archetype} · ${instance.district} · interior`;
+  scene.description = `Independent tactical inspection scene for ${instance.id}.`;
+  scene.boundsCells = {
+    x: Math.max(instance.footprintCells.x + 2, 8),
+    z: Math.max(instance.footprintCells.z + 2, 8),
+  };
+  scene.floors = Math.max(instance.floors, 1);
+  scene.floorHeightFeet = [...instance.floorHeightFeet];
+  scene.diagnostics.metrics = {
+    rooms: scene.rooms.length,
+    routes: scene.routes.length,
+    verticalConnections: instance.interiorProgram.verticalCores.length,
+  };
+  return scene;
 }

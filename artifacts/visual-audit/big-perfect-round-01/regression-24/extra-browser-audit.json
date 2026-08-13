@@ -1,0 +1,735 @@
+{
+  "generatedAt": "2026-08-13T06:18:44.617Z",
+  "transparency": {
+    "before": {
+      "pressed": "false",
+      "view": {
+        "floorView": "roof",
+        "cameraMode": "perspective",
+        "buildingTransparency": false,
+        "camera": {
+          "x": 169.77359999999993,
+          "y": 126.30720000000001,
+          "z": 160.47719999999998
+        },
+        "target": {
+          "x": 65.532,
+          "y": 0.12,
+          "z": 48.006
+        },
+        "near": 0.1,
+        "far": 1645.92
+      }
+    },
+    "after": {
+      "pressed": "true",
+      "view": {
+        "floorView": "roof",
+        "cameraMode": "perspective",
+        "buildingTransparency": true,
+        "camera": {
+          "x": 169.77359999999993,
+          "y": 126.30720000000001,
+          "z": 160.47719999999998
+        },
+        "target": {
+          "x": 65.532,
+          "y": 0.12,
+          "z": 48.006
+        },
+        "near": 0.1,
+        "far": 1645.92
+      }
+    }
+  },
+  "hollowTree": {
+    "valid": true,
+    "warnings": [],
+    "spiralRoute": {
+      "id": "hollow-tree-spiral-route",
+      "kind": "vertical",
+      "points": [
+        {
+          "x": 67.22616453702149,
+          "y": 0.6096,
+          "z": 31.00672856317761
+        },
+        {
+          "x": 60.96,
+          "y": 8.2296,
+          "z": 36.21024
+        },
+        {
+          "x": 72.35238315070936,
+          "y": 15.8496,
+          "z": 42.01494914567794
+        }
+      ],
+      "purpose": "movement",
+      "traffic": 0.72,
+      "schedule": "all"
+    },
+    "traversal": [
+      {
+        "id": "hollow-tree-spiral-step-1",
+        "shape": "box",
+        "position": {
+          "x": 67.22616453702149,
+          "y": 0.7896000000000001,
+          "z": 31.00672856317761
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-2",
+        "shape": "box",
+        "position": {
+          "x": 75.38150693358659,
+          "y": 1.3540444444444444,
+          "z": 36.36531263843304
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-3",
+        "shape": "box",
+        "position": {
+          "x": 80.01102766581712,
+          "y": 1.9184888888888887,
+          "z": 44.82920572286354
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-4",
+        "shape": "box",
+        "position": {
+          "x": 80.12121975239201,
+          "y": 2.4829333333333334,
+          "z": 54.36484298797217
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-5",
+        "shape": "box",
+        "position": {
+          "x": 75.79047660670663,
+          "y": 3.0473777777777777,
+          "z": 62.736247450870806
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-6",
+        "shape": "box",
+        "position": {
+          "x": 68.12634840154031,
+          "y": 3.6118222222222225,
+          "z": 68.02933471565333
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-7",
+        "shape": "box",
+        "position": {
+          "x": 58.98432306961342,
+          "y": 4.176266666666667,
+          "z": 69.0893103594977
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-8",
+        "shape": "box",
+        "position": {
+          "x": 50.51910202512813,
+          "y": 4.740711111111111,
+          "z": 65.77126781376874
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-9",
+        "shape": "box",
+        "position": {
+          "x": 44.676777499004544,
+          "y": 5.305155555555555,
+          "z": 58.9499429816217
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-10",
+        "shape": "box",
+        "position": {
+          "x": 42.7475904,
+          "y": 5.869599999999999,
+          "z": 50.292
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-11",
+        "shape": "box",
+        "position": {
+          "x": 45.08201606803384,
+          "y": 6.434044444444445,
+          "z": 41.849526187604184
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-12",
+        "shape": "box",
+        "position": {
+          "x": 51.032397568026866,
+          "y": 6.998488888888889,
+          "z": 35.573724123444464
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-13",
+        "shape": "box",
+        "position": {
+          "x": 59.128246554608474,
+          "y": 7.5629333333333335,
+          "z": 32.86403013026703
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-14",
+        "shape": "box",
+        "position": {
+          "x": 67.43862903476219,
+          "y": 8.127377777777777,
+          "z": 34.256830447899006
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-15",
+        "shape": "box",
+        "position": {
+          "x": 74.03255373306683,
+          "y": 8.691822222222221,
+          "z": 39.32282498403844
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-16",
+        "shape": "box",
+        "position": {
+          "x": 77.42762975525063,
+          "y": 9.256266666666667,
+          "z": 46.79169724036898
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-17",
+        "shape": "box",
+        "position": {
+          "x": 76.92275581262152,
+          "y": 9.82071111111111,
+          "z": 54.869246573263794
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-18",
+        "shape": "box",
+        "position": {
+          "x": 72.74031523711288,
+          "y": 10.385155555555556,
+          "z": 61.66811818816864
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-19",
+        "shape": "box",
+        "position": {
+          "x": 65.9497236128134,
+          "y": 10.949599999999998,
+          "z": 65.64879021821042
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-20",
+        "shape": "box",
+        "position": {
+          "x": 58.19593702626999,
+          "y": 11.514044444444444,
+          "z": 65.96778009119353
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-21",
+        "shape": "box",
+        "position": {
+          "x": 51.30142659724454,
+          "y": 12.07848888888889,
+          "z": 62.65441020577951
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-22",
+        "shape": "box",
+        "position": {
+          "x": 46.83782672332233,
+          "y": 12.642933333333335,
+          "z": 56.57959664167456
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-23",
+        "shape": "box",
+        "position": {
+          "x": 45.767934808174296,
+          "y": 13.207377777777777,
+          "z": 49.22966731429764
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-24",
+        "shape": "box",
+        "position": {
+          "x": 48.23954812387511,
+          "y": 13.771822222222223,
+          "z": 42.34337948017205
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-25",
+        "shape": "box",
+        "position": {
+          "x": 53.574899200000004,
+          "y": 14.336266666666667,
+          "z": 37.500630195382435
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-26",
+        "shape": "box",
+        "position": {
+          "x": 60.45253615308188,
+          "y": 14.900711111111113,
+          "z": 35.760136747730016
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-27",
+        "shape": "box",
+        "position": {
+          "x": 67.23363492457166,
+          "y": 15.465155555555555,
+          "z": 37.42914221348469
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-step-28",
+        "shape": "box",
+        "position": {
+          "x": 72.35238315070936,
+          "y": 16.029600000000002,
+          "z": 42.01494914567794
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 0.22,
+          "z": 1.6002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-route-stairs",
+        "shape": "stairs",
+        "position": {
+          "x": 69.78927384386542,
+          "y": 0.6096,
+          "z": 36.510838854427774
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 15.24,
+          "z": 12.143271291884407
+        },
+        "tags": [
+          "stairs",
+          "hollow-tree",
+          "spiral-tree-street",
+          "vertical-route",
+          "shaft-access",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-spiral-route-lower-landing",
+        "shape": "box",
+        "position": {
+          "x": 67.22616453702149,
+          "y": 0.6096,
+          "z": 31.006728563177603
+        },
+        "size": {
+          "x": 3.3528000000000002,
+          "y": 0.18,
+          "z": 3.3528000000000002
+        },
+        "tags": [
+          "hollow-tree",
+          "spiral-tree-street",
+          "stair-landing",
+          "support-surface",
+          "standable",
+          "site-program"
+        ]
+      },
+      {
+        "id": "hollow-tree-root-stairs",
+        "shape": "stairs",
+        "position": {
+          "x": 60.96,
+          "y": -3.048,
+          "z": 61.557408
+        },
+        "size": {
+          "x": 2.5907999999999998,
+          "y": 3.048,
+          "z": 8.5344
+        },
+        "tags": [
+          "stairs",
+          "hollow-tree",
+          "root-archive",
+          "vertical-route",
+          "vertical-opening",
+          "shaft-access",
+          "site-program"
+        ]
+      }
+    ]
+  },
+  "networkFailures": [],
+  "consoleErrors": [],
+  "totalNetworkFailures": 0,
+  "totalConsoleErrors": 0
+}

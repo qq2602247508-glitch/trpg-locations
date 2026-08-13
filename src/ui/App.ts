@@ -5,6 +5,7 @@ import { GenerationClient } from "../workers/GenerationClient";
 import { generateAtomTestScene } from "../composition";
 import { planningSourcePresentation } from "./planningStatus";
 import { createBuildingEntrySession, type BuildingEntrySession } from "./buildingEntrySession";
+import { generateBuildingInteriorScene } from "../generators/buildingModule";
 
 const KIND_LABELS: Record<SceneKind, string> = {
   adaptive: "自适应题材",
@@ -329,16 +330,32 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   });
   elements.buildingFocusButton.addEventListener("click", () => {
     if (!activeScene || !elements.buildingFocus.value) return;
+    const requestedFloor = elements.floor.value;
+    const selectedBuilding = activeScene.buildingInstances?.find((building) => building.id === elements.buildingFocus.value);
+    if (!selectedBuilding) return;
+    let inspectionScene: GeneratedScene | undefined;
+    if (selectedBuilding.detailLevel !== "full-interior") {
+      inspectionScene = generateBuildingInteriorScene(selectedBuilding);
+    }
     if (!buildingEntrySession) {
       buildingEntrySession = createBuildingEntrySession(
         elements.buildingFocus.value,
+        activeScene,
         renderer.captureSceneView(),
         elements.cameraToggle.getAttribute("aria-pressed") === "true",
         elements.topCameraToggle.getAttribute("aria-pressed") === "true",
       );
     }
-    const requestedFloor = elements.floor.value;
-    renderer.setBuildingFocus(elements.buildingFocus.value);
+    if (inspectionScene) {
+      renderer.setScene(inspectionScene);
+      renderer.setBuildingFocus(selectedBuilding.id);
+      activeScene = inspectionScene;
+      Object.assign(window, { __TRPG_SCENE__: inspectionScene });
+      renderSceneDetails(elements, inspectionScene, lastStats, elements.prompt.value);
+      elements.buildingFocus.value = selectedBuilding.id;
+    } else {
+      renderer.setBuildingFocus(selectedBuilding.id);
+    }
     // Re-focusing is also the camera-fit action for a selected upper or
     // basement layer. Preserve an explicit numeric floor instead of silently
     // returning to 1F and making B1 inspection impossible.
@@ -351,6 +368,13 @@ export async function mountApp(root: HTMLElement): Promise<void> {
   });
   elements.buildingFocusExit.addEventListener("click", () => {
     if (!buildingEntrySession) return;
+    if (buildingEntrySession.settlementScene) {
+      activeScene = buildingEntrySession.settlementScene;
+      renderer.setScene(activeScene);
+      renderSceneDetails(elements, activeScene, lastStats, elements.prompt.value);
+      elements.buildingFocus.value = buildingEntrySession.buildingId;
+      Object.assign(window, { __TRPG_SCENE__: activeScene });
+    }
     renderer.restoreSceneView(buildingEntrySession.view);
     elements.floor.value = String(buildingEntrySession.view.floorView);
     setToggle(elements.transparencyToggle, buildingEntrySession.view.buildingTransparency);

@@ -101,4 +101,64 @@ describe("cross-domain building and natural-terrain interfaces", () => {
     expect(linkedContext.some((primitive) => primitive.tags?.includes("structural-support"))).toBe(true);
     expect(scene.diagnostics.warnings).toHaveLength(0);
   });
+
+  it("keeps embedded full interiors structurally owned by their building identity", () => {
+    const scene = generateScene({
+      prompt: "繁忙港区的仓库、市场和码头",
+      seed: "building-detail-contract-full",
+      size: "large",
+      density: 0.84,
+    }, "settlement");
+    const building = scene.buildingInstances?.find((entry) => entry.detailLevel === "full-interior");
+
+    expect(building).toBeDefined();
+    expect(building?.interiorProgram?.rooms.length).toBeGreaterThan(1);
+    expect(building?.interiorProgram?.connections.length).toBeGreaterThan(0);
+    expect(building?.interiorProgram?.rooms.some((room) => room.level > 0)).toBe(true);
+
+    const ownedPrimitives = scene.primitives.filter((primitive) => primitive.tags?.includes(`building-instance:${building?.id}`));
+    expect(ownedPrimitives.some((primitive) => primitive.tags?.includes("full-interior"))).toBe(true);
+    expect(ownedPrimitives.some((primitive) => primitive.tags?.includes("program-room"))).toBe(true);
+    expect(
+      ownedPrimitives.some((primitive) => primitive.tags?.includes("room-connection"))
+      || scene.routes.some((route) => route.id.startsWith(`${building?.id}-`)),
+    ).toBe(true);
+    expect(ownedPrimitives.some((primitive) => primitive.tags?.includes("vertical-opening"))).toBe(true);
+    expect(new Set(ownedPrimitives.map((primitive) => primitive.level)).size).toBeGreaterThan(1);
+    expect(ownedPrimitives.filter((primitive) => primitive.tags?.includes("program-room")).length)
+      .toBeGreaterThanOrEqual(building?.interiorProgram?.rooms.length ?? 0);
+  });
+
+  it("keeps facade and mass buildings as replayable placeholders instead of embedded interiors", () => {
+    const request = {
+      prompt: "繁忙港区的仓库、市场和码头",
+      seed: "building-detail-contract-placeholder",
+      size: "large" as const,
+      density: 0.84,
+    };
+    const first = generateScene(request, "settlement");
+    const second = generateScene(request, "settlement");
+    const placeholders = first.buildingInstances?.filter((entry) => entry.detailLevel === "facade" || entry.detailLevel === "mass") ?? [];
+
+    expect(placeholders.length).toBeGreaterThan(0);
+    for (const building of placeholders) {
+      expect(building.seed.length).toBeGreaterThan(0);
+      expect(building.envelopeProgram).toEqual(expect.objectContaining({
+        version: 1,
+        variant: expect.any(String),
+        partCount: expect.any(Number),
+        silhouetteSignature: expect.any(String),
+      }));
+      expect(building.interiorProgram?.rooms.length).toBeGreaterThan(1);
+      expect(building.interiorProgram?.connections.length).toBeGreaterThan(0);
+
+      const replay = second.buildingInstances?.find((entry) => entry.id === building.id);
+      expect(replay?.seed).toBe(building.seed);
+      expect(replay?.envelopeProgram).toEqual(building.envelopeProgram);
+      expect(replay?.interiorProgram).toEqual(building.interiorProgram);
+
+      const owned = first.primitives.filter((primitive) => primitive.tags?.includes(`building-instance:${building.id}`));
+      expect(owned.some((primitive) => primitive.tags?.includes("focus-interior"))).toBe(false);
+    }
+  });
 });
