@@ -291,6 +291,15 @@ export function isTacticalGridSurface(primitive: Pick<ScenePrimitive, "shape" | 
   return primitive.shape === "box" || primitive.shape === "cylinder";
 }
 
+/** Final renderer admission contract for a surface-grid owner. Keep this
+ * separate from visibility/focus filtering so tests can prove that every
+ * classified tactical surface reaches the grid builder. */
+export function shouldRenderTacticalSurfaceGrid(
+  primitive: Pick<ScenePrimitive, "id" | "shape" | "material" | "tags">,
+): boolean {
+  return primitive.id !== "site-terrain-base" && isTacticalGridSurface(primitive);
+}
+
 const MATERIAL_STYLE: Record<
   MaterialKey,
   {
@@ -1257,7 +1266,6 @@ export class SceneRenderer {
       this.gridRoot.add(ground);
     }
 
-    const surfaceTags = new Set(["floor", "platform", "ledge", "terrain", "bridge", "boardwalk", "ice-island", "road", "plaza", "quay", "clearing"]);
     const surfaceLinesByKey = new Map<string, { levels: number[]; focusCluster?: string; positions: number[] }>();
     const focusedBuilding = this.focusedBuildingId ? scene.buildingInstances?.find((building) => building.id === this.focusedBuildingId) : undefined;
     const blueprintFocus = focusedBuilding !== undefined && focusedBuilding.detailLevel !== "full-interior";
@@ -1266,17 +1274,11 @@ export class SceneRenderer {
         && (!blueprintFocus || primitive.tags?.includes("focus-interior") === true));
     const addSurfaceGrid = (surface: ScenePrimitive): void => {
       if (!belongsToFocus(surface)) return;
-      if (!isTacticalGridSurface(surface) || !surface.tags?.some((tag) => surfaceTags.has(tag))) return;
-      if (surface.id === "site-terrain-base") return;
-      // Site terrain is still tactical terrain. Only omit cells that cannot
-      // carry a creature: void, water, lava and decorative context. Earlier
-      // filtering hid every settlement/forest/ice ground grid because those
-      // scenes carry a SiteProgram.
-      if (scene.siteProgram
-        && surface.tags?.includes("terrain")
-        && !surface.tags?.includes("standable")
-        && !surface.tags?.includes("buildable")
-        && !surface.tags?.some((tag) => ["road", "bridge", "platform", "ledge"].includes(tag))) return;
+      // `isTacticalGridSurface` is the single standability contract. Do not
+      // add a second semantic allow-list here: support landings, buildable
+      // slabs and authored stair landings are valid tactical surfaces even
+      // when they do not also carry a broad terrain/floor label.
+      if (!shouldRenderTacticalSurfaceGrid(surface)) return;
       const cosine = Math.cos(surface.rotationY ?? 0);
       const sine = Math.sin(surface.rotationY ?? 0);
       const toWorld = (localX: number, localZ: number): [number, number, number] => [

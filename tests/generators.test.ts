@@ -4,7 +4,7 @@ import { SeededRandom } from "../src/core/random";
 import { instantiateBuildingModule } from "../src/generators/buildingModule";
 import { baseScene, box, rectangularShell } from "../src/generators/shared";
 import { GRID_METERS, type GeneratedScene, type GenerationRequest, type SceneKind, type SettlementBuildingKind } from "../src/schema";
-import { dynamicFocusCutawayIds, floorBaseY, floorContextLevels, focusedCameraFactors, focusClusterForFloor, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, spatialBatchKey } from "../src/render/SceneRenderer";
+import { dynamicFocusCutawayIds, floorBaseY, floorContextLevels, focusedCameraFactors, focusClusterForFloor, fogDensityForSpan, isArchitecturalGhostPrimitive, isTacticalGridSurface, levelForY, overlayTouchesFloor, primitiveTouchesFloorContext, routeBelongsToBuildingFocus, routeMatchesTime, shouldRenderTacticalSurfaceGrid, spatialBatchKey } from "../src/render/SceneRenderer";
 import { planSettlementSite } from "../src/site-program";
 
 const request = (seed: string, size: GenerationRequest["size"] = "medium", density = 0.64): GenerationRequest => ({
@@ -56,6 +56,35 @@ describe("scene generators", () => {
     expect(isTacticalGridSurface({ shape: "box", material: "rock", tags: ["void", "standable"] })).toBe(false);
     expect(isTacticalGridSurface({ shape: "sphere", material: "moss", tags: ["natural-detail", "standable"] })).toBe(false);
     expect(isTacticalGridSurface({ shape: "box", material: "wood", tags: ["cover"] })).toBe(false);
+    expect(isTacticalGridSurface({ shape: "box", material: "stone", tags: ["support-surface", "stair-landing"] })).toBe(true);
+    expect(isTacticalGridSurface({ shape: "box", material: "stone", tags: ["buildable"] })).toBe(true);
+  });
+
+  it("admits every classified tactical surface to the rendered grid without a second tag allow-list", () => {
+    expect(shouldRenderTacticalSurfaceGrid({
+      id: "connector-landing",
+      shape: "box",
+      material: "stone",
+      tags: ["support-surface", "stair-landing"],
+    })).toBe(true);
+    expect(shouldRenderTacticalSurfaceGrid({
+      id: "terrain-support",
+      shape: "box",
+      material: "earth",
+      tags: ["terrain", "support-surface"],
+    })).toBe(true);
+    expect(shouldRenderTacticalSurfaceGrid({
+      id: "site-terrain-base",
+      shape: "box",
+      material: "earth",
+      tags: ["terrain", "standable"],
+    })).toBe(false);
+    expect(shouldRenderTacticalSurfaceGrid({
+      id: "decorative-water",
+      shape: "box",
+      material: "water",
+      tags: ["standable"],
+    })).toBe(false);
   });
 
   it("reduces fog density as generated maps grow", () => {
@@ -579,6 +608,21 @@ describe("scene generators", () => {
     expect(scene.primitives.filter((primitive) => primitive.tags?.includes("mine-cart-track")).length).toBeGreaterThanOrEqual(4);
     expect(scene.primitives.filter((primitive) => primitive.tags?.includes("rail")).length).toBeGreaterThanOrEqual(2);
     expect(scene.diagnostics.warnings).not.toContain("Semantic geometry missing: 旧矿井口与矿车轨道.");
+    expect(scene.diagnostics.valid).toBe(true);
+  });
+
+  it("marks mine platforms as real standable surfaces for the tactical grid", () => {
+    const scene = generateScene({
+      ...request("regression-21-mine-grid", "large", 0.72),
+      prompt: "废弃矿井，有矿车桥、木平台、竖井梯和多层开采面",
+    }, "adaptive");
+    expect(scene.archetype).toBe("mine");
+    const minePlatforms = scene.primitives.filter((primitive) => (
+      primitive.id === "mine-upper-platform" || primitive.id === "mine-lower-hub"
+    ));
+    expect(minePlatforms).toHaveLength(2);
+    expect(minePlatforms.every((primitive) => primitive.tags?.includes("standable"))).toBe(true);
+    expect(minePlatforms.every((primitive) => isTacticalGridSurface(primitive))).toBe(true);
     expect(scene.diagnostics.valid).toBe(true);
   });
 
